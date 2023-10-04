@@ -9,7 +9,6 @@ DEVICE = 'cpu'
 torch.manual_seed(0)
 
 class TestReplayBuffer:
-
     @pytest.mark.parametrize("capacity", [10,100,1000,10000])
     @pytest.mark.parametrize("number", [10,100,1000,10000])
     @pytest.mark.parametrize("shape", [(1,),(2,3),(4,5,(6,7))])

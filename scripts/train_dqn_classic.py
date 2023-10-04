@@ -19,6 +19,7 @@ SEED = 0
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 ENVIRONMENT = 'CartPole-v1'
 FRAME_SKIP = 4
+GAMMA = 0.99
 # Critic
 FEATURES = 128
 # Replay Buffer
@@ -50,39 +51,61 @@ def train():
     env_eval.reset(seed=SEED)
     # Define Critic
     critic = nn.Sequential(
-        nn.LazyLinear(out_features=128),
+        nn.Linear(in_features=env_train.observation_space.shape[0] + env_train.action_space.n, out_features=FEATURES),
         nn.Tanh(),
         nn.Linear(in_features=FEATURES, out_features=FEATURES),
         nn.Tanh(),
-        nn.Linear(in_features=FEATURES, out_features=env_train.action_space.n),
+        nn.Linear(in_features=FEATURES, out_features=1),
         nn.LeakyReLU(),
     ).to(device=DEVICE)
     # Initialise Replay Buffer
-    memory = ReplayBuffer(capacity=REPLAY_BUFFER_CAPACITY, shape=env_train.observation_space.shape, device=DEVICE)
+    memory = ReplayBuffer(
+        capacity=REPLAY_BUFFER_CAPACITY,
+        shape=(
+            env_train.observation_space.shape,
+            env_train.action_space.shape,
+            1,
+            env_train.observation_space.shape
+            ),
+        device=DEVICE
+    )
     # Loss
-    optim = OPTIMISER()
+    loss = nn.MSELoss()
+    optim = OPTIMISER(params=critic.parameters())
 
     # Training loop
-    epsilon = INITIAL_EXPLORATION_FACTOR
-    obs, _, _, _ = env_train.reset()
+    obs, _ = env_train.reset()
+    obs = torch.tensor(obs, device=DEVICE)
     for step in range(TOTAL_FRAMES // FRAME_SKIP):
+
+        epsilon = min(1,step / EXPLORATION_ANNEAL_TIME) * FINAL_EXPLORATION_FACTOR + (1-min(1,step / EXPLORATION_ANNEAL_TIME)) * INITIAL_EXPLORATION_FACTOR
         # Calculate action
         action = epsilon_greedy(torch.argmax(critic(obs)), env_train.action_space, epsilon)
         # Step environment
         reward = 0
         for _ in range(FRAME_SKIP):
-            n_obs, n_reward, n_done, _ = env_train.step(action)
+            n_obs, n_reward, n_terminated, _, _ = env_train.step(action)
             reward += n_reward
-            if n_done: # New episode
+            if n_terminated: # New episode
                 break
         # Update memory buffer
             # (s_t, a_t, r_t, s_t+1)
+        action = torch.tensor(action, device=DEVICE)
+        n_obs = torch.tensor(n_obs, device=DEVICE)
+        reward = torch.tensor([reward], device=DEVICE)
         transition_tuple = (obs, action, reward, n_obs)
-        transition_tuple = tuple(torch.tensor(x, device=DEVICE) for x in transition_tuple)
 
+        memory.append(transition_tuple)
         # Keep populating data
         if step < INITIAL_COLLECTION_SIZE:
             continue
-        
+
+        if step % UPDATE_PERIOD == 0:
+            # DQN Update
+            optim.zero_grad()
+            s_t0, a_t, r_t, s_t1 = memory.sample(MINIBATCH_SIZE, continuous=False)
+                # TODO(mark) Consider terminal states
+            y = r_t + torch.max(critic(s_t1)) * GAMMA
+            output = loss(critic(s_t0))
 if __name__ == "__main__":
     train()

@@ -54,7 +54,6 @@ class ReplayBuffer:
                 self.storage[i][self._append_index:self.capacity+1] = x[:self.capacity-self._append_index]
                 self.storage[i][:n_insert+self._append_index-self.capacity] = x[self.capacity-self._append_index:]
 
-        print(n_insert, inputs[0].shape, len(inputs))
         self._append_index += n_insert
         if self._append_index >= self.capacity:
             self._full = True
