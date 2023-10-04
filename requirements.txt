@@ -1,0 +1,10 @@
+# Environments
+gymnasium==0.29.1
+
+# Torch
+torch
+torchvision
+torchaudio
+
+# Util
+pytest
