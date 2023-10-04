@@ -25,7 +25,8 @@ FEATURES = 128
 REPLAY_BUFFER_CAPACITY = 1000000
 # Training
     # Gradient
-TOTAL_FRAMES = 10000000
+#TOTAL_FRAMES = 10000000
+TOTAL_FRAMES = 100
 MINIBATCH_SIZE = 32
 INITIAL_COLLECTION_SIZE = 1000 # Data to collect before first update
 UPDATE_PERIOD = 4 # Data to collect between each update
@@ -77,6 +78,7 @@ def train():
         # Update memory buffer
             # (s_t, a_t, r_t, s_t+1)
         transition_tuple = (obs, action, reward, n_obs)
+        transition_tuple = tuple(torch.tensor(x, device=DEVICE) for x in transition_tuple)
 
         # Keep populating data
         if step < INITIAL_COLLECTION_SIZE:
