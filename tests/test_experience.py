@@ -3,7 +3,7 @@ import pytest
 
 import torch
 
-from curiosity.util.experience import ReplayBuffer
+from curiosity.experience import ReplayBuffer
 
 DEVICE = 'cpu'
 torch.manual_seed(0)
