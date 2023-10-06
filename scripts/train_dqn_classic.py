@@ -1,3 +1,4 @@
+import copy
 from datetime import datetime
 import random
 import sys
@@ -26,7 +27,7 @@ default_config = {
     # Experimentation and Logging
     "seed": 0,
     "frames_per_epoch": 1000,
-    "frames_per_video": 1000000,
+    "frames_per_video": 10000,
     "eval_repeat": 10,
     # Environemnt
     "environment": "CartPole-v1",
@@ -34,18 +35,19 @@ default_config = {
     "reward_decay": 0.99,
     # Critic
     "critic_features": 32,
+    "target_update_frequency": 20,
     # Replay Buffer Capacity
     "replay_buffer_capacity": 100000,
     # Training
-    "total_frames": 1000000,
-    "minibatch_size": 128,
+    "total_frames": 100000,
+    "minibatch_size": 1024,
     "initial_collection_size": 10000,
     "update_frequency": 1,
     # Exploration
         # Epsilon Greedy Exploration
     "initial_exploration_factor": 1,
-    "final_exploration_factor": 0.1,
-    "exploration_anneal_time": 50000
+    "final_exploration_factor": 0.05,
+    "exploration_anneal_time": 1000000
 }
 
 def train(config: Dict = default_config):
@@ -58,7 +60,8 @@ def train(config: Dict = default_config):
     env_eval = RecordVideo(
         gym.make(config["environment"], render_mode="rgb_array"),
         "log/video",
-        episode_trigger=lambda x: x% (config["eval_repeat"]*config["frames_per_video"]//config["frames_per_epoch"])==0
+        episode_trigger=lambda x: x% (config["eval_repeat"]*config["frames_per_video"]//config["frames_per_epoch"])==0,
+        disable_logger=True
     )
     if not isinstance(env_train.action_space, Discrete):
         raise ValueError("DQN requires discrete actions")
@@ -77,6 +80,7 @@ def train(config: Dict = default_config):
         nn.Linear(in_features=N, out_features=env_train.action_space.n),
         nn.LeakyReLU(),
     ).to(device=DEVICE)
+    target_critic = copy.deepcopy(critic)
 
     # Initialise Replay Buffer
     memory = ReplayBuffer(
@@ -114,8 +118,10 @@ def train(config: Dict = default_config):
         # Logging
         critic_loss = 0
 
-        for step in range(config["total_frames"] // config["frame_skip"]):
-            epsilon = min(1,step / config["exploration_anneal_time"]) * config["final_exploration_factor"] + (1-min(1,step / config["exploration_anneal_time"])) * config["initial_exploration_factor"]
+        for step in range(config["total_frames"] // config["frame_skip"] + 1):
+            train_step = max(0, step-config["initial_collection_size"])
+            exploration_stage = min(1, train_step / config["exploration_anneal_time"])
+            epsilon = exploration_stage * config["final_exploration_factor"] + (1-exploration_stage) * config["initial_exploration_factor"]
             # Calculate action
             action = epsilon_greedy(torch.argmax(critic(obs)), env_train.action_space, epsilon)
             # Step environment
@@ -143,11 +149,16 @@ def train(config: Dict = default_config):
                 optim.zero_grad()
                 s_t0, a_t, r_t, s_t1 = memory.sample(config["minibatch_size"], continuous=False)
                     # TODO(mark) Consider terminal states
-                y = (r_t + torch.max(critic(s_t1)) * config["reward_decay"]).squeeze()
+                with torch.no_grad():
+                    y = (r_t + torch.max(target_critic(s_t1)) * config["reward_decay"]).squeeze()
                 output = loss(critic(s_t0)[torch.arange(config["minibatch_size"]), a_t], y)
                 critic_loss = output.item()
                 output.backward()
-                optim.step() 
+                optim.step()
+
+                # Update target networks
+                if step % config["target_update_frequency"] == 0:
+                    target_critic.load_state_dict(critic.state_dict())
 
             # Epoch Logging
             if epoch_update:
