@@ -21,33 +21,33 @@ from curiosity.logging import evaluate
 # Mnih, Volodymyr, et al. Playing Atari with Deep Reinforcement Learning. 2013.
 
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-WANDB = False
+WANDB = True
 
 default_config = {
     # Experimentation and Logging
     "seed": 0,
     "frames_per_epoch": 1000,
-    "frames_per_video": 10000,
+    "frames_per_video": 50000,
     "eval_repeat": 10,
     # Environemnt
     "environment": "CartPole-v1",
     "frame_skip": 1,
-    "reward_decay": 0.99,
+    "discount_factor": 0.99,
     # Critic
-    "critic_features": 32,
-    "target_update_frequency": 20,
+    "critic_features": 128,
+    "target_update_frequency": 500,
     # Replay Buffer Capacity
-    "replay_buffer_capacity": 100000,
+    "replay_buffer_capacity": 10000,
     # Training
-    "total_frames": 100000,
-    "minibatch_size": 1024,
+    "total_frames": 500000,
+    "minibatch_size": 128,
     "initial_collection_size": 10000,
-    "update_frequency": 1,
+    "update_frequency": 10,
     # Exploration
         # Epsilon Greedy Exploration
     "initial_exploration_factor": 1,
     "final_exploration_factor": 0.05,
-    "exploration_anneal_time": 1000000
+    "exploration_anneal_time": 50000
 }
 
 def train(config: Dict = default_config):
@@ -59,7 +59,7 @@ def train(config: Dict = default_config):
     env_train = AutoResetWrapper(gym.make(config["environment"]))
     env_eval = RecordVideo(
         gym.make(config["environment"], render_mode="rgb_array"),
-        "log/video",
+        f"log/video/{PROJECT_NAME}",
         episode_trigger=lambda x: x% (config["eval_repeat"]*config["frames_per_video"]//config["frames_per_epoch"])==0,
         disable_logger=True
     )
@@ -77,8 +77,7 @@ def train(config: Dict = default_config):
         nn.Tanh(),
         nn.Linear(in_features=N, out_features=N),
         nn.Tanh(),
-        nn.Linear(in_features=N, out_features=env_train.action_space.n),
-        nn.LeakyReLU(),
+        nn.Linear(in_features=N, out_features=env_train.action_space.n)
     ).to(device=DEVICE)
     target_critic = copy.deepcopy(critic)
 
@@ -89,13 +88,15 @@ def train(config: Dict = default_config):
             env_train.observation_space.shape,
             env_train.action_space.shape,
             1,
-            env_train.observation_space.shape
+            env_train.observation_space.shape,
+            1
             ),
         dtype=(
             torch.float32,
             torch.int,
             torch.float32,
-            torch.float32
+            torch.float32,
+            torch.bool
             ),
         device=DEVICE
     )
@@ -106,7 +107,8 @@ def train(config: Dict = default_config):
     # Logging
     if WANDB:
         run = wandb.init(
-                project = PROJECT_NAME,
+                project = "curiosity",
+                name = PROJECT_NAME,
                 config = config
         )
 
@@ -127,17 +129,19 @@ def train(config: Dict = default_config):
             # Step environment
             reward = 0
             for _ in range(config["frame_skip"]):
-                n_obs, n_reward, n_terminated, _, _ = env_train.step(action)
+                n_obs, n_reward, n_terminated, n_truncated, _ = env_train.step(action)
+                done = n_terminated or n_truncated
                 reward += n_reward
-                if n_terminated: # New episode
+                if done: # New episode
                     break
             # Update memory buffer
                 # (s_t, a_t, r_t, s_t+1)
             action = torch.tensor(action, device=DEVICE)
             n_obs = torch.tensor(n_obs, device=DEVICE)
             reward = torch.tensor([reward], device=DEVICE)
-            transition_tuple = (obs, action, reward, n_obs)
-
+            n_terminated = torch.tensor([n_terminated], device=DEVICE)
+            transition_tuple = (obs, action, reward, n_obs, n_terminated)
+            obs = n_obs
             memory.append(transition_tuple)
             # Keep populating data
             if step <  config["initial_collection_size"]:
@@ -146,19 +150,21 @@ def train(config: Dict = default_config):
             epoch_update = step % config["frames_per_epoch"] == 0 
             if step % config["update_frequency"] == 0:
                 # DQN Update
-                optim.zero_grad()
-                s_t0, a_t, r_t, s_t1 = memory.sample(config["minibatch_size"], continuous=False)
-                    # TODO(mark) Consider terminal states
+                s_t0, a_t, r_t, s_t1, d = memory.sample(config["minibatch_size"], continuous=False)
+                x = critic(s_t0)[torch.arange(config["minibatch_size"]), a_t]
                 with torch.no_grad():
-                    y = (r_t + torch.max(target_critic(s_t1)) * config["reward_decay"]).squeeze()
-                output = loss(critic(s_t0)[torch.arange(config["minibatch_size"]), a_t], y)
+                    target_max = (~d).squeeze() * torch.max(target_critic(s_t1), dim=1).values
+                    y = (r_t.squeeze() + target_max * config["discount_factor"])
+                output = loss(y, x)
                 critic_loss = output.item()
+                optim.zero_grad()
                 output.backward()
                 optim.step()
 
-                # Update target networks
-                if step % config["target_update_frequency"] == 0:
-                    target_critic.load_state_dict(critic.state_dict())
+            # Update target networks
+            if step % config["target_update_frequency"] == 0:
+                for target_param, critic_param in zip(target_critic.parameters(), critic.parameters()):
+                    target_param.data.copy_(critic_param.data)
 
             # Epoch Logging
             if epoch_update:
