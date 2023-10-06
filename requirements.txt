@@ -6,6 +6,10 @@ torch
 torchvision
 torchaudio
 
+# Logging
+wandb
+moviepy
+
 # Util
 pytest
 tqdm

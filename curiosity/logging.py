@@ -1,7 +1,6 @@
 from collections.abc import Callable
 
 import torch
-from torch import nn
 from gymnasium import Env
 
 def evaluate(env: Env, policy: Callable, repeat: int = 1):
@@ -18,6 +17,7 @@ def evaluate(env: Env, policy: Callable, repeat: int = 1):
     total_reward = 0
     for _ in range(repeat):
         with torch.no_grad():
+            env.close()
             obs, _ = env.reset()
             terminated = False
             truncated = False
