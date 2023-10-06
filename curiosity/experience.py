@@ -11,7 +11,7 @@ class ReplayBuffer:
                  capacity: int,
                  shape: Sequence[int],
                  device: str = "cpu",
-                 dtype: Optional[torch.dtype] = None) -> None:
+                 dtype: Optional[torch.dtype | Sequence[torch.dtype]] = None) -> None:
         shape = list(shape)
         for i, s in enumerate(shape):
             if isinstance(s, int):
@@ -21,7 +21,10 @@ class ReplayBuffer:
         self.shape = shape
         self.N = len(shape)
         self.device = device
-        self.storage = [torch.zeros((capacity, *s), device=self.device, dtype=dtype) for s in shape]
+        if hasattr(dtype, "__getitem__"):
+            self.storage = [torch.zeros((capacity, *s), device=self.device, dtype=dtype[i]) for i, s in enumerate(shape)]
+        else:
+            self.storage = [torch.zeros((capacity, *s), device=self.device, dtype=dtype) for s in shape]
         self._append_index = 0 # Position of next tensor to be inserted
         self._full = False # Bookmark to check if storage has looped around
 

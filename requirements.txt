@@ -8,3 +8,4 @@ torchaudio
 
 # Util
 pytest
+tqdm

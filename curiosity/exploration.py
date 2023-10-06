@@ -1,4 +1,6 @@
 import random
+
+import torch
 from gymnasium.spaces import Space
 
 def epsilon_greedy(x, action_space: Space, epsilon: float):
@@ -6,4 +8,6 @@ def epsilon_greedy(x, action_space: Space, epsilon: float):
     if random.random() <= epsilon:
         return action_space.sample()
     else:
+        if isinstance(x, torch.Tensor):
+            x = x.cpu().numpy()
         return x
