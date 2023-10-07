@@ -1,4 +1,4 @@
-from typing import Optional, Sequence
+from typing import Optional, Sequence, Union
 import random
 
 import torch
@@ -11,7 +11,7 @@ class ReplayBuffer:
                  capacity: int,
                  shape: Sequence[int],
                  device: str = "cpu",
-                 dtype: Optional[torch.dtype | Sequence[torch.dtype]] = None) -> None:
+                 dtype: Optional[Union[torch.dtype, Sequence[torch.dtype]]] = None) -> None:
         shape = list(shape)
         for i, s in enumerate(shape):
             if isinstance(s, int):
@@ -21,6 +21,7 @@ class ReplayBuffer:
         self.shape = shape
         self.N = len(shape)
         self.device = device
+
         if hasattr(dtype, "__getitem__"):
             self.storage = [torch.zeros((capacity, *s), device=self.device, dtype=dtype[i]) for i, s in enumerate(shape)]
         else:
@@ -38,6 +39,8 @@ class ReplayBuffer:
         n_insert = None
         for i in range(self.N):
             x = inputs[i]
+            if not isinstance(x, torch.Tensor):
+                x = torch.tensor(x, device=self.device)
             if x.shape[-len(self.shape[i]):] != self.shape[i]:
                 raise ValueError(f"Expected data ending with {self.shape[i]} but got {x.shape[-len(self.shape):]}")
             if len(x.shape) == len(self.shape[i]):
