@@ -6,14 +6,14 @@ from typing import Dict
 import gymnasium as gym
 from gymnasium.wrappers.autoreset import AutoResetWrapper
 from gymnasium.wrappers.record_video import RecordVideo
-from gymnasium.spaces import Box, Discrete
+from gymnasium.spaces import Box
 import torch
 import torch.nn as nn
 from tqdm import tqdm
 import wandb
 
 from curiosity.experience import ReplayBuffer
-from curiosity.exploration import epsilon_greedy
+from curiosity.exploration import gaussian
 from curiosity.logging import evaluate
 from curiosity.nn import AddTargetNetwork
 
@@ -30,10 +30,10 @@ default_config = {
     "frames_per_video": 50000,
     "eval_repeat": 10,
     # Environemnt
-    "environment": "Acrobot-v1",
+    "environment":"Pendulum-v1",
     "discount_factor": 0.99,
-    # Critic
-    "critic_features": 128,
+    # Network
+    "features": 128,
     "target_update_frequency": 500,
     # Replay Buffer Capacity
     "replay_buffer_capacity": 10000,
@@ -41,12 +41,10 @@ default_config = {
     "total_frames": 500000,
     "minibatch_size": 128,
     "initial_collection_size": 10000,
-    "update_frequency": 10,
+    "tau": 0.005,
     # Exploration
         # Epsilon Greedy Exploration
-    "initial_exploration_factor": 1,
-    "final_exploration_factor": 0.05,
-    "exploration_anneal_time": 50000
+    "exploration_factor": 0.1,
 }
 
 def train(config: Dict = default_config):
@@ -62,15 +60,16 @@ def train(config: Dict = default_config):
         episode_trigger=lambda x: x% (config["eval_repeat"]*config["frames_per_video"]//config["frames_per_epoch"])==0,
         disable_logger=True
     )
-    if not isinstance(env_train.action_space, Discrete):
-        raise ValueError("DQN requires discrete actions")
+    if not isinstance(env_train.action_space, Box) or len(env_train.action_space.shape) != 1:
+        raise ValueError("This implementation of DDPG requires 1D continuous actions")
     if not isinstance(env_train.observation_space, Box) or len(env_train.observation_space.shape) != 1:
-        raise ValueError("Critic is defined only for 1D box observations. Is this a pixel space?")
+        raise ValueError("Network is defined only for 1D box observations. Is this a pixel space?")
     env_train.reset(seed=config['seed'])
     env_eval.reset(seed=config['seed'])
 
     # Define Critic
-    critic = AddTargetNetwork(build_critic(config, env_train), device = DEVICE)
+    actor, critic = build_actor_critic(env_train)
+    actor, critic = AddTargetNetwork(actor, device=DEVICE), AddTargetNetwork(critic, device=DEVICE)
 
     # Initialise Replay Buffer
     memory = ReplayBuffer(
@@ -80,9 +79,9 @@ def train(config: Dict = default_config):
         device=DEVICE
     )
     # Loss
-    loss = nn.MSELoss()
-    optim = torch.optim.Adam(params=critic.net.parameters())
-
+    loss_critic_fn = nn.MSELoss()
+    optim_actor = torch.optim.Adam(params=actor.net.parameters())
+    optim_critic = torch.optim.Adam(params=critic.net.parameters())
     # Logging
     if WANDB:
         wandb.init(
@@ -96,18 +95,18 @@ def train(config: Dict = default_config):
     epoch = 0
     with tqdm(total=config["total_frames"] // config["frames_per_epoch"], file=sys.stdout) as pbar:
         # Logging
-        critic_loss = 0
+        loss_critic_value = 0
+        loss_actor_value = 0
+
         for step in range(config["total_frames"]):
 
             # ====================
             # Data Collection
             # ====================
 
-            train_step = max(0, step-config["initial_collection_size"])
-            exploration_stage = min(1, train_step / config["exploration_anneal_time"])
-            epsilon = exploration_stage * config["final_exploration_factor"] + (1-exploration_stage) * config["initial_exploration_factor"]
             # Calculate action
-            action = epsilon_greedy(torch.argmax(critic(torch.tensor(obs, device=DEVICE))), env_train.action_space, epsilon)
+            with torch.no_grad():
+                action = gaussian(actor.target(torch.tensor(obs, device=DEVICE)), config["exploration_factor"])
             # Step environment
             n_obs, reward, terminated, truncated, _ = env_train.step(action)
             # Update memory buffer
@@ -119,43 +118,53 @@ def train(config: Dict = default_config):
             # Keep populating data
             if step < config["initial_collection_size"]:
                 continue
-            
+
             # ====================
             # Gradient Update 
             # Mostly Update this
             # ====================
 
             epoch_update = step % config["frames_per_epoch"] == 0 
-            if step % config["update_frequency"] == 0:
-                # DQN Update
-                s_t0, a_t, r_t, s_t1, d = memory.sample(config["minibatch_size"], continuous=False)
-                x = critic(s_t0)[torch.arange(config["minibatch_size"]), a_t]
-                with torch.no_grad():
-                    target_max = (~d) * torch.max(critic.target(s_t1), dim=1).values
-                    y = (r_t + target_max * config["discount_factor"])
-                output = loss(y, x)
-                critic_loss = output.item()
-                optim.zero_grad()
-                output.backward()
-                optim.step()
+            # DDPG Update
+                # Critic
+            s_t0, a_t, r_t, s_t1, d = memory.sample(config["minibatch_size"], continuous=False)
+            x = critic(torch.cat((s_t0, a_t), 1)).squeeze()
+            with torch.no_grad():
+                target_max = (~d) * critic.target(torch.cat((s_t1, actor(s_t1)), 1)).squeeze()
+                y = (r_t + target_max * config["discount_factor"])
+            loss_critic = loss_critic_fn(y, x)
+            optim_critic.zero_grad()
+            loss_critic_value = loss_critic.item()
+            loss_critic.backward()
+            optim_critic.step()
+                # Actor
+            desired_action = actor(s_t0)
+            loss_actor = -critic(torch.cat((s_t0, desired_action), 1)).mean()
+            optim_actor.zero_grad()
+            loss_actor_value = loss_actor.item()
+            loss_actor.backward()
+            optim_actor.step()
 
-            # Update target networks
-            if step % config["target_update_frequency"] == 0:
-                critic.update_target_network(1.0)
+            critic.update_target_network(config["tau"])
+            actor.update_target_network(config["tau"])
 
             # Epoch Logging
             if epoch_update:
                 epoch += 1
-                reward = evaluate(env=env_eval, policy = lambda x: torch.argmax(critic(torch.tensor(x,device=DEVICE))).cpu().numpy(), repeat=config["eval_repeat"])
+                reward = evaluate(
+                    env=env_eval,
+                    policy = lambda x: actor(torch.tensor(x, device=DEVICE)).cpu().numpy(),
+                    repeat=config["eval_repeat"]
+                )
 
-                pbar.set_description(f"epoch {epoch} reward {reward} critic loss {critic_loss} exploration factor {epsilon}")
+                pbar.set_description(f"epoch {epoch} reward {reward} critic loss {loss_critic_value} actor loss {loss_actor_value}")
                 pbar.update(1)
                 if WANDB:
                     wandb.log({
                         "frame": step,
                         "eval_reward": reward,
-                        "critic_loss": critic_loss,
-                        "exploration_factor": epsilon
+                        "critic_loss": loss_critic_value,
+                        "actor_loss": loss_actor_value,
                     })
 
         env_eval.close()
@@ -163,15 +172,25 @@ def train(config: Dict = default_config):
         if WANDB:
             wandb.finish()
 
-def build_critic(config, env: gym.Env):
-    N = config['critic_features']
-    return nn.Sequential(
+def build_actor_critic(env: gym.Env, N: int = 128):
+    # TODO(mark) Shared layers
+    actor = nn.Sequential(
         nn.LazyLinear(out_features=N),
         nn.Tanh(),
         nn.Linear(in_features=N, out_features=N),
         nn.Tanh(),
-        nn.Linear(in_features=N, out_features=env.action_space.n)
+        nn.Linear(in_features=N, out_features=env.action_space.shape[-1])
     )
+
+    critic = nn.Sequential(
+        nn.LazyLinear(out_features=N),
+        nn.Tanh(),
+        nn.Linear(in_features=N, out_features=N),
+        nn.Tanh(),
+        nn.Linear(in_features=N, out_features = 1)
+    )
+
+    return actor, critic
 
 if __name__ == "__main__":
     train()
