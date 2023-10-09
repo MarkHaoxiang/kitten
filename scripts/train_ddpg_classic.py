@@ -12,9 +12,15 @@ import torch.nn as nn
 from tqdm import tqdm
 import wandb
 
-from curiosity.experience import ReplayBuffer
+from curiosity.experience import (
+    ReplayBuffer,
+    early_start
+)
 from curiosity.logging import evaluate
-from curiosity.nn import AddTargetNetwork
+from curiosity.nn import (
+    ClassicalGaussianActor,
+    AddTargetNetwork
+)
 
 # An implementation of DQN
 # Mnih, Volodymyr, et al. Playing Atari with Deep Reinforcement Learning. 2013.
@@ -41,6 +47,7 @@ default_config = {
     "minibatch_size": 128,
     "initial_collection_size": 10000,
     "tau": 0.005,
+    "lr": 0.001
 }
 
 def train(config: Dict = default_config):
@@ -76,8 +83,8 @@ def train(config: Dict = default_config):
     )
     # Loss
     loss_critic_fn = nn.MSELoss()
-    optim_actor = torch.optim.Adam(params=actor.net.parameters())
-    optim_critic = torch.optim.Adam(params=critic.net.parameters())
+    optim_actor = torch.optim.Adam(params=actor.net.parameters(), lr=config["lr"])
+    optim_critic = torch.optim.Adam(params=critic.net.parameters(), lr=config["lr"])
     # Logging
     if WANDB:
         wandb.init(
@@ -90,12 +97,12 @@ def train(config: Dict = default_config):
     obs, _ = env_train.reset()
     epoch = 0
     with tqdm(total=config["total_frames"] // config["frames_per_epoch"], file=sys.stdout) as pbar:
+        early_start(env_train, memory, config["initial_collecton_size"])
         # Logging
         loss_critic_value = 0
         loss_actor_value = 0
 
         for step in range(config["total_frames"]):
-
             # ====================
             # Data Collection
             # ====================
@@ -106,15 +113,10 @@ def train(config: Dict = default_config):
             # Step environment
             n_obs, reward, terminated, truncated, _ = env_train.step(action)
             # Update memory buffer
-                # (s_t, a_t, r_t, s_t+1)
+                # (s_t, a_t, r_t, s_t+1, d)
             transition_tuple = (obs, action, reward, n_obs, terminated)
             obs = n_obs
             memory.append(transition_tuple)
-
-            # Keep populating data
-            if step < config["initial_collection_size"]:
-                continue
-
             # ====================
             # Gradient Update 
             # Mostly Update this
@@ -169,33 +171,7 @@ def train(config: Dict = default_config):
             wandb.finish()
 
 def build_actor_critic(env: gym.Env, N: int = 128):
-    class GaussianActor(nn.Module):
-        def __init__(self, features: int, n_actions: int):
-            super().__init__()
-            self.shared = nn.Sequential(
-                nn.LazyLinear(out_features=features),
-                nn.Tanh(),
-                nn.Linear(in_features=features, out_features=features),
-                nn.Tanh(),
-            )
-            self.mean = nn.Sequential(
-                self.shared,
-                nn.Linear(in_features=features, out_features=n_actions)
-            )
-            self.std = nn.Sequential(
-                self.shared,
-                nn.Linear(in_features=features, out_features=n_actions),
-                nn.Sigmoid()
-            )
-        
-        def forward(self, x: torch.Tensor, noise: bool = True):
-            action = self.mean(x)
-            if noise:
-                std = self.std(x)
-                action = torch.normal(action, std)
-            return action
-
-    actor = GaussianActor(N, env.action_space.shape[-1]).to(device=DEVICE)
+    actor = ClassicalGaussianActor(N, env.action_space.shape[-1]).to(device=DEVICE)
     critic = nn.Sequential(
         nn.LazyLinear(out_features=N),
         nn.Tanh(),

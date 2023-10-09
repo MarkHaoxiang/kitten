@@ -12,10 +12,17 @@ import torch.nn as nn
 from tqdm import tqdm
 import wandb
 
-from curiosity.experience import ReplayBuffer
+from curiosity.experience import (
+    ReplayBuffer,
+    build_replay_buffer,
+    early_start
+)
 from curiosity.exploration import epsilon_greedy
 from curiosity.logging import evaluate
-from curiosity.nn import AddTargetNetwork
+from curiosity.nn import (
+    AddTargetNetwork,
+    build_critic
+)
 
 # An implementation of DQN
 # Mnih, Volodymyr, et al. Playing Atari with Deep Reinforcement Learning. 2013.
@@ -70,15 +77,11 @@ def train(config: Dict = default_config):
     env_eval.reset(seed=config['seed'])
 
     # Define Critic
-    critic = AddTargetNetwork(build_critic(config, env_train), device = DEVICE)
+    critic = AddTargetNetwork(build_critic(env_train, config["critic_features"]), device = DEVICE)
 
     # Initialise Replay Buffer
-    memory = ReplayBuffer(
-        capacity=config["replay_buffer_capacity"],
-        shape=(env_train.observation_space.shape, env_train.action_space.shape, (), env_train.observation_space.shape, ()),
-        dtype=(torch.float32, torch.int, torch.float32, torch.float32, torch.bool),
-        device=DEVICE
-    )
+    memory = build_replay_buffer(env_train, capacity=config["replay_buffer_capacity"], device=DEVICE)
+
     # Loss
     loss = nn.MSELoss()
     optim = torch.optim.Adam(params=critic.net.parameters())
@@ -91,10 +94,13 @@ def train(config: Dict = default_config):
             config = config
         )
 
+    # ====================
     # Training loop
+    # ====================
     obs, _ = env_train.reset()
     epoch = 0
     with tqdm(total=config["total_frames"] // config["frames_per_epoch"], file=sys.stdout) as pbar:
+        early_start(env_train, memory, config["initial_collecton_size"])
         # Logging
         critic_loss = 0
         for step in range(config["total_frames"]):
@@ -116,10 +122,6 @@ def train(config: Dict = default_config):
             obs = n_obs
             memory.append(transition_tuple)
 
-            # Keep populating data
-            if step < config["initial_collection_size"]:
-                continue
-            
             # ====================
             # Gradient Update 
             # Mostly Update this
@@ -141,7 +143,7 @@ def train(config: Dict = default_config):
 
             # Update target networks
             if step % config["target_update_frequency"] == 0:
-                critic.update_target_network(1.0)
+                critic.update_target_network()
 
             # Epoch Logging
             if epoch_update:
@@ -162,16 +164,6 @@ def train(config: Dict = default_config):
         env_train.close()
         if WANDB:
             wandb.finish()
-
-def build_critic(config, env: gym.Env):
-    N = config['critic_features']
-    return nn.Sequential(
-        nn.LazyLinear(out_features=N),
-        nn.Tanh(),
-        nn.Linear(in_features=N, out_features=N),
-        nn.Tanh(),
-        nn.Linear(in_features=N, out_features=env.action_space.n)
-    )
 
 if __name__ == "__main__":
     train()

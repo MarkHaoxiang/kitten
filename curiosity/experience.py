@@ -1,6 +1,8 @@
-from typing import Optional, Sequence, Union
+from typing import Optional, Sequence, Union, Callable
 import random
 
+from gymnasium import Env
+from gymnasium.wrappers.autoreset import AutoResetWrapper
 import torch
 from torch import Tensor
 
@@ -88,3 +90,43 @@ class ReplayBuffer:
 
     def __len__(self):
         return self.capacity if self._full else self._append_index
+    
+def build_replay_buffer(env: Env, capacity: int = 10000, device: str = "cpu") -> ReplayBuffer:
+    """ Creates a replay buffer for env
+
+    Args:
+        env (Env): Training environment
+        capacity (int, optional): Capacity of the replay buffer. Defaults to 10000.
+        device (str, optional): Tensor device. Defaults to "cpu".
+
+    Returns:
+        Replay Buffer: A replay buffer designed to hold tuples (State, Action, Reward, Next State, Done)
+    """
+    return ReplayBuffer(
+        capacity=capacity,
+        shape=(env.observation_space.shape, env.action_space.shape, (), env.observation_space.shape, ()),
+        dtype=(torch.float32, torch.int, torch.float32, torch.float32, torch.bool),
+        device=device
+    )
+
+def early_start(env: Env, memory: ReplayBuffer, steps: int, policy: Callable = None) -> ReplayBuffer:
+    """ Fill the replay buffer for "steps" amount. In-place.
+
+    Args:
+        env (Env): Training Environment
+        replay_buffer (ReplayBuffer): Replay buffer
+        steps (int): Number of steps to run
+    """
+    if not isinstance(env, AutoResetWrapper):
+        env = AutoResetWrapper(env)
+    obs, _ = env.reset()
+    for _ in range(steps):
+        if policy is None:
+            action = policy(obs)
+        else:
+            action = env.action_space.sample()
+        n_obs, reward, terminated, truncated, _ = env.step(action)
+        transition_tuple = (obs, action, reward, n_obs, terminated)
+        obs = n_obs
+        memory.append(transition_tuple)
+    return memory
