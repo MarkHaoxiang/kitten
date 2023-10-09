@@ -13,7 +13,6 @@ from tqdm import tqdm
 import wandb
 
 from curiosity.experience import ReplayBuffer
-from curiosity.exploration import gaussian
 from curiosity.logging import evaluate
 from curiosity.nn import AddTargetNetwork
 
@@ -42,9 +41,6 @@ default_config = {
     "minibatch_size": 128,
     "initial_collection_size": 10000,
     "tau": 0.005,
-    # Exploration
-        # Epsilon Greedy Exploration
-    "exploration_factor": 0.1,
 }
 
 def train(config: Dict = default_config):
@@ -106,7 +102,7 @@ def train(config: Dict = default_config):
 
             # Calculate action
             with torch.no_grad():
-                action = gaussian(actor.target(torch.tensor(obs, device=DEVICE)), config["exploration_factor"])
+                action = actor.target(torch.tensor(obs, device=DEVICE)).cpu().detach().numpy()
             # Step environment
             n_obs, reward, terminated, truncated, _ = env_train.step(action)
             # Update memory buffer
@@ -153,7 +149,7 @@ def train(config: Dict = default_config):
                 epoch += 1
                 reward = evaluate(
                     env=env_eval,
-                    policy = lambda x: actor(torch.tensor(x, device=DEVICE)).cpu().numpy(),
+                    policy = lambda x: actor(torch.tensor(x, device=DEVICE), noise=False).cpu().numpy(),
                     repeat=config["eval_repeat"]
                 )
 
@@ -173,21 +169,39 @@ def train(config: Dict = default_config):
             wandb.finish()
 
 def build_actor_critic(env: gym.Env, N: int = 128):
-    # TODO(mark) Shared layers
-    actor = nn.Sequential(
-        nn.LazyLinear(out_features=N),
-        nn.Tanh(),
-        nn.Linear(in_features=N, out_features=N),
-        nn.Tanh(),
-        nn.Linear(in_features=N, out_features=env.action_space.shape[-1])
-    )
+    class GaussianActor(nn.Module):
+        def __init__(self, features: int, n_actions: int):
+            super().__init__()
+            self.shared = nn.Sequential(
+                nn.LazyLinear(out_features=features),
+                nn.Tanh(),
+                nn.Linear(in_features=features, out_features=features),
+                nn.Tanh(),
+            )
+            self.mean = nn.Sequential(
+                self.shared,
+                nn.Linear(in_features=features, out_features=n_actions)
+            )
+            self.std = nn.Sequential(
+                self.shared,
+                nn.Linear(in_features=features, out_features=n_actions),
+                nn.Sigmoid()
+            )
+        
+        def forward(self, x: torch.Tensor, noise: bool = True):
+            action = self.mean(x)
+            if noise:
+                std = self.std(x)
+                action = torch.normal(action, std)
+            return action
 
+    actor = GaussianActor(N, env.action_space.shape[-1]).to(device=DEVICE)
     critic = nn.Sequential(
         nn.LazyLinear(out_features=N),
         nn.Tanh(),
         nn.Linear(in_features=N, out_features=N),
         nn.Tanh(),
-        nn.Linear(in_features=N, out_features = 1)
+        nn.Linear(in_features=N, out_features=1)
     )
 
     return actor, critic

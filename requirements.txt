@@ -1,6 +1,6 @@
 # Environments
-gymnasium==0.29.1
-pygame
+swig
+gymnasium[all]
 
 # Torch
 torch

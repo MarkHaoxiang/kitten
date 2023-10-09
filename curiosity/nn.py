@@ -15,8 +15,8 @@ class AddTargetNetwork(nn.Module):
         self.net = self.net.to(device)
         self.target = self.target.to(device)
     
-    def forward(self, x):
-        return self.net(x)
+    def forward(self, x, *args, **kwargs):
+        return self.net(x, *args, **kwargs)
 
     def update_target_network(self, tau: float) -> None:
         assert (0 <= tau <= 1), f"Weighting {tau} is out of range"
