@@ -121,7 +121,7 @@ def early_start(env: Env, memory: ReplayBuffer, steps: int, policy: Callable = N
         env = AutoResetWrapper(env)
     obs, _ = env.reset()
     for _ in range(steps):
-        if policy is None:
+        if not policy is None:
             action = policy(obs)
         else:
             action = env.action_space.sample()

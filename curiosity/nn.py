@@ -78,7 +78,7 @@ class ClassicalGaussianActor(GaussianActor):
             nn.Linear(in_features=features, out_features=n_actions),
             nn.Sigmoid()
         )
-        super(mean, std)
+        super().__init__(mean, std)
 
 # TODO(mark)
 # - AtariGaussianActor

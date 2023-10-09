@@ -5,7 +5,6 @@ from typing import Dict
 
 import gymnasium as gym
 from gymnasium.wrappers.autoreset import AutoResetWrapper
-from gymnasium.wrappers.record_video import RecordVideo
 from gymnasium.spaces import Box
 import torch
 import torch.nn as nn
@@ -13,10 +12,10 @@ from tqdm import tqdm
 import wandb
 
 from curiosity.experience import (
-    ReplayBuffer,
+    build_replay_buffer,
     early_start
 )
-from curiosity.logging import evaluate
+from curiosity.logging import EvaluationEnv 
 from curiosity.nn import (
     ClassicalGaussianActor,
     AddTargetNetwork
@@ -51,53 +50,42 @@ default_config = {
 }
 
 def train(config: Dict = default_config):
-
     PROJECT_NAME = "dqn_{}_{}".format(config["environment"], str(datetime.now()).replace(":","-").replace(".","-"))
     random.seed(config['seed'])
 
     # Create Environments
-    env_train = AutoResetWrapper(gym.make(config["environment"]))
-    env_eval = RecordVideo(
-        gym.make(config["environment"], render_mode="rgb_array"),
-        f"log/video/{PROJECT_NAME}",
-        episode_trigger=lambda x: x% (config["eval_repeat"]*config["frames_per_video"]//config["frames_per_epoch"])==0,
-        disable_logger=True
-    )
-    if not isinstance(env_train.action_space, Box) or len(env_train.action_space.shape) != 1:
+    env = AutoResetWrapper(gym.make(config["environment"], render_mode="rgb_array"))
+    if not isinstance(env.action_space, Box) or len(env.action_space.shape) != 1:
         raise ValueError("This implementation of DDPG requires 1D continuous actions")
-    if not isinstance(env_train.observation_space, Box) or len(env_train.observation_space.shape) != 1:
-        raise ValueError("Network is defined only for 1D box observations. Is this a pixel space?")
-    env_train.reset(seed=config['seed'])
-    env_eval.reset(seed=config['seed'])
+    env.reset(seed=config['seed'])
 
     # Define Critic
-    actor, critic = build_actor_critic(env_train)
+    actor, critic = build_actor_critic(env)
     actor, critic = AddTargetNetwork(actor, device=DEVICE), AddTargetNetwork(critic, device=DEVICE)
 
-    # Initialise Replay Buffer
-    memory = ReplayBuffer(
-        capacity=config["replay_buffer_capacity"],
-        shape=(env_train.observation_space.shape, env_train.action_space.shape, (), env_train.observation_space.shape, ()),
-        dtype=(torch.float32, torch.int, torch.float32, torch.float32, torch.bool),
-        device=DEVICE
-    )
+    # Initialise Replay Buffer    
+    memory = build_replay_buffer(env, capacity=config["replay_buffer_capacity"], device=DEVICE)
+
     # Loss
     loss_critic_fn = nn.MSELoss()
     optim_actor = torch.optim.Adam(params=actor.net.parameters(), lr=config["lr"])
     optim_critic = torch.optim.Adam(params=critic.net.parameters(), lr=config["lr"])
+
     # Logging
-    if WANDB:
-        wandb.init(
-            project = "curiosity",
-            name = PROJECT_NAME,
-            config = config
-        )
+    evaluator = EvaluationEnv(
+        env=env,
+        project_name=PROJECT_NAME,
+        config=config,
+        video=config["eval_repeat"]*config["frames_per_video"]//config["frames_per_epoch"],
+        wandb_enable=WANDB
+    )
+    evaluator.reset(seed=config["seed"])
 
     # Training loop
-    obs, _ = env_train.reset()
+    obs, _ = env.reset()
     epoch = 0
     with tqdm(total=config["total_frames"] // config["frames_per_epoch"], file=sys.stdout) as pbar:
-        early_start(env_train, memory, config["initial_collecton_size"])
+        early_start(env, memory, config["initial_collection_size"])
         # Logging
         loss_critic_value = 0
         loss_actor_value = 0
@@ -111,7 +99,7 @@ def train(config: Dict = default_config):
             with torch.no_grad():
                 action = actor.target(torch.tensor(obs, device=DEVICE)).cpu().detach().numpy()
             # Step environment
-            n_obs, reward, terminated, truncated, _ = env_train.step(action)
+            n_obs, reward, terminated, truncated, _ = env.step(action)
             # Update memory buffer
                 # (s_t, a_t, r_t, s_t+1, d)
             transition_tuple = (obs, action, reward, n_obs, terminated)
@@ -149,26 +137,21 @@ def train(config: Dict = default_config):
             # Epoch Logging
             if epoch_update:
                 epoch += 1
-                reward = evaluate(
-                    env=env_eval,
+                reward = evaluator.evaluate(
                     policy = lambda x: actor(torch.tensor(x, device=DEVICE), noise=False).cpu().numpy(),
                     repeat=config["eval_repeat"]
                 )
 
                 pbar.set_description(f"epoch {epoch} reward {reward} critic loss {loss_critic_value} actor loss {loss_actor_value}")
-                pbar.update(1)
-                if WANDB:
-                    wandb.log({
-                        "frame": step,
-                        "eval_reward": reward,
-                        "critic_loss": loss_critic_value,
-                        "actor_loss": loss_actor_value,
-                    })
+                evaluator.log({
+                    "frame": step,
+                    "eval_reward": reward,
+                    "critic_loss": loss_critic_value,
+                    "actor_loss": loss_actor_value,
+                })
 
-        env_eval.close()
-        env_train.close()
-        if WANDB:
-            wandb.finish()
+        evaluator.close()
+        env.close()
 
 def build_actor_critic(env: gym.Env, N: int = 128):
     actor = ClassicalGaussianActor(N, env.action_space.shape[-1]).to(device=DEVICE)
