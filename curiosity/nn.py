@@ -1,5 +1,7 @@
 import copy
+from typing import Union
 
+import numpy as np
 from gymnasium import Env
 from gymnasium.spaces import Box, Discrete
 import torch
@@ -30,7 +32,7 @@ class AddTargetNetwork(nn.Module):
 class GaussianActor(nn.Module):
     """ Implements a policy module with normal noise applied, for continuous environments.
     """
-    def __init__(self, mean_network: nn.Module, std_network: nn.Module):
+    def __init__(self, mean_network: nn.Module, std: Union[float, torch.Tensor, nn.Module]):
         """ Initialises the gaussian actor
 
         Args:
@@ -39,46 +41,47 @@ class GaussianActor(nn.Module):
         """
         super().__init__()
         self.mean = mean_network
-        self.std = std_network
+        self.std = std
 
-    def forward(self, x: torch.Tensor, noise: bool = True) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, noise: bool = False) -> torch.Tensor:
         """ Calculates the action to take
 
         Args:
             x (torch.Tensor): obs
             noise (bool, optional): Toggle to add gaussian noise.
                 For example, set to false when evaluating.
-                Defaults to True.
+                Defaults to False.
 
         Returns:
             torch.Tensor: action
         """
         action = self.mean(x)
         if noise:
-            std = self.std(x)
+            std = self.std
+            if isinstance(std, nn.Module):
+                std = self.std(x)
             action = torch.normal(action, std)
         return action
-    
+
 class ClassicalGaussianActor(GaussianActor):
     """ An actor for continuous low-dimensionality gym environments
     """
-    def __init__(self, features: int, n_actions: int):
-        shared = nn.Sequential(
+    def __init__(self, env: Env, features=128, exploration_factor=0.1):
+        mean = nn.Sequential(
             nn.LazyLinear(out_features=features),
             nn.Tanh(),
             nn.Linear(in_features=features, out_features=features),
             nn.Tanh(),
+            nn.Linear(in_features=features, out_features=env.action_space.shape[-1]),
+            nn.Tanh()
         )
-        mean = nn.Sequential(
-            shared,
-            nn.Linear(in_features=features, out_features=n_actions)
-        )
-        std = nn.Sequential(
-            shared,
-            nn.Linear(in_features=features, out_features=n_actions),
-            nn.Sigmoid()
-        )
-        super().__init__(mean, std)
+        super().__init__(mean, exploration_factor)
+        self.register_buffer("scale", torch.tensor(env.action_space.high-env.action_space.low) / 2.0)
+        self.register_buffer("bias", torch.tensor(env.action_space.high+env.action_space.low) / 2.0)
+
+    def forward(self, *args, **kwargs):
+        return super().forward(*args, **kwargs) * self.scale + self.bias
+
 
 # TODO(mark)
 # - AtariGaussianActor

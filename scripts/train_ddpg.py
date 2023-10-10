@@ -3,13 +3,13 @@ import random
 import sys
 from typing import Dict
 
+import numpy as np
 import gymnasium as gym
 from gymnasium.wrappers.autoreset import AutoResetWrapper
 from gymnasium.spaces import Box
 import torch
 import torch.nn as nn
 from tqdm import tqdm
-import wandb
 
 from curiosity.experience import (
     build_replay_buffer,
@@ -21,8 +21,8 @@ from curiosity.nn import (
     AddTargetNetwork
 )
 
-# An implementation of DQN
-# Mnih, Volodymyr, et al. Playing Atari with Deep Reinforcement Learning. 2013.
+# An implementation of DDPG
+# Lillicrap, et al. Continuous control with deep reinforcement learning. 2015.
 
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 WANDB = False
@@ -36,6 +36,7 @@ default_config = {
     # Environemnt
     "environment":"Pendulum-v1",
     "discount_factor": 0.99,
+    "exploration_factor": 0.1,
     # Network
     "features": 128,
     "target_update_frequency": 500,
@@ -60,7 +61,7 @@ def train(config: Dict = default_config):
     env.reset(seed=config['seed'])
 
     # Define Critic
-    actor, critic = build_actor_critic(env)
+    actor, critic = build_actor_critic(env, config["features"], config["exploration_factor"])
     actor, critic = AddTargetNetwork(actor, device=DEVICE), AddTargetNetwork(critic, device=DEVICE)
 
     # Initialise Replay Buffer    
@@ -97,14 +98,19 @@ def train(config: Dict = default_config):
 
             # Calculate action
             with torch.no_grad():
-                action = actor.target(torch.tensor(obs, device=DEVICE)).cpu().detach().numpy()
+                action = actor(torch.tensor(obs, device=DEVICE), noise=True) \
+                    .cpu() \
+                    .detach() \
+                    .numpy() \
+                    .clip(env.action_space.low, env.action_space.high)
             # Step environment
-            n_obs, reward, terminated, truncated, _ = env.step(action)
+            n_obs, reward, terminated, truncated, infos = env.step(action)
             # Update memory buffer
                 # (s_t, a_t, r_t, s_t+1, d)
             transition_tuple = (obs, action, reward, n_obs, terminated)
             obs = n_obs
             memory.append(transition_tuple)
+
             # ====================
             # Gradient Update 
             # Mostly Update this
@@ -116,7 +122,7 @@ def train(config: Dict = default_config):
             s_t0, a_t, r_t, s_t1, d = memory.sample(config["minibatch_size"], continuous=False)
             x = critic(torch.cat((s_t0, a_t), 1)).squeeze()
             with torch.no_grad():
-                target_max = (~d) * critic.target(torch.cat((s_t1, actor(s_t1)), 1)).squeeze()
+                target_max = (~d) * critic.target(torch.cat((s_t1, actor.target(s_t1)), 1)).squeeze()
                 y = (r_t + target_max * config["discount_factor"])
             loss_critic = loss_critic_fn(y, x)
             optim_critic.zero_grad()
@@ -130,7 +136,6 @@ def train(config: Dict = default_config):
             loss_actor_value = loss_actor.item()
             loss_actor.backward()
             optim_actor.step()
-
             critic.update_target_network(config["tau"])
             actor.update_target_network(config["tau"])
 
@@ -138,11 +143,11 @@ def train(config: Dict = default_config):
             if epoch_update:
                 epoch += 1
                 reward = evaluator.evaluate(
-                    policy = lambda x: actor(torch.tensor(x, device=DEVICE), noise=False).cpu().numpy(),
+                    policy = lambda x: actor(torch.tensor(x, device=DEVICE)).cpu().numpy(),
                     repeat=config["eval_repeat"]
                 )
-
                 pbar.set_description(f"epoch {epoch} reward {reward} critic loss {loss_critic_value} actor loss {loss_actor_value}")
+                pbar.update(1)
                 evaluator.log({
                     "frame": step,
                     "eval_reward": reward,
@@ -153,8 +158,8 @@ def train(config: Dict = default_config):
         evaluator.close()
         env.close()
 
-def build_actor_critic(env: gym.Env, N: int = 128):
-    actor = ClassicalGaussianActor(N, env.action_space.shape[-1]).to(device=DEVICE)
+def build_actor_critic(env: gym.Env, N: int = 128, exploration_factor: float = 0.1):
+    actor = ClassicalGaussianActor(env, N, exploration_factor).to(device=DEVICE)
     critic = nn.Sequential(
         nn.LazyLinear(out_features=N),
         nn.Tanh(),
