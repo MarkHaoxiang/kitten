@@ -25,16 +25,16 @@ from curiosity.nn import (
 # Lillicrap, et al. Continuous control with deep reinforcement learning. 2015.
 
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-WANDB = False
 
 default_config = {
     # Experimentation and Logging
+    "wandb": True,
     "seed": 0,
     "frames_per_epoch": 1000,
     "frames_per_video": 50000,
     "eval_repeat": 10,
     # Environemnt
-    "environment":"Pendulum-v1",
+    "environment":"MountainCarContinuous-v0",
     "discount_factor": 0.99,
     "exploration_factor": 0.1,
     # Network
@@ -51,7 +51,7 @@ default_config = {
 }
 
 def train(config: Dict = default_config):
-    PROJECT_NAME = "dqn_{}_{}".format(config["environment"], str(datetime.now()).replace(":","-").replace(".","-"))
+    PROJECT_NAME = "ddpg_{}_{}".format(config["environment"], str(datetime.now()).replace(":","-").replace(".","-"))
     random.seed(config['seed'])
 
     # Create Environments
@@ -78,7 +78,7 @@ def train(config: Dict = default_config):
         project_name=PROJECT_NAME,
         config=config,
         video=config["eval_repeat"]*config["frames_per_video"]//config["frames_per_epoch"],
-        wandb_enable=WANDB
+        wandb_enable=config["wandb"]
     )
     evaluator.reset(seed=config["seed"])
 
@@ -99,9 +99,7 @@ def train(config: Dict = default_config):
             # Calculate action
             with torch.no_grad():
                 action = actor(torch.tensor(obs, device=DEVICE), noise=True) \
-                    .cpu() \
-                    .detach() \
-                    .numpy() \
+                    .cpu().detach().numpy() \
                     .clip(env.action_space.low, env.action_space.high)
             # Step environment
             n_obs, reward, terminated, truncated, infos = env.step(action)
