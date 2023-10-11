@@ -29,6 +29,7 @@ class AddTargetNetwork(nn.Module):
         assert (0 <= tau <= 1), f"Weighting {tau} is out of range"
         for target_param, net_param in zip(self.target.parameters(), self.net.parameters()):
             target_param.data.copy_(net_param.data * tau + target_param.data*(1-tau))
+
 class GaussianActor(nn.Module):
     """ Implements a policy module with normal noise applied, for continuous environments.
     """
@@ -101,16 +102,40 @@ def build_critic(env: Env, features: int):
     pixels = len(env.observation_space.shape) != 1
 
     if not pixels:
-        if discrete:
-            return nn.Sequential(
-                nn.Linear(in_features=env.observation_space.shape[-1] + (0 if discrete else len(env.action_space.shape)), out_features=features),
-                nn.Tanh(),
-                nn.Linear(in_features=features, out_features=features),
-                nn.Tanh(),
-                nn.Linear(in_features=features, out_features=env.action_space.n if discrete else 1)
-            )
+        return nn.Sequential(
+            nn.Linear(in_features=env.observation_space.shape[-1] + (0 if discrete else len(env.action_space.shape)), out_features=features),
+            nn.Tanh(),
+            nn.Linear(in_features=features, out_features=features),
+            nn.Tanh(),
+            nn.Linear(in_features=features, out_features=env.action_space.n if discrete else 1)
+        )
     else:
-        raise NotImplementedError("Pixel space is a work in progress")
+        # Architecture from OpenAI baselines
+        class AtariNetwork(nn.Module):
+            def __init__(self, atari_grayscale: bool = True):
+                super().__init__()
+                self.grayscale = atari_grayscale
+                self.conv = nn.Sequential(
+                    nn.Conv2d(in_channels=1, out_channels=16, kernel_size=8, stride=4),
+                    nn.ReLU(),
+                    nn.Conv2d(in_channels=16, out_channels=32, kernel_size=4, stride=2),
+                    nn.ReLU(),
+                )
+                self.flatten = nn.Flatten()
+                self.linear = nn.LazyLinear(env.action_space.n)
 
+            def forward(self, x: torch.Tensor) -> torch.Tensor:
+                if self.grayscale:
+                    x = x.unsqueeze(-1)
+                    x = torch.transpose(x, -1, -3)
+                if len(x.shape) == 3:
+                    x = x.unsqueeze(0)
+                result = self.conv(x)
+                result = self.flatten(result)
+                result = self.linear(result)
+                result = result.squeeze()
+                return result
+
+        return AtariNetwork()
 # TODO(mark)
 # - Whats a good method for sharing layers between actor and critic. Is it even neccessary?

@@ -1,0 +1,24 @@
+{
+    "seed": 0,
+    "frames_per_epoch": 1000,
+    "frames_per_video": 50000,
+    "eval_repeat": 10,
+    "wandb": false,
+
+    "environment": "Acrobot-v1",
+    "atari": false,
+    "discount_factor": 0.99,
+
+    "critic_features": 128,
+    "target_update_frequency": 500,
+
+    "replay_buffer_capacity": 10000,
+    "total_frames": 500000,
+    "minibatch_size": 128,
+    "initial_collection_size": 10000,
+    "update_frequency": 10,
+
+    "initial_exploration_factor": 1,
+    "final_exploration_factor": 0.05,
+    "exploration_anneal_time": 50000
+}

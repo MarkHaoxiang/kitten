@@ -1,12 +1,14 @@
+import argparse
 from datetime import datetime
+import json
 import random
 import sys
 from typing import Dict
 
 import gymnasium as gym
 from gymnasium.wrappers.autoreset import AutoResetWrapper
-from gymnasium.wrappers.record_video import RecordVideo
-from gymnasium.spaces import Box, Discrete
+from gymnasium.wrappers.atari_preprocessing import AtariPreprocessing
+from gymnasium.spaces import Discrete
 import torch
 import torch.nn as nn
 from tqdm import tqdm
@@ -21,46 +23,30 @@ from curiosity.nn import (
     build_critic
 )
 
+parser = argparse.ArgumentParser(
+    prog="DQN-RAINBOW",
+    description= "Mnih, Volodymyr, et al. Playing Atari with Deep Reinforcement Learning. 2013. Hessel et  Al. Rainbow: Combining Improvements in Deep Reinforcement Learning"
+)
+parser.add_argument("config", help="The configuration file to pass in.")
+args = parser.parse_args()
+
 # An implementation of DQN
-# Mnih, Volodymyr, et al. Playing Atari with Deep Reinforcement Learning. 2013.
+# 
+# With improvements to form RAINBOW (TODO)
 
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-WANDB = False
 
-default_config = {
-    # Experimentation and Logging
-    "seed": 0,
-    "frames_per_epoch": 1000,
-    "frames_per_video": 50000,
-    "eval_repeat": 10,
-    # Environemnt
-    "environment": "Acrobot-v1",
-    "discount_factor": 0.99,
-    # Critic
-    "critic_features": 128,
-    "target_update_frequency": 500,
-    # Replay Buffer Capacity
-    "replay_buffer_capacity": 10000,
-    # Training
-    "total_frames": 500000,
-    "minibatch_size": 128,
-    "initial_collection_size": 10000,
-    "update_frequency": 10,
-    # Exploration
-        # Epsilon Greedy Exploration
-    "initial_exploration_factor": 1,
-    "final_exploration_factor": 0.05,
-    "exploration_anneal_time": 50000
-}
-
-
-def train(config: Dict = default_config):
-
+def train(config: Dict):
     PROJECT_NAME = "dqn_{}_{}".format(config["environment"], str(datetime.now()).replace(":","-").replace(".","-"))
     random.seed(config['seed'])
 
     # Create Environments
-    env = AutoResetWrapper(gym.make(config["environment"], render_mode="rgb_array"))    
+    if config["atari"]:
+        env = gym.make(config["environment"], render_mode="rgb_array", frameskip=1)
+        env = AtariPreprocessing(env)
+    else:
+        env = gym.make(config["environment"], render_mode="rgb_array")
+    env = AutoResetWrapper(env)    
     if not isinstance(env.action_space, Discrete):
         raise ValueError("DQN requires discrete actions")
     env.reset(seed=config["seed"])
@@ -81,7 +67,7 @@ def train(config: Dict = default_config):
         project_name=PROJECT_NAME,
         config=config,
         video=config["eval_repeat"]*config["frames_per_video"]//config["frames_per_epoch"],
-        wandb_enable=WANDB
+        wandb_enable=config["wandb"]
     )
     evaluator.reset(seed=config["seed"])
 
@@ -93,18 +79,16 @@ def train(config: Dict = default_config):
     with tqdm(total=config["total_frames"] // config["frames_per_epoch"], file=sys.stdout) as pbar:
         early_start(env, memory, config["initial_collection_size"])
         # Logging
-        critic_loss = 0
         for step in range(config["total_frames"]):
 
             # ====================
             # Data Collection
             # ====================
-
             train_step = max(0, step-config["initial_collection_size"])
             exploration_stage = min(1, train_step / config["exploration_anneal_time"])
             epsilon = exploration_stage * config["final_exploration_factor"] + (1-exploration_stage) * config["initial_exploration_factor"]
             # Calculate action
-            action = epsilon_greedy(torch.argmax(critic(torch.tensor(obs, device=DEVICE))), env.action_space, epsilon)
+            action = epsilon_greedy(torch.argmax(critic(torch.tensor(obs, device=DEVICE, dtype=torch.float32))), env.action_space, epsilon)
             # Step environment
             n_obs, reward, terminated, truncated, _ = env.step(action)
             # Update memory buffer
@@ -127,7 +111,8 @@ def train(config: Dict = default_config):
                     target_max = (~d) * torch.max(critic.target(s_t1), dim=1).values
                     y = (r_t + target_max * config["discount_factor"])
                 output = loss(y, x)
-                critic_loss = output.item()
+                if epoch_update:
+                    critic_loss = output.item()
                 optim.zero_grad()
                 output.backward()
                 optim.step()
@@ -139,7 +124,7 @@ def train(config: Dict = default_config):
             # Epoch Logging
             if epoch_update:
                 epoch += 1
-                reward = evaluator.evaluate(policy = lambda x: torch.argmax(critic(torch.tensor(x,device=DEVICE))).cpu().numpy(), repeat=config["eval_repeat"])
+                reward = evaluator.evaluate(policy = lambda x: torch.argmax(critic(torch.tensor(x, device=DEVICE, dtype=torch.float32))).cpu().numpy(), repeat=config["eval_repeat"])
                 pbar.set_description(f"epoch {epoch} reward {reward} critic loss {critic_loss} exploration factor {epsilon}")
                 pbar.update(1)
                 evaluator.log({
@@ -153,4 +138,6 @@ def train(config: Dict = default_config):
         env.close()
 
 if __name__ == "__main__":
-    train()
+    with open(args.config, 'r') as f:
+        config = json.load(f)
+    train(config)
