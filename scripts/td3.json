@@ -10,7 +10,8 @@
     "exploration_factor": 0.1,
     
     "features": 128,
-    "target_update_frequency": 1,
+    "critic_update_frequency": 500,
+    "policy_update_frequency": 2,
     
     "replay_buffer_capacity": 10000,
 

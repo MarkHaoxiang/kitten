@@ -1,4 +1,5 @@
 import argparse
+import copy
 from datetime import datetime
 import json
 import random
@@ -21,17 +22,12 @@ from curiosity.nn import (
     ClassicalGaussianActor,
     AddTargetNetwork
 )
-
 parser = argparse.ArgumentParser(
-    prog="DDPG",
-    description= "Lillicrap, et al. Continuous control with deep reinforcement learning. 2015."
+    prog="TD3",
+    description= "Fujimoto, et al. Addressing Function Approximation Error in Actor-Critic Methods. 2018."
 )
 parser.add_argument("config", help="The configuration file to pass in.")
 args = parser.parse_args()
-
-
-# An implementation of DDPG
-# Lillicrap, et al. Continuous control with deep reinforcement learning. 2015.
 
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -45,14 +41,15 @@ def train(config: Dict,
           discount_factor: float,
           exploration_factor: float,
           features: int,
-          target_update_frequency: int,
+          critic_update_frequency: int,
+          policy_update_frequency: float,
           replay_buffer_capacity: int,
           total_frames: int,
           minibatch_size: int,
           initial_collection_size: int,
           tau: float,
           lr: float):
-    """ Train DDPG
+    """ Train TD3
 
     Args:
             # Metadata
@@ -69,10 +66,9 @@ def train(config: Dict,
             # Algorithm
         exploration_factor (float): Gaussian noise standard deviation for exploration
         features (int): Helps define the complexity of neural nets used
-        target_update_frequency (int): Frames between each network update
-        e
-        
-        fer_capacity (int): Capacity of replay buffer
+        critic_update_frequency (int): Frames between each critic update
+        policy_update_frequency (float): Ratio of critic updates - actor updates
+        replay_buffer_capacity (int): Capacity of replay buffer
         total_frames (int): Total frames to train on
         minibatch_size (int): Batch size to run gradient descent
         initial_collection_size (int): Early start to help with explorations by taking random actions
@@ -82,19 +78,22 @@ def train(config: Dict,
     Raises:
         ValueError: Invalid configuration passed
     """
+    
     # Metadata
-    PROJECT_NAME = "ddpg_{}_{}".format(environment, str(datetime.now()).replace(":","-").replace(".","-"))
+    PROJECT_NAME = "td3_{}_{}".format(environment, str(datetime.now()).replace(":","-").replace(".","-"))
     random.seed(seed)
+    policy_update_frequency = int(policy_update_frequency * critic_update_frequency)
 
     # Create Environments
     env = AutoResetWrapper(gym.make(environment, render_mode="rgb_array"))
     if not isinstance(env.action_space, Box) or len(env.action_space.shape) != 1:
-        raise ValueError("This implementation of DDPG requires 1D continuous actions")
+        raise ValueError("This implementation of TD3 requires 1D continuous actions")
     env.reset(seed=seed)
 
     # Define Actor / Critic
-    actor, critic = build_actor_critic(env, features, exploration_factor)
-    actor, critic = AddTargetNetwork(actor, device=DEVICE), AddTargetNetwork(critic, device=DEVICE)
+    actor, critic_1 = build_actor_critic(env, features, exploration_factor)
+    actor, critic_1 = AddTargetNetwork(actor, device=DEVICE), AddTargetNetwork(critic_1, device=DEVICE)
+    critic_2 = copy.deepcopy(critic_1)
 
     # Initialise Replay Buffer    
     memory = build_replay_buffer(env, capacity=replay_buffer_capacity, device=DEVICE)
@@ -102,7 +101,7 @@ def train(config: Dict,
     # Loss
     loss_critic_fn = nn.MSELoss()
     optim_actor = torch.optim.Adam(params=actor.net.parameters(), lr=lr)
-    optim_critic = torch.optim.Adam(params=critic.net.parameters(), lr=lr)
+    optim_critic = torch.optim.Adam(params=critic_1.net.parameters(), lr=lr)
 
     # Logging
     evaluator = EvaluationEnv(
@@ -149,26 +148,25 @@ def train(config: Dict,
             epoch_update = step % frames_per_epoch == 0 
             # DDPG Update
                 # Critic
-            if step % target_update_frequency == 0:
-                s_t0, a_t, r_t, s_t1, d = memory.sample(minibatch_size, continuous=False)
-                x = critic(torch.cat((s_t0, a_t), 1)).squeeze()
-                with torch.no_grad():
-                    target_max = (~d) * critic.target(torch.cat((s_t1, actor.target(s_t1)), 1)).squeeze()
-                    y = (r_t + target_max * discount_factor)
-                loss_critic = loss_critic_fn(y, x)
-                optim_critic.zero_grad()
-                loss_critic_value = loss_critic.item()
-                loss_critic.backward()
-                optim_critic.step()
-                    # Actor
-                desired_action = actor(s_t0)
-                loss_actor = -critic(torch.cat((s_t0, desired_action), 1)).mean()
-                optim_actor.zero_grad()
-                loss_actor_value = loss_actor.item()
-                loss_actor.backward()
-                optim_actor.step()
-                critic.update_target_network(tau)
-                actor.update_target_network(tau)
+            s_t0, a_t, r_t, s_t1, d = memory.sample(minibatch_size, continuous=False)
+            x = critic_1(torch.cat((s_t0, a_t), 1)).squeeze()
+            with torch.no_grad():
+                target_max = (~d) * critic_1.target(torch.cat((s_t1, actor.target(s_t1)), 1)).squeeze()
+                y = (r_t + target_max * discount_factor)
+            loss_critic = loss_critic_fn(y, x)
+            optim_critic.zero_grad()
+            loss_critic_value = loss_critic.item()
+            loss_critic.backward()
+            optim_critic.step()
+                # Actor
+            desired_action = actor(s_t0)
+            loss_actor = -critic_1(torch.cat((s_t0, desired_action), 1)).mean()
+            optim_actor.zero_grad()
+            loss_actor_value = loss_actor.item()
+            loss_actor.backward()
+            optim_actor.step()
+            critic_1.update_target_network(tau)
+            actor.update_target_network(tau)
 
             # Epoch Logging
             if epoch_update:
