@@ -1,0 +1,22 @@
+{
+    "wandb": false,
+    "seed": 0,
+    "frames_per_epoch": 1000,
+    "frames_per_video": 50000,
+    "eval_repeat": 10,
+
+    "environment":"MountainCarContinuous-v0",
+    "discount_factor": 0.99,
+    "exploration_factor": 0.1,
+    
+    "features": 128,
+    "target_update_frequency": 500,
+    
+    "replay_buffer_capacity": 10000,
+
+    "total_frames": 500000,
+    "minibatch_size": 128,
+    "initial_collection_size": 10000,
+    "tau": 0.005,
+    "lr": 0.001
+}

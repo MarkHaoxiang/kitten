@@ -1,9 +1,10 @@
+import argparse
 from datetime import datetime
+import json
 import random
 import sys
 from typing import Dict
 
-import numpy as np
 import gymnasium as gym
 from gymnasium.wrappers.autoreset import AutoResetWrapper
 from gymnasium.spaces import Box
@@ -21,36 +22,20 @@ from curiosity.nn import (
     AddTargetNetwork
 )
 
+parser = argparse.ArgumentParser(
+    prog="DDPG",
+    description= "Lillicrap, et al. Continuous control with deep reinforcement learning. 2015."
+)
+parser.add_argument("config", help="The configuration file to pass in.")
+args = parser.parse_args()
+
+
 # An implementation of DDPG
 # Lillicrap, et al. Continuous control with deep reinforcement learning. 2015.
 
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-default_config = {
-    # Experimentation and Logging
-    "wandb": True,
-    "seed": 0,
-    "frames_per_epoch": 1000,
-    "frames_per_video": 50000,
-    "eval_repeat": 10,
-    # Environemnt
-    "environment":"MountainCarContinuous-v0",
-    "discount_factor": 0.99,
-    "exploration_factor": 0.1,
-    # Network
-    "features": 128,
-    "target_update_frequency": 500,
-    # Replay Buffer Capacity
-    "replay_buffer_capacity": 10000,
-    # Training
-    "total_frames": 500000,
-    "minibatch_size": 128,
-    "initial_collection_size": 10000,
-    "tau": 0.005,
-    "lr": 0.001
-}
-
-def train(config: Dict = default_config):
+def train(config: Dict):
     PROJECT_NAME = "ddpg_{}_{}".format(config["environment"], str(datetime.now()).replace(":","-").replace(".","-"))
     random.seed(config['seed'])
 
@@ -169,4 +154,6 @@ def build_actor_critic(env: gym.Env, N: int = 128, exploration_factor: float = 0
     return actor, critic
 
 if __name__ == "__main__":
-    train()
+    with open(args.config, 'r') as f:
+        config = json.load(f)
+    train(config)

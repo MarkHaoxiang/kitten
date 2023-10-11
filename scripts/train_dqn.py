@@ -24,8 +24,8 @@ from curiosity.nn import (
 )
 
 parser = argparse.ArgumentParser(
-    prog="DQN-RAINBOW",
-    description= "Mnih, Volodymyr, et al. Playing Atari with Deep Reinforcement Learning. 2013. Hessel et  Al. Rainbow: Combining Improvements in Deep Reinforcement Learning"
+    prog="DQN",
+    description= "Mnih, Volodymyr, et al. Playing Atari with Deep Reinforcement Learning. 2013."
 )
 parser.add_argument("config", help="The configuration file to pass in.")
 args = parser.parse_args()
