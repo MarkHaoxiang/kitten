@@ -83,10 +83,6 @@ class ClassicalGaussianActor(GaussianActor):
     def forward(self, *args, **kwargs):
         return super().forward(*args, **kwargs) * self.scale + self.bias
 
-
-# TODO(mark)
-# - AtariGaussianActor
-
 def build_critic(env: Env, features: int):
     """ Build a default critic network for env on a single-agent environment
     """

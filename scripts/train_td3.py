@@ -1,5 +1,4 @@
 import argparse
-import copy
 from datetime import datetime
 import json
 import random
@@ -24,7 +23,7 @@ from curiosity.nn import (
 )
 parser = argparse.ArgumentParser(
     prog="TD3",
-    description= "Fujimoto, et al. Addressing Function Approximation Error in Actor-Critic Methods. 2018."
+    description= "Fujimoto, et al. Addressing Function Approximation Error in Actor-Critic Methods. 2018. Adds clipped double critic, delayed policy updates, and value function smoothing  to DDPG."
 )
 parser.add_argument("config", help="The configuration file to pass in.")
 args = parser.parse_args()
@@ -40,6 +39,7 @@ def train(config: Dict,
           environment: str,
           discount_factor: float,
           exploration_factor: float,
+          critic_noise: float,
           features: int,
           critic_update_frequency: int,
           policy_update_frequency: float,
@@ -65,6 +65,7 @@ def train(config: Dict,
         discount_factor (float): Reward discount
             # Algorithm
         exploration_factor (float): Gaussian noise standard deviation for exploration
+        target_noise (float): Smoothing noise standard deviation added to policy for the critic update
         features (int): Helps define the complexity of neural nets used
         critic_update_frequency (int): Frames between each critic update
         policy_update_frequency (float): Ratio of critic updates - actor updates
@@ -92,8 +93,10 @@ def train(config: Dict,
 
     # Define Actor / Critic
     actor, critic_1 = build_actor_critic(env, features, exploration_factor)
-    actor, critic_1 = AddTargetNetwork(actor, device=DEVICE), AddTargetNetwork(critic_1, device=DEVICE)
-    critic_2 = copy.deepcopy(critic_1)
+    _,     critic_2 = build_actor_critic(env, features, exploration_factor)
+    actor = AddTargetNetwork(actor, device=DEVICE)
+    critic_1 = AddTargetNetwork(critic_1, device=DEVICE)
+    critic_2 = AddTargetNetwork(critic_2, device=DEVICE)
 
     # Initialise Replay Buffer    
     memory = build_replay_buffer(env, capacity=replay_buffer_capacity, device=DEVICE)
@@ -101,7 +104,8 @@ def train(config: Dict,
     # Loss
     loss_critic_fn = nn.MSELoss()
     optim_actor = torch.optim.Adam(params=actor.net.parameters(), lr=lr)
-    optim_critic = torch.optim.Adam(params=critic_1.net.parameters(), lr=lr)
+    optim_critic_1 = torch.optim.Adam(params=critic_1.net.parameters(), lr=lr)
+    optim_critic_2 = torch.optim.Adam(params=critic_2.net.parameters(), lr=lr)
 
     # Logging
     evaluator = EvaluationEnv(
@@ -145,31 +149,42 @@ def train(config: Dict,
             # Mostly Update this
             # ====================
 
-            epoch_update = step % frames_per_epoch == 0 
             # DDPG Update
-                # Critic
             s_t0, a_t, r_t, s_t1, d = memory.sample(minibatch_size, continuous=False)
-            x = critic_1(torch.cat((s_t0, a_t), 1)).squeeze()
-            with torch.no_grad():
-                target_max = (~d) * critic_1.target(torch.cat((s_t1, actor.target(s_t1)), 1)).squeeze()
-                y = (r_t + target_max * discount_factor)
-            loss_critic = loss_critic_fn(y, x)
-            optim_critic.zero_grad()
-            loss_critic_value = loss_critic.item()
-            loss_critic.backward()
-            optim_critic.step()
+            if step % critic_update_frequency == 0:
+                # Critic
+                x1 = critic_1(torch.cat((s_t0, a_t), 1)).squeeze()
+                x2 = critic_2(torch.cat((s_t0, a_t), 1)).squeeze()
+                with torch.no_grad():
+                    next_action = actor.target(s_t1)
+                    target_max_1 = critic_1.target(torch.cat((s_t1, next_action), 1)).squeeze()
+                    target_max_2 = critic_2.target(torch.cat((s_t1, next_action), 1)).squeeze()
+                    y = (r_t + (~d) * torch.minimum(target_max_1, target_max_2) * discount_factor)
+                loss_critic_1 = loss_critic_fn(y, x1)
+                loss_critic_2 = loss_critic_fn(y, x2)
+                loss_critic_value = loss_critic_1.item()
+                optim_critic_1.zero_grad()
+                loss_critic_1.backward()
+                optim_critic_1.step()
+                optim_critic_2.zero_grad()
+                loss_critic_2.backward()
+                optim_critic_2.step()
+
+                critic_1.update_target_network(tau)
+                critic_2.update_target_network(tau)
+
+            if step % policy_update_frequency == 0:
                 # Actor
-            desired_action = actor(s_t0)
-            loss_actor = -critic_1(torch.cat((s_t0, desired_action), 1)).mean()
-            optim_actor.zero_grad()
-            loss_actor_value = loss_actor.item()
-            loss_actor.backward()
-            optim_actor.step()
-            critic_1.update_target_network(tau)
-            actor.update_target_network(tau)
+                desired_action = actor(s_t0)
+                loss_actor = -critic_1(torch.cat((s_t0, desired_action), 1)).mean()
+                optim_actor.zero_grad()
+                loss_actor_value = loss_actor.item()
+                loss_actor.backward()
+                optim_actor.step()
+                actor.update_target_network(tau)
 
             # Epoch Logging
-            if epoch_update:
+            if step % frames_per_epoch == 0 :
                 epoch += 1
                 reward = evaluator.evaluate(
                     policy = lambda x: actor(torch.tensor(x, device=DEVICE)).cpu().numpy(),

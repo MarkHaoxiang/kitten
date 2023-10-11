@@ -8,9 +8,10 @@
     "environment":"MountainCarContinuous-v0",
     "discount_factor": 0.99,
     "exploration_factor": 0.1,
+    "target_noise": 0.05,
     
     "features": 128,
-    "critic_update_frequency": 500,
+    "critic_update_frequency": 1,
     "policy_update_frequency": 2,
     
     "replay_buffer_capacity": 10000,
