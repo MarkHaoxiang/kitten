@@ -39,7 +39,8 @@ def train(config: Dict,
           environment: str,
           discount_factor: float,
           exploration_factor: float,
-          critic_noise: float,
+          target_noise: float,
+          target_noise_clip: float,
           features: int,
           critic_update_frequency: int,
           policy_update_frequency: float,
@@ -66,6 +67,7 @@ def train(config: Dict,
             # Algorithm
         exploration_factor (float): Gaussian noise standard deviation for exploration
         target_noise (float): Smoothing noise standard deviation added to policy for the critic update
+        target_noise_clip (float): Clip target noise
         features (int): Helps define the complexity of neural nets used
         critic_update_frequency (int): Frames between each critic update
         policy_update_frequency (float): Ratio of critic updates - actor updates
@@ -85,11 +87,13 @@ def train(config: Dict,
     random.seed(seed)
     policy_update_frequency = int(policy_update_frequency * critic_update_frequency)
 
+
     # Create Environments
     env = AutoResetWrapper(gym.make(environment, render_mode="rgb_array"))
     if not isinstance(env.action_space, Box) or len(env.action_space.shape) != 1:
         raise ValueError("This implementation of TD3 requires 1D continuous actions")
     env.reset(seed=seed)
+    env_action_scale = torch.tensor(env.action_space.high-env.action_space.low) / 2.0
 
     # Define Actor / Critic
     actor, critic_1 = build_actor_critic(env, features, exploration_factor)
@@ -104,8 +108,10 @@ def train(config: Dict,
     # Loss
     loss_critic_fn = nn.MSELoss()
     optim_actor = torch.optim.Adam(params=actor.net.parameters(), lr=lr)
-    optim_critic_1 = torch.optim.Adam(params=critic_1.net.parameters(), lr=lr)
-    optim_critic_2 = torch.optim.Adam(params=critic_2.net.parameters(), lr=lr)
+    optim_critic = torch.optim.Adam(
+        params=list(critic_1.net.parameters()) + list(critic_2.net.parameters()),
+        lr=lr
+    )
 
     # Logging
     evaluator = EvaluationEnv(
@@ -149,7 +155,7 @@ def train(config: Dict,
             # Mostly Update this
             # ====================
 
-            # DDPG Update
+            # TD3 Update
             s_t0, a_t, r_t, s_t1, d = memory.sample(minibatch_size, continuous=False)
             if step % critic_update_frequency == 0:
                 # Critic
@@ -157,21 +163,19 @@ def train(config: Dict,
                 x2 = critic_2(torch.cat((s_t0, a_t), 1)).squeeze()
                 with torch.no_grad():
                     next_action = actor.target(s_t1)
+                    next_action += torch.clamp(
+                        torch.normal(0, target_noise, next_action.shape, device=DEVICE),
+                        min = -target_noise_clip,
+                        max = target_noise_clip,
+                    ) * env_action_scale
                     target_max_1 = critic_1.target(torch.cat((s_t1, next_action), 1)).squeeze()
                     target_max_2 = critic_2.target(torch.cat((s_t1, next_action), 1)).squeeze()
                     y = (r_t + (~d) * torch.minimum(target_max_1, target_max_2) * discount_factor)
-                loss_critic_1 = loss_critic_fn(y, x1)
-                loss_critic_2 = loss_critic_fn(y, x2)
-                loss_critic_value = loss_critic_1.item()
-                optim_critic_1.zero_grad()
-                loss_critic_1.backward()
-                optim_critic_1.step()
-                optim_critic_2.zero_grad()
-                loss_critic_2.backward()
-                optim_critic_2.step()
-
-                critic_1.update_target_network(tau)
-                critic_2.update_target_network(tau)
+                loss_critic = loss_critic_fn(y, x1) + loss_critic_fn(y, x2)
+                loss_critic_value = loss_critic.item()
+                optim_critic.zero_grad()
+                loss_critic.backward()
+                optim_critic.step()
 
             if step % policy_update_frequency == 0:
                 # Actor
@@ -181,6 +185,10 @@ def train(config: Dict,
                 loss_actor_value = loss_actor.item()
                 loss_actor.backward()
                 optim_actor.step()
+
+                # Update Target Networks
+                critic_1.update_target_network(tau)
+                critic_2.update_target_network(tau)
                 actor.update_target_network(tau)
 
             # Epoch Logging
