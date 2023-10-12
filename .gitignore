@@ -162,4 +162,4 @@ cython_debug/
 napkin.ipynb
 log
 wandb
-scripts/test.json
+config/test.json
