@@ -130,7 +130,7 @@ def train(config: Dict,
 
             # Calculate action
             with torch.no_grad():
-                action = actor(torch.tensor(obs, device=DEVICE), noise=True) \
+                action = actor(torch.tensor(obs, device=DEVICE, dtype=torch.float32), noise=True) \
                     .cpu().detach().numpy() \
                     .clip(env.action_space.low, env.action_space.high)
             # Step environment
@@ -174,7 +174,7 @@ def train(config: Dict,
             if epoch_update:
                 epoch += 1
                 reward = evaluator.evaluate(
-                    policy = lambda x: actor(torch.tensor(x, device=DEVICE)).cpu().numpy(),
+                    policy = lambda x: actor(torch.tensor(x, device=DEVICE, dtype=torch.float32)).cpu().numpy(),
                     repeat=eval_repeat
                 )
                 pbar.set_description(f"epoch {epoch} reward {reward} critic loss {loss_critic_value} actor loss {loss_actor_value}")

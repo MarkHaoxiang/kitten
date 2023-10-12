@@ -4,19 +4,15 @@
     "frames_per_video": 50000,
     "eval_repeat": 10,
     "wandb": false,
-
-    "environment":"MountainCarContinuous-v0",
+    "environment":"Hopper-v4",
     "discount_factor": 0.99,
     "exploration_factor": 0.1,
-    
     "features": 128,
     "target_update_frequency": 1,
-    
-    "replay_buffer_capacity": 10000,
-
-    "total_frames": 500000,
-    "minibatch_size": 128,
-    "initial_collection_size": 10000,
+    "replay_buffer_capacity": 100000,
+    "total_frames": 1000000,
+    "minibatch_size": 256,
+    "initial_collection_size": 25000,
     "tau": 0.005,
-    "lr": 0.001
+    "lr": 0.0003
 }
