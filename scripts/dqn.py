@@ -152,10 +152,9 @@ def train(config: Dict,
                 pbar.set_description(f"epoch {epoch} reward {reward} critic loss {critic_loss} exploration factor {epsilon}")
                 pbar.update(1)
                 evaluator.log({
-                    "frame": step,
-                    "eval_reward": reward,
-                    "critic_loss": critic_loss,
-                    "exploration_factor": epsilon
+                    "train/frame": step,
+                    "train/critic_loss": critic_loss,
+                    "train/exploration_factor": epsilon
                 })
 
         evaluator.close()
