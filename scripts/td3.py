@@ -7,7 +7,6 @@ from typing import Dict
 
 import gymnasium as gym
 from gymnasium.wrappers.autoreset import AutoResetWrapper
-from gymnasium.spaces import Box
 import torch
 import torch.nn as nn
 from tqdm import tqdm
@@ -18,14 +17,21 @@ from curiosity.experience import (
 )
 from curiosity.logging import EvaluationEnv 
 from curiosity.nn import (
-    ClassicalGaussianActor,
-    AddTargetNetwork
+    AddTargetNetwork,
+    build_actor,
+    build_critic
 )
 parser = argparse.ArgumentParser(
     prog="TD3",
     description= "Fujimoto, et al. Addressing Function Approximation Error in Actor-Critic Methods. 2018. Adds clipped double critic, delayed policy updates, and value function smoothing  to DDPG."
 )
-parser.add_argument("config", help="The configuration file to pass in.")
+parser.add_argument(
+    '-c',
+    "--config",
+    default="scripts/td3.json",
+    required=False,
+    help="The configuration file to pass in."
+)
 args = parser.parse_args()
 
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -49,7 +55,8 @@ def train(config: Dict,
           minibatch_size: int,
           initial_collection_size: int,
           tau: float,
-          lr: float):
+          lr: float,
+          **kwargs):
     """ Train TD3
 
     Args:
@@ -90,17 +97,13 @@ def train(config: Dict,
 
     # Create Environments
     env = AutoResetWrapper(gym.make(environment, render_mode="rgb_array"))
-    if not isinstance(env.action_space, Box) or len(env.action_space.shape) != 1:
-        raise ValueError("This implementation of TD3 requires 1D continuous actions")
     env.reset(seed=seed)
     env_action_scale = torch.tensor(env.action_space.high-env.action_space.low, device=DEVICE) / 2.0
 
     # Define Actor / Critic
-    actor, critic_1 = build_actor_critic(env, features, exploration_factor)
-    _,     critic_2 = build_actor_critic(env, features, exploration_factor)
-    actor = AddTargetNetwork(actor, device=DEVICE)
-    critic_1 = AddTargetNetwork(critic_1, device=DEVICE)
-    critic_2 = AddTargetNetwork(critic_2, device=DEVICE)
+    actor = AddTargetNetwork(build_actor(env, features, exploration_factor), device=DEVICE)
+    critic_1 = AddTargetNetwork(build_critic(env, features), device=DEVICE)
+    critic_2 = AddTargetNetwork(build_critic(env, features), device=DEVICE)
 
     # Initialise Replay Buffer    
     memory = build_replay_buffer(env, capacity=replay_buffer_capacity, device=DEVICE)
@@ -209,18 +212,6 @@ def train(config: Dict,
 
         evaluator.close()
         env.close()
-
-def build_actor_critic(env: gym.Env, N: int = 128, exploration_factor: float = 0.1):
-    actor = ClassicalGaussianActor(env, N, exploration_factor).to(device=DEVICE)
-    critic = nn.Sequential(
-        nn.LazyLinear(out_features=N),
-        nn.Tanh(),
-        nn.Linear(in_features=N, out_features=N),
-        nn.Tanh(),
-        nn.Linear(in_features=N, out_features=1)
-    )
-
-    return actor, critic
 
 if __name__ == "__main__":
     with open(args.config, 'r') as f:

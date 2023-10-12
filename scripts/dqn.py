@@ -27,7 +27,13 @@ parser = argparse.ArgumentParser(
     prog="DQN",
     description= "Mnih, Volodymyr, et al. Playing Atari with Deep Reinforcement Learning. 2013."
 )
-parser.add_argument("config", help="The configuration file to pass in.")
+parser.add_argument(
+    '-c',
+    "--config",
+    default="scripts/dqn_classic.json",
+    required=False,
+    help="The configuration file to pass in."
+)
 args = parser.parse_args()
 
 # An implementation of DQN
@@ -36,26 +42,44 @@ args = parser.parse_args()
 
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-def train(config: Dict):
+def train(config: Dict,
+          seed: int = 0,
+          frames_per_epoch: int = 1000,
+          frames_per_video: int = 50000,
+          eval_repeat: int = 10,
+          wandb: bool = False,
+          environment: str = "Acrobot-v1",
+          atari: bool = False,
+          discount_factor: float = 0.99,
+          critic_features: int = 128,
+          target_update_frequency: int = 500,
+          replay_buffer_capacity: int = 10000,
+          total_frames: int = 500000,
+          minibatch_size: int = 128,
+          initial_collection_size: int = 10000,
+          update_frequency: int = 10,
+          initial_exploration_factor: float = 1.0,
+          final_exploration_factor: float = 0.05,
+          exploration_anneal_time: int = 50000):
     PROJECT_NAME = "dqn_{}_{}".format(config["environment"], str(datetime.now()).replace(":","-").replace(".","-"))
-    random.seed(config['seed'])
+    random.seed(seed)
 
     # Create Environments
-    if config["atari"]:
-        env = gym.make(config["environment"], render_mode="rgb_array", frameskip=1)
+    if atari:
+        env = gym.make(environment, render_mode="rgb_array", frameskip=1)
         env = AtariPreprocessing(env)
     else:
-        env = gym.make(config["environment"], render_mode="rgb_array")
+        env = gym.make(environment, render_mode="rgb_array")
     env = AutoResetWrapper(env)    
     if not isinstance(env.action_space, Discrete):
         raise ValueError("DQN requires discrete actions")
-    env.reset(seed=config["seed"])
+    env.reset(seed=seed)
 
     # Define Critic
-    critic = AddTargetNetwork(build_critic(env, config["critic_features"]), device=DEVICE)
+    critic = AddTargetNetwork(build_critic(env, critic_features), device=DEVICE)
 
     # Initialise Replay Buffer
-    memory = build_replay_buffer(env, capacity=config["replay_buffer_capacity"], device=DEVICE)
+    memory = build_replay_buffer(env, capacity=replay_buffer_capacity, device=DEVICE)
 
     # Loss
     loss = nn.MSELoss()
@@ -66,27 +90,27 @@ def train(config: Dict):
         env=env,
         project_name=PROJECT_NAME,
         config=config,
-        video=config["eval_repeat"]*config["frames_per_video"]//config["frames_per_epoch"],
-        wandb_enable=config["wandb"]
+        video=eval_repeat*frames_per_video//frames_per_epoch,
+        wandb_enable=wandb
     )
-    evaluator.reset(seed=config["seed"])
+    evaluator.reset(seed=seed)
 
     # ====================
     # Training loop
     # ====================
     obs, _ = env.reset()
     epoch = 0
-    with tqdm(total=config["total_frames"] // config["frames_per_epoch"], file=sys.stdout) as pbar:
-        early_start(env, memory, config["initial_collection_size"])
+    with tqdm(total=total_frames // frames_per_epoch, file=sys.stdout) as pbar:
+        early_start(env, memory, initial_collection_size)
         # Logging
-        for step in range(config["total_frames"]):
+        for step in range(total_frames):
 
             # ====================
             # Data Collection
             # ====================
-            train_step = max(0, step-config["initial_collection_size"])
-            exploration_stage = min(1, train_step / config["exploration_anneal_time"])
-            epsilon = exploration_stage * config["final_exploration_factor"] + (1-exploration_stage) * config["initial_exploration_factor"]
+            train_step = max(0, step-initial_collection_size)
+            exploration_stage = min(1, train_step / exploration_anneal_time)
+            epsilon = exploration_stage * final_exploration_factor + (1-exploration_stage) * initial_exploration_factor
             # Calculate action
             action = epsilon_greedy(torch.argmax(critic(torch.tensor(obs, device=DEVICE, dtype=torch.float32))), env.action_space, epsilon)
             # Step environment
@@ -102,14 +126,14 @@ def train(config: Dict):
             # Mostly Update this
             # ====================
 
-            epoch_update = step % config["frames_per_epoch"] == 0 
-            if step % config["update_frequency"] == 0:
+            epoch_update = step % frames_per_epoch == 0 
+            if step % update_frequency == 0:
                 # DQN Update
-                s_t0, a_t, r_t, s_t1, d = memory.sample(config["minibatch_size"], continuous=False)
-                x = critic(s_t0)[torch.arange(config["minibatch_size"]), a_t]
+                s_t0, a_t, r_t, s_t1, d = memory.sample(minibatch_size, continuous=False)
+                x = critic(s_t0)[torch.arange(minibatch_size), a_t]
                 with torch.no_grad():
                     target_max = (~d) * torch.max(critic.target(s_t1), dim=1).values
-                    y = (r_t + target_max * config["discount_factor"])
+                    y = (r_t + target_max * discount_factor)
                 output = loss(y, x)
                 if epoch_update:
                     critic_loss = output.item()
@@ -118,13 +142,13 @@ def train(config: Dict):
                 optim.step()
 
             # Update target networks
-            if step % config["target_update_frequency"] == 0:
+            if step % target_update_frequency == 0:
                 critic.update_target_network()
 
             # Epoch Logging
             if epoch_update:
                 epoch += 1
-                reward = evaluator.evaluate(policy = lambda x: torch.argmax(critic(torch.tensor(x, device=DEVICE, dtype=torch.float32))).cpu().numpy(), repeat=config["eval_repeat"])
+                reward = evaluator.evaluate(policy = lambda x: torch.argmax(critic(torch.tensor(x, device=DEVICE, dtype=torch.float32))).cpu().numpy(), repeat=eval_repeat)
                 pbar.set_description(f"epoch {epoch} reward {reward} critic loss {critic_loss} exploration factor {epsilon}")
                 pbar.update(1)
                 evaluator.log({

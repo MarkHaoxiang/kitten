@@ -7,7 +7,6 @@ from typing import Dict
 
 import gymnasium as gym
 from gymnasium.wrappers.autoreset import AutoResetWrapper
-from gymnasium.spaces import Box
 import torch
 import torch.nn as nn
 from tqdm import tqdm
@@ -18,15 +17,22 @@ from curiosity.experience import (
 )
 from curiosity.logging import EvaluationEnv 
 from curiosity.nn import (
-    ClassicalGaussianActor,
-    AddTargetNetwork
+    AddTargetNetwork,
+    build_actor,
+    build_critic
 )
 
 parser = argparse.ArgumentParser(
     prog="DDPG",
     description= "Lillicrap, et al. Continuous control with deep reinforcement learning. 2015."
 )
-parser.add_argument("config", help="The configuration file to pass in.")
+parser.add_argument(
+    '-c',
+    "--config",
+    default="scripts/ddpg.json",
+    required=False,
+    help="The configuration file to pass in."
+)
 args = parser.parse_args()
 
 
@@ -51,7 +57,8 @@ def train(config: Dict,
           minibatch_size: int,
           initial_collection_size: int,
           tau: float,
-          lr: float):
+          lr: float,
+          **kwargs):
     """ Train DDPG
 
     Args:
@@ -88,13 +95,11 @@ def train(config: Dict,
 
     # Create Environments
     env = AutoResetWrapper(gym.make(environment, render_mode="rgb_array"))
-    if not isinstance(env.action_space, Box) or len(env.action_space.shape) != 1:
-        raise ValueError("This implementation of DDPG requires 1D continuous actions")
     env.reset(seed=seed)
 
     # Define Actor / Critic
-    actor, critic = build_actor_critic(env, features, exploration_factor)
-    actor, critic = AddTargetNetwork(actor, device=DEVICE), AddTargetNetwork(critic, device=DEVICE)
+    actor = AddTargetNetwork(build_actor(env, features, exploration_factor), device=DEVICE)
+    critic = AddTargetNetwork(build_critic(env, features), device=DEVICE)
 
     # Initialise Replay Buffer    
     memory = build_replay_buffer(env, capacity=replay_buffer_capacity, device=DEVICE)
@@ -188,18 +193,6 @@ def train(config: Dict,
 
         evaluator.close()
         env.close()
-
-def build_actor_critic(env: gym.Env, N: int = 128, exploration_factor: float = 0.1):
-    actor = ClassicalGaussianActor(env, N, exploration_factor).to(device=DEVICE)
-    critic = nn.Sequential(
-        nn.LazyLinear(out_features=N),
-        nn.Tanh(),
-        nn.Linear(in_features=N, out_features=N),
-        nn.Tanh(),
-        nn.Linear(in_features=N, out_features=1)
-    )
-
-    return actor, critic
 
 if __name__ == "__main__":
     with open(args.config, 'r') as f:
