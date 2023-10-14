@@ -187,7 +187,7 @@ def train(config: Dict,
                 evaluator.log({
                     "train/frame": step,
                     "train/critic_loss": loss_critic_value,
-                    "train/actor_loss": loss_actor_value,
+                    "actor_loss": loss_actor_value,
                 })
 
         evaluator.close()
