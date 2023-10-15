@@ -223,6 +223,11 @@ def train(config: Dict,
                 })
                 pbar.set_description(f"epoch {epoch} reward {reward} critic loss {loss_critic_value} actor loss {loss_actor_value}")
                 pbar.update(1)
+            
+            if checkpoint and step % frames_per_checkpoint == 0:
+                evaluator.checkpoint(actor.net, "actor", step)
+                evaluator.checkpoint(critic_1.net, "critic_1", step)
+                evaluator.checkpoint(critic_2.net, "critic_2", step)
 
         evaluator.close()
         env.close()

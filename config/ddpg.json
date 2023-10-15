@@ -3,7 +3,7 @@
     "frames_per_epoch": 10000,
     "frames_per_video": -1,
     "eval_repeat": 5,
-    "wandb": false,
+    "wandb": true,
     "environment":"Hopper-v4",
     "discount_factor": 0.99,
     "exploration_factor": 0.1,
