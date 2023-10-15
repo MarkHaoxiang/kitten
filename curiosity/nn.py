@@ -70,9 +70,9 @@ class ClassicalGaussianActor(GaussianActor):
     def __init__(self, env: Env, features=128, exploration_factor=0.1):
         mean = nn.Sequential(
             nn.LazyLinear(out_features=features),
-            nn.Tanh(),
+            nn.LeakyReLU(),
             nn.Linear(in_features=features, out_features=features),
-            nn.Tanh(),
+            nn.LeakyReLU(),
             nn.Linear(in_features=features, out_features=env.action_space.shape[-1]),
             nn.Tanh()
         )
@@ -137,10 +137,10 @@ def build_critic(env: Env, features: int) -> nn.Module:
 
     if not pixels:
         return nn.Sequential(
-            nn.Linear(in_features=env.observation_space.shape[-1] + (0 if discrete else len(env.action_space.shape)), out_features=features),
-            nn.Tanh(),
+            nn.Linear(in_features=env.observation_space.shape[-1] + (0 if discrete else env.action_space.shape[0]), out_features=features),
+            nn.LeakyReLU(),
             nn.Linear(in_features=features, out_features=features),
-            nn.Tanh(),
+            nn.LeakyReLU(),
             nn.Linear(in_features=features, out_features=env.action_space.n if discrete else 1)
         )
     else:
@@ -153,9 +153,9 @@ def build_critic(env: Env, features: int) -> nn.Module:
                 self.grayscale = atari_grayscale
                 self.conv = nn.Sequential(
                     nn.Conv2d(in_channels=1, out_channels=16, kernel_size=8, stride=4),
-                    nn.ReLU(),
+                    nn.LeakyReLU(),
                     nn.Conv2d(in_channels=16, out_channels=32, kernel_size=4, stride=2),
-                    nn.ReLU(),
+                    nn.LeakyReLU(),
                 )
                 self.flatten = nn.Flatten()
                 self.linear = nn.LazyLinear(env.action_space.n)

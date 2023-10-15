@@ -7,6 +7,7 @@ import json
 
 import torch
 import torch.nn as nn
+import numpy as np
 from gymnasium import Env
 from gymnasium.wrappers.record_video import RecordVideo
 import wandb
@@ -34,7 +35,7 @@ class EvaluationEnv(Env):
         for _ in range(saved_reset_states):
             obs, _ = self.env.reset()
             self.saved_reset_states.append(obs)
-        self.saved_reset_states = torch.tensor(self.saved_reset_states, device=device)
+        self.saved_reset_states = torch.tensor(np.array(self.saved_reset_states), device=device, dtype=torch.float32)
 
         # Log
         os.makedirs(self.path)

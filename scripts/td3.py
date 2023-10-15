@@ -42,6 +42,7 @@ def train(config: Dict,
           frames_per_video: int,
           eval_repeat: int,
           wandb: bool,
+          frames_per_checkpoint: int,
           environment: str,
           discount_factor: float,
           exploration_factor: float,
@@ -121,10 +122,17 @@ def train(config: Dict,
         env=env,
         project_name=PROJECT_NAME,
         config=config,
-        video=eval_repeat*frames_per_video//frames_per_epoch,
-        wandb_enable=wandb
+        video=eval_repeat*frames_per_video//frames_per_epoch if frames_per_video > 0 else None,
+        wandb_enable=wandb,
+        device=DEVICE
     )
     evaluator.reset(seed=seed)
+
+    checkpoint = frames_per_checkpoint > 0
+    if checkpoint:
+        evaluator.checkpoint(actor.net, "actor")
+        evaluator.checkpoint(critic_1.net, "critic_1")
+        evaluator.checkpoint(critic_2.net, "critic_2")
 
     # Training loop
     obs, _ = env.reset()
@@ -171,6 +179,11 @@ def train(config: Dict,
                         min = -target_noise_clip,
                         max = target_noise_clip,
                     ) * env_action_scale
+                    next_action = torch.clamp(
+                        next_action,
+                        min=torch.tensor(env.action_space.low,dtype=torch.float32, device=DEVICE),
+                        max=torch.tensor(env.action_space.low,dtype=torch.float32, device=DEVICE)
+                    )
                     target_max_1 = critic_1.target(torch.cat((s_t1, next_action), 1)).squeeze()
                     target_max_2 = critic_2.target(torch.cat((s_t1, next_action), 1)).squeeze()
                     y = (r_t + (~d) * torch.minimum(target_max_1, target_max_2) * discount_factor)
@@ -201,13 +214,15 @@ def train(config: Dict,
                     policy = lambda x: actor(torch.tensor(x, device=DEVICE, dtype=torch.float32)).cpu().numpy(),
                     repeat=eval_repeat
                 )
-                pbar.set_description(f"epoch {epoch} reward {reward} critic loss {loss_critic_value} actor loss {loss_actor_value}")
-                pbar.update(1)
+                critic_value = critic_1(torch.cat((evaluator.saved_reset_states, actor(evaluator.saved_reset_states)), 1)).mean().item()
                 evaluator.log({
                     "train/frame": step,
                     "train/critic_loss": loss_critic_value,
                     "train/actor_loss": loss_actor_value,
+                    "train/critic_value": critic_value 
                 })
+                pbar.set_description(f"epoch {epoch} reward {reward} critic loss {loss_critic_value} actor loss {loss_actor_value}")
+                pbar.update(1)
 
         evaluator.close()
         env.close()
