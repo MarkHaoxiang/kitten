@@ -11,7 +11,9 @@ class IntrinsicCuriosityModule(nn.Module):
                  feature_net: nn.Module,
                  forward_head: nn.Module,
                  inverse_head: nn.Module,
-                 eta = 0.01):
+                 eta: float = 0.01,
+                 beta: float = 0.2,
+                 discrete_action_space: bool = False):
         """ Creates the intrinsic curiosity module
 
         Args:
@@ -19,12 +21,19 @@ class IntrinsicCuriosityModule(nn.Module):
             forward_head (nn.Module): From encoding and action to encoding
             inverse_head (nn.Module): From two encodings to action
             eta (float, optional): Intrinsic reward scaling factor. Default 0.01.
+            beta (float, optional): Forward/Inverse loss scaling factor. Default 0.2.
         """
         super().__init__()
         self.feature_net = feature_net
         self.forward_head = forward_head
         self.inverse_head = inverse_head
         self.eta = eta
+        self.beta = beta
+        self.discrete = discrete_action_space
+        if self.discrete:
+            raise NotImplementedError("Not yet implemented for discrete action space")
+
+        self._mse_loss = nn.MSELoss()
 
     def forward_model(self, s_0: torch.Tensor, a: torch.Tensor) -> torch.Tensor:
         """ Predicts next encoding
@@ -72,3 +81,54 @@ class IntrinsicCuriosityModule(nn.Module):
         true_phi_1 = self.feature_net(s_1)
         r_i = torch.linalg.vector_norm(true_phi_1-pred_phi_1, dim=(-1)) * self.eta / 2
         return r_i
+    
+    def loss(self, s_0: torch.Tensor, s_1: torch.Tensor, a: torch.Tensor):
+        pred_phi_1 = self.forward_model(s_0, a)
+        true_phi_1 = self.feature_net(s_1)
+        forward_loss = 0.5 * self._mse_loss(true_phi_1, pred_phi_1)
+
+        pred_a = self.inverse_model(s_0, s_1)
+        if self.discrete:
+            raise NotImplementedError("Not yet implemented for discrete action space")
+        else:
+            inverse_loss = self._mse_loss(a, pred_a)
+ 
+        return forward_loss * self.beta + inverse_loss
+
+
+    # TODO(mark)
+    # Expand to support general gym environment
+    @staticmethod
+    def build(obs_size: int,
+              encoding_size: int,
+              action_size: int,
+              device: str ="cpu",
+              **kwargs):
+        """ Builds a default intrinsic curiosity module
+
+        Args:
+            obs_size (int): Observation shape
+            encoding_size (int): Number of features for the encoding
+            action_size (int): Action shape
+            device (str, optional): Tensor device. Defaults to "cpu".
+
+        Returns:
+            _type_: ICM
+        """
+        feature_net = nn.Sequential(
+            nn.Linear(in_features=obs_size,
+                      out_features=encoding_size,
+                      device=device,
+                      dtype=torch.float32
+            ),
+            nn.LeakyReLU()
+        )
+        forward_head = nn.Linear(
+            in_features=encoding_size+action_size,
+            out_features=encoding_size,
+            device=device,
+            dtype=torch.float32
+        )
+        inverse_head = nn.Linear(in_features=encoding_size * 2, out_features=action_size)
+        
+        return IntrinsicCuriosityModule(feature_net, forward_head, inverse_head, discrete=False, **kwargs)

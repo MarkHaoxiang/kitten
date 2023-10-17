@@ -21,9 +21,11 @@ from curiosity.nn import (
     build_actor,
     build_critic
 )
+from curiosity.world import IntrinsicCuriosityModule
+
 parser = argparse.ArgumentParser(
-    prog="TD3",
-    description= "Fujimoto, et al. Addressing Function Approximation Error in Actor-Critic Methods. 2018. Adds clipped double critic, delayed policy updates, and value function smoothing  to DDPG."
+    prog="TD3+ICM",
+    description= """Fujimoto, et al. Addressing Function Approximation Error in Actor-Critic Methods. 2018. Adds clipped double critic, delayed policy updates, and value function smoothing  to DDPG. Pathak, Deepak, et al. Curiosity-Driven Exploration by Self-Supervised Prediction. 2017. Adds intrinsic curiosity, a type of exploration world model."""
 )
 parser.add_argument(
     '-c',
@@ -57,6 +59,9 @@ def train(config: Dict,
           initial_collection_size: int,
           tau: float,
           lr: float,
+          icm_encoding_features: int,
+          eta: float,
+          beta: float,
           **kwargs):
     """ Train TD3
 
@@ -85,6 +90,9 @@ def train(config: Dict,
         initial_collection_size (int): Early start to help with explorations by taking random actions
         tau (float): Speed at which target network follows main networks
         lr (float): Optimiser step size
+        icm_encoding_features (float): Encoding size for intrinsic curiosity
+        eta (float): Scale of intrinsic reward for intrinsic curiosity
+        beta (float): Scale of forward/inverse loss for intrinsic curiosity
 
     Raises:
         ValueError: Invalid configuration passed
@@ -106,6 +114,16 @@ def train(config: Dict,
     critic_1 = AddTargetNetwork(build_critic(env, features), device=DEVICE)
     critic_2 = AddTargetNetwork(build_critic(env, features), device=DEVICE)
 
+    # Define curiosity
+    icm = IntrinsicCuriosityModule.build(
+        obs_size=env.observation_space.shape[0],
+        encoding_size=icm_encoding_features,
+        action_size=env.action_space.shape[0],
+        eta=eta,
+        beta=beta,
+        device=DEVICE
+    )
+
     # Initialise Replay Buffer    
     memory = build_replay_buffer(env, capacity=replay_buffer_capacity, device=DEVICE)
 
@@ -116,6 +134,7 @@ def train(config: Dict,
         params=list(critic_1.net.parameters()) + list(critic_2.net.parameters()),
         lr=lr
     )
+    optim_icm = torch.optim.Adam(params=icm.parameters(), lr=lr)
 
     # Logging
     evaluator = EvaluationEnv(
@@ -142,6 +161,7 @@ def train(config: Dict,
         # Logging
         loss_critic_value = 0
         loss_actor_value = 0
+        loss_icm_value = 0
 
         for step in range(total_frames):
             # ====================
@@ -167,7 +187,11 @@ def train(config: Dict,
             # ====================
 
             # TD3 Update
-            s_t0, a_t, r_t, s_t1, d = memory.sample(minibatch_size, continuous=False)
+            s_t0, a_t, r_e, s_t1, d = memory.sample(minibatch_size, continuous=False)
+                # Add intrinsic reward
+            r_i = icm(s_t0, s_t1, a_t)
+            r_t = r_e + r_i
+
             if step % critic_update_frequency == 0:
                 # Critic
                 x1 = critic_1(torch.cat((s_t0, a_t), 1)).squeeze()
@@ -207,6 +231,13 @@ def train(config: Dict,
                 critic_2.update_target_network(tau)
                 actor.update_target_network(tau)
 
+                # Update icm
+                loss_icm = icm.loss(s_t0, s_t1, a_t)
+                optim_icm.zero_grad()
+                loss_icm_value = loss_icm.item()
+                loss_icm.backward()
+                optim_icm.step()
+
             # Epoch Logging
             if step % frames_per_epoch == 0 :
                 epoch += 1
@@ -219,7 +250,10 @@ def train(config: Dict,
                     "train/frame": step,
                     "train/critic_loss": loss_critic_value,
                     "train/actor_loss": loss_actor_value,
-                    "train/critic_value": critic_value 
+                    "train/critic_value": critic_value,
+                    "train/icm_loss": loss_icm_value,
+                    "train/intrinsic_reward": torch.mean(r_i),
+                    "train/extrinsic_reward": torch.mean(r_e)
                 })
                 pbar.set_description(f"epoch {epoch} reward {reward} critic loss {loss_critic_value} actor loss {loss_actor_value}")
                 pbar.update(1)

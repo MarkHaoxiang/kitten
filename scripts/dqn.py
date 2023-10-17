@@ -30,7 +30,7 @@ parser = argparse.ArgumentParser(
 parser.add_argument(
     '-c',
     "--config",
-    default="scripts/dqn_classic.json",
+    default="config/dqn_classic.json",
     required=False,
     help="The configuration file to pass in."
 )

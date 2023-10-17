@@ -29,7 +29,7 @@ parser = argparse.ArgumentParser(
 parser.add_argument(
     '-c',
     "--config",
-    default="scripts/ddpg.json",
+    default="config/ddpg.json",
     required=False,
     help="The configuration file to pass in."
 )

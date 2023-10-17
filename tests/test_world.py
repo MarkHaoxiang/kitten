@@ -65,3 +65,6 @@ class TestIntrinsicCuriosityModule:
         # Reward
         r_i = icm(s_0, s_1, a)
         assert r_i.shape == batch_size, f"Reward shape {r_i.shape} should match batch size {batch_size}"
+
+        # Loss
+        loss = icm.loss(s_0, s_1, a)
