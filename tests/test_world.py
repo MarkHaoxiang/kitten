@@ -68,3 +68,4 @@ class TestIntrinsicCuriosityModule:
 
         # Loss
         loss = icm.loss(s_0, s_1, a)
+        loss.backward()

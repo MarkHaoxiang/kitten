@@ -1,7 +1,7 @@
 {
-    "seed": 0,
+    "seed": 10,
     "frames_per_epoch": 100,
-    "frames_per_video": 5000,
+    "frames_per_video": -1,
     "eval_repeat": 10,
     "wandb": true,
     "environment":"Pendulum-v1",

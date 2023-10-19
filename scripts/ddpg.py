@@ -93,6 +93,7 @@ def train(config: Dict,
     # Metadata
     PROJECT_NAME = "ddpg_{}_{}".format(environment, str(datetime.now()).replace(":","-").replace(".","-"))
     random.seed(seed)
+    torch.manual_seed(seed)
 
     # Create Environments
     env = AutoResetWrapper(gym.make(environment, render_mode="rgb_array"))

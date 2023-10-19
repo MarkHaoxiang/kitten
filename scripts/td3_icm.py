@@ -99,10 +99,9 @@ def train(config: Dict,
     """
     
     # Metadata
-    PROJECT_NAME = "td3_{}_{}".format(environment, str(datetime.now()).replace(":","-").replace(".","-"))
+    PROJECT_NAME = "td3_icm_{}_{}".format(environment, str(datetime.now()).replace(":","-").replace(".","-"))
     random.seed(seed)
     policy_update_frequency = int(policy_update_frequency * critic_update_frequency)
-
 
     # Create Environments
     env = AutoResetWrapper(gym.make(environment, render_mode="rgb_array"))
@@ -206,7 +205,7 @@ def train(config: Dict,
                     next_action = torch.clamp(
                         next_action,
                         min=torch.tensor(env.action_space.low,dtype=torch.float32, device=DEVICE),
-                        max=torch.tensor(env.action_space.low,dtype=torch.float32, device=DEVICE)
+                        max=torch.tensor(env.action_space.high,dtype=torch.float32, device=DEVICE)
                     )
                     target_max_1 = critic_1.target(torch.cat((s_t1, next_action), 1)).squeeze()
                     target_max_2 = critic_2.target(torch.cat((s_t1, next_action), 1)).squeeze()

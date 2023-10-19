@@ -3,6 +3,7 @@ import random
 
 from gymnasium import Env
 from gymnasium.wrappers.autoreset import AutoResetWrapper
+from gymnasium.spaces.discrete import Discrete
 import torch
 from torch import Tensor
 
@@ -102,10 +103,11 @@ def build_replay_buffer(env: Env, capacity: int = 10000, device: str = "cpu") ->
     Returns:
         Replay Buffer: A replay buffer designed to hold tuples (State, Action, Reward, Next State, Done)
     """
+    discrete = isinstance(env.action_space, Discrete)
     return ReplayBuffer(
         capacity=capacity,
         shape=(env.observation_space.shape, env.action_space.shape, (), env.observation_space.shape, ()),
-        dtype=(torch.float32, torch.int, torch.float32, torch.float32, torch.bool),
+        dtype=(torch.float32, torch.int if discrete else torch.float32, torch.float32, torch.float32, torch.bool),
         device=device
     )
 

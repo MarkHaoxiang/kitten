@@ -32,6 +32,14 @@ parser.add_argument(
     required=False,
     help="The configuration file to pass in."
 )
+
+parser.add_argument(
+    "-n",
+    "--name",
+    required=False,
+    help="Project name"
+)
+
 args = parser.parse_args()
 
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -91,15 +99,22 @@ def train(config: Dict,
     """
     
     # Metadata
-    PROJECT_NAME = "td3_{}_{}".format(environment, str(datetime.now()).replace(":","-").replace(".","-"))
-    random.seed(seed)
-    policy_update_frequency = int(policy_update_frequency * critic_update_frequency)
+    if args.name is None:
+        PROJECT_NAME = "td3_{}_{}".format(environment, str(datetime.now()).replace(":","-").replace(".","-"))
+    else:
+        PROJECT_NAME = f"td3_{args.name}"
 
+    random.seed(seed)
+    torch.manual_seed(seed)
+    policy_update_frequency = int(policy_update_frequency * critic_update_frequency)
 
     # Create Environments
     env = AutoResetWrapper(gym.make(environment, render_mode="rgb_array"))
     env.reset(seed=seed)
     env_action_scale = torch.tensor(env.action_space.high-env.action_space.low, device=DEVICE) / 2.0
+    env_action_min = torch.tensor(env.action_space.low, dtype=torch.float32, device=DEVICE)
+    env_action_max = torch.tensor(env.action_space.high, dtype=torch.float32, device=DEVICE)
+
 
     # Define Actor / Critic
     actor = AddTargetNetwork(build_actor(env, features, exploration_factor), device=DEVICE)
@@ -170,8 +185,9 @@ def train(config: Dict,
             s_t0, a_t, r_t, s_t1, d = memory.sample(minibatch_size, continuous=False)
             if step % critic_update_frequency == 0:
                 # Critic
-                x1 = critic_1(torch.cat((s_t0, a_t), 1)).squeeze()
-                x2 = critic_2(torch.cat((s_t0, a_t), 1)).squeeze()
+                s_t0_a_t = torch.cat((s_t0, a_t), 1)
+                x1 = critic_1(s_t0_a_t).squeeze()
+                x2 = critic_2(s_t0_a_t).squeeze()
                 with torch.no_grad():
                     next_action = actor.target(s_t1)
                     next_action += torch.clamp(
@@ -181,11 +197,12 @@ def train(config: Dict,
                     ) * env_action_scale
                     next_action = torch.clamp(
                         next_action,
-                        min=torch.tensor(env.action_space.low,dtype=torch.float32, device=DEVICE),
-                        max=torch.tensor(env.action_space.low,dtype=torch.float32, device=DEVICE)
+                        min=env_action_min,
+                        max=torch.tensor(env.action_space.high, dtype=torch.float32, device=DEVICE)
                     )
-                    target_max_1 = critic_1.target(torch.cat((s_t1, next_action), 1)).squeeze()
-                    target_max_2 = critic_2.target(torch.cat((s_t1, next_action), 1)).squeeze()
+                    s_t1_next_action = torch.cat((s_t1, next_action), 1)
+                    target_max_1 = critic_1.target(s_t1_next_action).squeeze()
+                    target_max_2 = critic_2.target(s_t1_next_action).squeeze()
                     y = (r_t + (~d) * torch.minimum(target_max_1, target_max_2) * discount_factor)
                 loss_critic = loss_critic_fn(y, x1) + loss_critic_fn(y, x2)
                 loss_critic_value = loss_critic.item()
