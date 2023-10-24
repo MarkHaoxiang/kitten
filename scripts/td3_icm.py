@@ -224,7 +224,7 @@ def train(config: Dict = {},
                 actor.update_target_network(tau)
 
                 # Update icm
-                loss_icm = icm.loss(s_t0, s_t1, a_t)
+                loss_icm = icm.calc_loss(s_t0, s_t1, a_t)
                 optim_icm.zero_grad()
                 loss_icm_value = loss_icm.item()
                 loss_icm.backward()
