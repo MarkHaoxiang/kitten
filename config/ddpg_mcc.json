@@ -18,6 +18,6 @@
     "frames_per_checkpoint": 5000,
     "_comment1": "The parameters below are specific to algorithms that use ICM",
     "icm_encoding_features": 32,
-    "eta": 0.01,
+    "eta": 1,
     "beta": 0.2
 }

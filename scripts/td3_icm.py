@@ -26,34 +26,33 @@ parser = CuriosityArgumentParser(
     prog="TD3+ICM",
     description= """Fujimoto, et al. Addressing Function Approximation Error in Actor-Critic Methods. 2018. Adds clipped double critic, delayed policy updates, and value function smoothing  to DDPG. Pathak, Deepak, et al. Curiosity-Driven Exploration by Self-Supervised Prediction. 2017. Adds intrinsic curiosity, a type of exploration world model."""
 )
-args = parser.parse_args()
 
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-def train(config: Dict,
-          seed: int,
-          frames_per_epoch: int,
-          frames_per_video: int,
-          eval_repeat: int,
-          wandb: bool,
-          frames_per_checkpoint: int,
-          environment: str,
-          discount_factor: float,
-          exploration_factor: float,
-          target_noise: float,
-          target_noise_clip: float,
-          features: int,
-          critic_update_frequency: int,
-          policy_update_frequency: float,
-          replay_buffer_capacity: int,
-          total_frames: int,
-          minibatch_size: int,
-          initial_collection_size: int,
-          tau: float,
-          lr: float,
-          icm_encoding_features: int,
-          eta: float,
-          beta: float,
+def train(config: Dict = {},
+          seed: int = 0,
+          frames_per_epoch: int = 1000,
+          frames_per_video: int = -1,
+          eval_repeat: int = 10,
+          wandb: bool = False,
+          frames_per_checkpoint: int = 10000,
+          environment: str = "Pendulum-v1",
+          discount_factor: float = 0.99,
+          exploration_factor: float = 0.1,
+          target_noise: float = 0.1,
+          target_noise_clip: float = 0.2,
+          features: int = 128,
+          critic_update_frequency: int = 1,
+          policy_update_frequency: float = 2.0,
+          replay_buffer_capacity: int = 10000,
+          total_frames: int = 50000,
+          minibatch_size: int = 128,
+          initial_collection_size: int = 1000,
+          tau: float = 0.005,
+          lr: float = 0.0003,
+          icm_encoding_features: int = 32,
+          eta: float = 0.01,
+          beta: float = 0.2,
           **kwargs):
     """ Train TD3
 
@@ -91,10 +90,7 @@ def train(config: Dict,
     """
     
     # Metadata
-    if args.name is None:
-        PROJECT_NAME = "td3_icm_{}_{}".format(environment, str(datetime.now()).replace(":","-").replace(".","-"))
-    else:
-        PROJECT_NAME = f"td3_icm_{args.name}"
+    PROJECT_NAME = parser.generate_project_name(environment, "td3_icm")
     random.seed(seed)
     torch.manual_seed(seed)
 
@@ -263,6 +259,4 @@ def train(config: Dict,
         env.close()
 
 if __name__ == "__main__":
-    with open(args.config, 'r') as f:
-        config = json.load(f)
-    train(config, **config)
+    parser.run(train)
