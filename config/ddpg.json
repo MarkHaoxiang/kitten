@@ -15,5 +15,9 @@
     "initial_collection_size": 25000,
     "tau": 0.005,
     "lr": 0.0003,
-    "frames_per_checkpoint": 100000
+    "frames_per_checkpoint": 100000,
+    "_comment1": "The parameters below are specific to algorithms that use ICM",
+    "icm_encoding_features": 64,
+    "eta": 1,
+    "beta": 0.2
 }

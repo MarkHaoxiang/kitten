@@ -210,8 +210,8 @@ def train(config: Dict = {},
                     "train/actor_loss": loss_actor_value,
                     "train/critic_value": critic_value, 
                     "train/icm_loss": loss_icm_value,
-                    # "train/intrinsic_reward": torch.mean(r_i),
-                    #"t rain/extrinsic_reward": torch.mean(r_e)
+                    "train/intrinsic_reward": torch.mean(r_i),
+                    "train/extrinsic_reward": torch.mean(r_e)
                 })
                 pbar.set_description(f"epoch {epoch} reward {reward} critic loss {loss_critic_value} actor loss {loss_actor_value}")
                 pbar.update(1)
