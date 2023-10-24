@@ -1,4 +1,6 @@
+import argparse
 import copy
+from datetime import datetime
 import math
 import warnings
 import os
@@ -11,6 +13,56 @@ import numpy as np
 from gymnasium import Env
 from gymnasium.wrappers.record_video import RecordVideo
 import wandb
+
+class CuriosityArgumentParser:
+    """ Argument parser for training scripts
+    """
+    def __init__(self, prog: str, description: str):
+        self.parser = argparse.ArgumentParser(prog=prog, description=description)
+        self.parser.add_argument(
+            '-c',
+            "--config",
+            required=False,
+            help="The configuration file to pass in."
+        )
+        self.parser.add_argument(
+            "-n",
+            "--name",
+            required=False,
+            help="Project name"
+        )
+        self.args = self.parser.parse_args()
+
+    def generate_project_name(self, environment: str, algorithm: str) -> str:
+        """ Generates an identifier for the experiment
+
+        Args:
+            environment (str): Environment name
+            algorithm (str): Algorithm name
+
+        Returns:
+            str: Project name
+        """
+        if self.args.name is None:
+            return "{}_{}_{}".format(algorithm, environment, str(datetime.now()).replace(":","-").replace(".","-"))
+        return f"{algorithm}_{self.args.name}"
+
+    def run(self, train: Callable):
+        """ Executes a training loop with this configuration
+
+        Args:
+            train (Callable): Handle to the training function
+        """
+        if self.args.config is None:
+            config = {}
+        else:
+            with open(self.args.config, 'r') as f:
+                config = json.load(f)
+        train(config, **config)
+
+
+    def __getattr__(self, name: str):
+        return self.parser.__getattribute__(name)
 
 class EvaluationEnv(Env):
     """ Evaluate training runs and keep logs
@@ -58,7 +110,7 @@ class EvaluationEnv(Env):
             project = "curiosity",
             name = self.project_name,
             config = self.config,
-            dir = os.path.join(self.path, "wandb"),
+            dir = self.path,
             mode = "online" if wandb_enable else "offline"
         )
 
@@ -119,7 +171,7 @@ class EvaluationEnv(Env):
             wandb.finish()
 
     def __getattr__(self, name: str):
-        return self.env.__getattr__(name)
+        return self.env.__getattribute__(name)
 
 def evaluate(env: Env, policy: Callable, repeat: int = 1):
     """ Evaluates an episode

@@ -1,4 +1,3 @@
-import argparse
 from datetime import datetime
 import json
 import random
@@ -15,7 +14,7 @@ from curiosity.experience import (
     build_replay_buffer,
     early_start
 )
-from curiosity.logging import EvaluationEnv 
+from curiosity.logging import EvaluationEnv, CuriosityArgumentParser
 from curiosity.nn import (
     AddTargetNetwork,
     build_actor,
@@ -23,16 +22,9 @@ from curiosity.nn import (
 )
 from curiosity.world import IntrinsicCuriosityModule
 
-parser = argparse.ArgumentParser(
+parser = CuriosityArgumentParser(
     prog="TD3+ICM",
     description= """Fujimoto, et al. Addressing Function Approximation Error in Actor-Critic Methods. 2018. Adds clipped double critic, delayed policy updates, and value function smoothing  to DDPG. Pathak, Deepak, et al. Curiosity-Driven Exploration by Self-Supervised Prediction. 2017. Adds intrinsic curiosity, a type of exploration world model."""
-)
-parser.add_argument(
-    '-c',
-    "--config",
-    default="config/td3.json",
-    required=False,
-    help="The configuration file to pass in."
 )
 args = parser.parse_args()
 
@@ -99,8 +91,13 @@ def train(config: Dict,
     """
     
     # Metadata
-    PROJECT_NAME = "td3_icm_{}_{}".format(environment, str(datetime.now()).replace(":","-").replace(".","-"))
+    if args.name is None:
+        PROJECT_NAME = "td3_icm_{}_{}".format(environment, str(datetime.now()).replace(":","-").replace(".","-"))
+    else:
+        PROJECT_NAME = f"td3_icm_{args.name}"
     random.seed(seed)
+    torch.manual_seed(seed)
+
     policy_update_frequency = int(policy_update_frequency * critic_update_frequency)
 
     # Create Environments

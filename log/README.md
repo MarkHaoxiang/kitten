@@ -1,1 +1,1 @@
-Experiment logs
+Generated logs and checkpoints

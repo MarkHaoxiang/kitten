@@ -1,6 +1,3 @@
-import argparse
-from datetime import datetime
-import json
 import random
 import sys
 from typing import Dict
@@ -15,50 +12,41 @@ from curiosity.experience import (
     build_replay_buffer,
     early_start
 )
-from curiosity.logging import EvaluationEnv 
+from curiosity.logging import EvaluationEnv, CuriosityArgumentParser
 from curiosity.nn import (
     AddTargetNetwork,
     build_actor,
     build_critic
 )
 
-parser = argparse.ArgumentParser(
+parser = CuriosityArgumentParser(
     prog="DDPG",
-    description= "Lillicrap, et al. Continuous control with deep reinforcement learning. 2015."
+    description="Lillicrap, et al. Continuous control with deep reinforcement learning. 2015."
 )
-parser.add_argument(
-    '-c',
-    "--config",
-    default="config/ddpg.json",
-    required=False,
-    help="The configuration file to pass in."
-)
-args = parser.parse_args()
-
 
 # An implementation of DDPG
 # Lillicrap, et al. Continuous control with deep reinforcement learning. 2015.
 
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-def train(config: Dict,
-          seed: int,
-          frames_per_epoch: int,
-          frames_per_video: int,
-          eval_repeat: int,
-          wandb: bool,
-          frames_per_checkpoint: int,
-          environment: str,
-          discount_factor: float,
-          exploration_factor: float,
-          features: int,
-          target_update_frequency: int,
-          replay_buffer_capacity: int,
-          total_frames: int,
-          minibatch_size: int,
-          initial_collection_size: int,
-          tau: float,
-          lr: float,
+def train(config: Dict = {},
+          seed: int = 0,
+          frames_per_epoch: int = 1000,
+          frames_per_video: int = -1,
+          eval_repeat: int = 10,
+          wandb: bool = False,
+          frames_per_checkpoint: int = 10000,
+          environment: str = "Pendulum-v1",
+          discount_factor: float = 0.99,
+          exploration_factor: float = 0.1,
+          features: int = 128,
+          target_update_frequency: int = 1,
+          replay_buffer_capacity: int = 10000,
+          total_frames: int = 50000,
+          minibatch_size: int = 128,
+          initial_collection_size: int = 1000,
+          tau: float = 0.005,
+          lr: float = 0.0003,
           **kwargs):
     """ Train DDPG
 
@@ -66,21 +54,19 @@ def train(config: Dict,
             # Metadata
         config (Dict): Dictionary containing all arguments
             # Experimentation and Logging
-        seed (int): random seed used to setup experiment
+        seed (int): Random seed used to setup experiment
         frames_per_epoch (int): Number of frames between each logging point
         frames_per_video (int): Number of frames between each video
         eval_repeat (int): Number of episodes to run in an evaluation
         wandb (bool): Toggle to log to Weights&Biases
             # Environment
-        environment (str): Environment name in registry
+        environment (str): Environment name in registry. Defaults to "Pendulum-v1"
         discount_factor (float): Reward discount
             # Algorithm
         exploration_factor (float): Gaussian noise standard deviation for exploration
         features (int): Helps define the complexity of neural nets used
         target_update_frequency (int): Frames between each network update
-        e
-        
-        fer_capacity (int): Capacity of replay buffer
+        replay_buffer_capacity (int): Capacity of replay buffer
         total_frames (int): Total frames to train on
         minibatch_size (int): Batch size to run gradient descent
         initial_collection_size (int): Early start to help with explorations by taking random actions
@@ -91,7 +77,7 @@ def train(config: Dict,
         ValueError: Invalid configuration passed
     """
     # Metadata
-    PROJECT_NAME = "ddpg_{}_{}".format(environment, str(datetime.now()).replace(":","-").replace(".","-"))
+    PROJECT_NAME = parser.generate_project_name(environment, "ddpg")
     random.seed(seed)
     torch.manual_seed(seed)
 
@@ -207,6 +193,4 @@ def train(config: Dict,
         env.close()
 
 if __name__ == "__main__":
-    with open(args.config, 'r') as f:
-        config = json.load(f)
-    train(config, **config)
+    parser.run(train)

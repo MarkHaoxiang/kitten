@@ -17,29 +17,16 @@ from curiosity.experience import (
     early_start
 )
 from curiosity.exploration import epsilon_greedy
-from curiosity.logging import EvaluationEnv
+from curiosity.logging import CuriosityArgumentParser, EvaluationEnv
 from curiosity.nn import (
     AddTargetNetwork,
     build_critic
 )
-
-parser = argparse.ArgumentParser(
+parser = CuriosityArgumentParser(
     prog="DQN",
-    description= "Mnih, Volodymyr, et al. Playing Atari with Deep Reinforcement Learning. 2013."
+    description="V Mnih, et al. Playing Atari with Deep Reinforcement Learning. 2013."
 )
-parser.add_argument(
-    '-c',
-    "--config",
-    default="config/dqn_classic.json",
-    required=False,
-    help="The configuration file to pass in."
-)
-args = parser.parse_args()
-
 # An implementation of DQN
-# 
-# With improvements to form RAINBOW (TODO)
-
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 def train(config: Dict,
@@ -61,8 +48,39 @@ def train(config: Dict,
           initial_exploration_factor: float = 1.0,
           final_exploration_factor: float = 0.05,
           exploration_anneal_time: int = 50000):
-    PROJECT_NAME = "dqn_{}_{}".format(config["environment"], str(datetime.now()).replace(":","-").replace(".","-"))
+    """ Train DQN
+
+    Args:
+            # Metadata
+        config (Dict): Dictionary containing all arguments
+            # Experimentation and Logging
+        seed (int, optional): Random seed used to setup experiment. Defaults to 0.
+        frames_per_epoch (int, optional): Number of frames between each logging point. Defaults to 1000.
+        frames_per_video (int, optional): Number f frames between each video. Defaults to 50000.
+        eval_repeat (int, optional): Number of episodes to run in an evaluation. Defaults to 10.
+        wandb (bool, optional): Toggle to log to Weights&Biases. Defaults to False.
+            # Environment
+        environment (str, optional): Environment name in registry. Defaults to "Acrobot-v1".
+        atari (bool, optional): Toggle to indicate an Atari environment with pixel features. Defaults to False.
+        discount_factor (float, optional): Reward discount. Defaults to 0.99.
+            # Algorithm
+        critic_features (int, optional): Helps define the complexity of the critic neural net. Defaults to 128.
+        target_update_frequency (int, optional): Steps between each update to the target network. Defaults to 500.
+        replay_buffer_capacity (int, optional): Capacity of the replay buffer. Defaults to 10000.
+        total_frames (int, optional): Total frames to train on. Defaults to 500000.
+        minibatch_size (int, optional): Batch size to run gradient descent. Defaults to 128.
+        initial_collection_size (int, optional): Early start to help exploration by taking random actions. Defaults to 10000.
+        update_frequency (int, optional): Steps between each network update. Defaults to 10.
+        initial_exploration_factor (float, optional): Exploration factor, initial. Defaults to 1.0.
+        final_exploration_factor (float, optional): Exploration factor, final. Defaults to 0.05.
+        exploration_anneal_time (int, optional): Time taken to anneal betwen initial -> final exploration factor. Defaults to 50000.
+
+    Raises:
+        ValueError: Invalid configuration passed.
+    """
+    PROJECT_NAME = parser.generate_project_name(environment, "dqn")
     random.seed(seed)
+    torch.manual_seed(seed)
 
     # Create Environments
     if atari:
@@ -161,6 +179,4 @@ def train(config: Dict,
         env.close()
 
 if __name__ == "__main__":
-    with open(args.config, 'r') as f:
-        config = json.load(f)
-    train(config)
+    parser.run(train)
