@@ -15,7 +15,7 @@ from curiosity.experience import (
     early_start
 )
 from curiosity.logging import EvaluationEnv, CuriosityArgumentParser
-from curiosity.nn import AddTargetNetwork
+from curiosity.rl import TwinDelayedDeepDeterministicPolicyGradient
 from curiosity.util import build_actor, build_critic
 from curiosity.world import IntrinsicCuriosityModule
 
@@ -97,11 +97,24 @@ def train(config: Dict = {},
     env = AutoResetWrapper(gym.make(environment, render_mode="rgb_array"))
     env.reset(seed=seed)
     env_action_scale = torch.tensor(env.action_space.high-env.action_space.low, device=DEVICE) / 2.0
+    env_action_min = torch.tensor(env.action_space.low, dtype=torch.float32, device=DEVICE)
+    env_action_max = torch.tensor(env.action_space.high, dtype=torch.float32, device=DEVICE)
 
     # Define Actor / Critic
-    actor = AddTargetNetwork(build_actor(env, features, exploration_factor), device=DEVICE)
-    critic_1 = AddTargetNetwork(build_critic(env, features), device=DEVICE)
-    critic_2 = AddTargetNetwork(build_critic(env, features), device=DEVICE)
+    td3 = TwinDelayedDeepDeterministicPolicyGradient(
+        actor=build_actor(env, features, exploration_factor),
+        critic_1=build_critic(env, features),
+        critic_2=build_critic(env, features),
+        gamma=discount_factor,
+        lr=lr,
+        tau=tau,
+        target_noise=target_noise,
+        target_noise_clip=target_noise_clip,
+        env_action_scale=env_action_scale,
+        env_action_min=env_action_min,
+        env_action_max=env_action_max,
+        device=DEVICE
+    ) 
 
     # Define curiosity
     icm = IntrinsicCuriosityModule.build(
@@ -117,12 +130,6 @@ def train(config: Dict = {},
     memory = build_replay_buffer(env, capacity=replay_buffer_capacity, device=DEVICE)
 
     # Loss
-    loss_critic_fn = nn.MSELoss()
-    optim_actor = torch.optim.Adam(params=actor.net.parameters(), lr=lr)
-    optim_critic = torch.optim.Adam(
-        params=list(critic_1.net.parameters()) + list(critic_2.net.parameters()),
-        lr=lr
-    )
     optim_icm = torch.optim.Adam(params=icm.parameters(), lr=lr)
 
     # Logging
@@ -138,9 +145,9 @@ def train(config: Dict = {},
 
     checkpoint = frames_per_checkpoint > 0
     if checkpoint:
-        evaluator.checkpoint(actor.net, "actor")
-        evaluator.checkpoint(critic_1.net, "critic_1")
-        evaluator.checkpoint(critic_2.net, "critic_2")
+        evaluator.checkpoint(td3.actor.net, "actor")
+        evaluator.checkpoint(td3.critic_1.net, "critic_1")
+        evaluator.checkpoint(td3.critic_2.net, "critic_2")
 
     # Training loop
     obs, _ = env.reset()
@@ -159,7 +166,7 @@ def train(config: Dict = {},
 
             # Calculate action
             with torch.no_grad():
-                action = actor(torch.tensor(obs, device=DEVICE, dtype=torch.float32), noise=True) \
+                action = td3.actor(torch.tensor(obs, device=DEVICE, dtype=torch.float32), noise=True) \
                     .cpu().detach().numpy() \
                     .clip(env.action_space.low, env.action_space.high)
             # Step environment
@@ -176,52 +183,21 @@ def train(config: Dict = {},
             # ====================
 
             # TD3 Update
-            s_t0, a_t, r_e, s_t1, d = memory.sample(minibatch_size, continuous=False)
+            s_0, a, r_e, s_1, d = memory.sample(minibatch_size, continuous=False)
                 # Add intrinsic reward
-            r_i = icm(s_t0, s_t1, a_t)
+            r_i = icm(s_0, s_1, a)
             r_t = r_e + r_i
 
             if step % critic_update_frequency == 0:
                 # Critic
-                x1 = critic_1(torch.cat((s_t0, a_t), 1)).squeeze()
-                x2 = critic_2(torch.cat((s_t0, a_t), 1)).squeeze()
-                with torch.no_grad():
-                    next_action = actor.target(s_t1)
-                    next_action += torch.clamp(
-                        torch.normal(0, target_noise, next_action.shape, device=DEVICE),
-                        min = -target_noise_clip,
-                        max = target_noise_clip,
-                    ) * env_action_scale
-                    next_action = torch.clamp(
-                        next_action,
-                        min=torch.tensor(env.action_space.low,dtype=torch.float32, device=DEVICE),
-                        max=torch.tensor(env.action_space.high,dtype=torch.float32, device=DEVICE)
-                    )
-                    target_max_1 = critic_1.target(torch.cat((s_t1, next_action), 1)).squeeze()
-                    target_max_2 = critic_2.target(torch.cat((s_t1, next_action), 1)).squeeze()
-                    y = (r_t + (~d) * torch.minimum(target_max_1, target_max_2) * discount_factor)
-                loss_critic = loss_critic_fn(y, x1) + loss_critic_fn(y, x2)
-                loss_critic_value = loss_critic.item()
-                optim_critic.zero_grad()
-                loss_critic.backward()
-                optim_critic.step()
+                loss_critic_value = td3.critic_update((s_0, a, r_t, s_1, d))
 
             if step % policy_update_frequency == 0:
                 # Actor
-                desired_action = actor(s_t0)
-                loss_actor = -critic_1(torch.cat((s_t0, desired_action), 1)).mean()
-                optim_actor.zero_grad()
-                loss_actor_value = loss_actor.item()
-                loss_actor.backward()
-                optim_actor.step()
-
-                # Update Target Networks
-                critic_1.update_target_network(tau)
-                critic_2.update_target_network(tau)
-                actor.update_target_network(tau)
+                loss_actor_value = td3.actor_update((s_0, a, r_t, s_1, d))
 
                 # Update icm
-                loss_icm = icm.calc_loss(s_t0, s_t1, a_t)
+                loss_icm = icm.calc_loss(s_0, s_1, a)
                 optim_icm.zero_grad()
                 loss_icm_value = loss_icm.item()
                 loss_icm.backward()
@@ -231,10 +207,10 @@ def train(config: Dict = {},
             if step % frames_per_epoch == 0 :
                 epoch += 1
                 reward = evaluator.evaluate(
-                    policy = lambda x: actor(torch.tensor(x, device=DEVICE, dtype=torch.float32)).cpu().numpy(),
+                    policy = lambda x: td3.actor(torch.tensor(x, device=DEVICE, dtype=torch.float32)).cpu().numpy(),
                     repeat=eval_repeat
                 )
-                critic_value = critic_1(torch.cat((evaluator.saved_reset_states, actor(evaluator.saved_reset_states)), 1)).mean().item()
+                critic_value = td3.critic_1(torch.cat((evaluator.saved_reset_states, td3.actor(evaluator.saved_reset_states)), 1)).mean().item()
                 evaluator.log({
                     "train/frame": step,
                     "train/critic_loss": loss_critic_value,
@@ -248,9 +224,9 @@ def train(config: Dict = {},
                 pbar.update(1)
             
             if checkpoint and step % frames_per_checkpoint == 0:
-                evaluator.checkpoint(actor.net, "actor", step)
-                evaluator.checkpoint(critic_1.net, "critic_1", step)
-                evaluator.checkpoint(critic_2.net, "critic_2", step)
+                evaluator.checkpoint(td3.actor.net, "actor", step)
+                evaluator.checkpoint(td3.critic_1.net, "critic_1", step)
+                evaluator.checkpoint(td3.critic_2.net, "critic_2", step)
 
         evaluator.close()
         env.close()
