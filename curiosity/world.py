@@ -93,7 +93,6 @@ class IntrinsicCuriosityModule(nn.Module):
             inverse_loss = self._mse_loss(a, pred_a)
         return forward_loss * self.beta + inverse_loss * (1-self.beta)
 
-
     # TODO(mark)
     # Expand to support general gym environment
     @staticmethod

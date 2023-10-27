@@ -1,6 +1,3 @@
-import argparse
-from datetime import datetime
-import json
 import random
 import sys
 from typing import Dict
@@ -18,10 +15,8 @@ from curiosity.experience import (
 )
 from curiosity.exploration import epsilon_greedy
 from curiosity.logging import CuriosityArgumentParser, EvaluationEnv
-from curiosity.nn import (
-    AddTargetNetwork,
-    build_critic
-)
+from curiosity.nn import AddTargetNetwork
+from curiosity.util import build_critic
 parser = CuriosityArgumentParser(
     prog="DQN",
     description="V Mnih, et al. Playing Atari with Deep Reinforcement Learning. 2013."

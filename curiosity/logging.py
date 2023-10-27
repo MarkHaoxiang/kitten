@@ -75,6 +75,7 @@ class EvaluationEnv(Env):
                  video: Optional[int] = 10000,
                  wandb_enable: bool = False,
                  saved_reset_states: int = 10,
+                 seed: Optional[int] = None,
                  device: str ="cpu"):
         super().__init__()
         # State
@@ -113,6 +114,10 @@ class EvaluationEnv(Env):
             dir = self.path,
             mode = "online" if wandb_enable else "offline"
         )
+
+        # Seed
+        if not seed is None:
+            self.env.reset(seed=seed)
 
     def checkpoint(self, model: nn.Module, name: str, frame: Optional[int] = None):
         """Utility to save a model

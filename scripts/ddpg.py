@@ -5,7 +5,6 @@ from typing import Dict
 import gymnasium as gym
 from gymnasium.wrappers.autoreset import AutoResetWrapper
 import torch
-import torch.nn as nn
 from tqdm import tqdm
 
 from curiosity.experience import (
@@ -13,11 +12,11 @@ from curiosity.experience import (
     early_start
 )
 from curiosity.logging import EvaluationEnv, CuriosityArgumentParser
-from curiosity.nn import (
-    AddTargetNetwork,
+from curiosity.util import (
     build_actor,
     build_critic
 )
+from curiosity.rl import DeepDeterministicPolicyGradient
 
 parser = CuriosityArgumentParser(
     prog="DDPG",
@@ -86,16 +85,17 @@ def train(config: Dict = {},
     env.reset(seed=seed)
 
     # Define Actor / Critic
-    actor = AddTargetNetwork(build_actor(env, features, exploration_factor), device=DEVICE)
-    critic = AddTargetNetwork(build_critic(env, features), device=DEVICE)
+    ddpg = DeepDeterministicPolicyGradient(
+        actor=build_actor(env, features, exploration_factor),
+        critic=build_critic(env, features),
+        gamma=discount_factor,
+        lr=lr,
+        tau=tau,
+        device=DEVICE
+    )
 
     # Initialise Replay Buffer    
     memory = build_replay_buffer(env, capacity=replay_buffer_capacity, device=DEVICE)
-
-    # Loss
-    loss_critic_fn = nn.MSELoss()
-    optim_actor = torch.optim.Adam(params=actor.net.parameters(), lr=lr)
-    optim_critic = torch.optim.Adam(params=critic.net.parameters(), lr=lr)
 
     # Logging
     evaluator = EvaluationEnv(
@@ -104,14 +104,14 @@ def train(config: Dict = {},
         config=config,
         video=eval_repeat*frames_per_video//frames_per_epoch if frames_per_video > 0 else None,
         wandb_enable=wandb,
+        seed=seed,
         device=DEVICE
     )
-    evaluator.reset(seed=seed)
 
     checkpoint = frames_per_checkpoint > 0
     if checkpoint:
-        evaluator.checkpoint(actor.net, "actor")
-        evaluator.checkpoint(critic.net, "critic")
+        evaluator.checkpoint(ddpg.actor.net, "actor")
+        evaluator.checkpoint(ddpg.critic.net, "critic")
 
     # Training loop
     obs, _ = env.reset()
@@ -119,9 +119,6 @@ def train(config: Dict = {},
     with tqdm(total=total_frames // frames_per_epoch, file=sys.stdout) as pbar:
         early_start(env, memory, initial_collection_size)
         # Logging
-        loss_critic_value = 0
-        loss_actor_value = 0
-
         for step in range(total_frames):
             # ====================
             # Data Collection
@@ -129,16 +126,15 @@ def train(config: Dict = {},
 
             # Calculate action
             with torch.no_grad():
-                action = actor(torch.tensor(obs, device=DEVICE, dtype=torch.float32), noise=True) \
+                action = ddpg.actor(torch.tensor(obs, device=DEVICE, dtype=torch.float32), noise=True) \
                     .cpu().detach().numpy() \
                     .clip(env.action_space.low, env.action_space.high)
             # Step environment
-            n_obs, reward, terminated, truncated, infos = env.step(action)
+            n_obs, reward, terminated, _, _ = env.step(action)
             # Update memory buffer
                 # (s_t, a_t, r_t, s_t+1, d)
-            transition_tuple = (obs, action, reward, n_obs, terminated)
+            memory.append((obs, action, reward, n_obs, terminated))
             obs = n_obs
-            memory.append(transition_tuple)
 
             # ====================
             # Gradient Update 
@@ -148,34 +144,16 @@ def train(config: Dict = {},
             # DDPG Update
                 # Critic
             if step % target_update_frequency == 0:
-                s_t0, a_t, r_t, s_t1, d = memory.sample(minibatch_size, continuous=False)
-                x = critic(torch.cat((s_t0, a_t), 1)).squeeze()
-                with torch.no_grad():
-                    target_max = (~d) * critic.target(torch.cat((s_t1, actor.target(s_t1)), 1)).squeeze()
-                    y = (r_t + target_max * discount_factor)
-                loss_critic = loss_critic_fn(y, x)
-                optim_critic.zero_grad()
-                loss_critic_value = loss_critic.item()
-                loss_critic.backward()
-                optim_critic.step()
-                    # Actor
-                desired_action = actor(s_t0)
-                loss_actor = -critic(torch.cat((s_t0, desired_action), 1)).mean()
-                optim_actor.zero_grad()
-                loss_actor_value = loss_actor.item()
-                loss_actor.backward()
-                optim_actor.step()
-                critic.update_target_network(tau)
-                actor.update_target_network(tau)
+                loss_critic_value, loss_actor_value = ddpg.update(memory.sample(minibatch_size, continuous=False))
 
             # Epoch Logging
             if step % frames_per_epoch == 0:
                 epoch += 1
                 reward = evaluator.evaluate(
-                    policy = lambda x: actor(torch.tensor(x, device=DEVICE, dtype=torch.float32)).cpu().numpy(),
+                    policy = lambda x: ddpg.actor(torch.tensor(x, device=DEVICE, dtype=torch.float32)).cpu().numpy(),
                     repeat=eval_repeat
                 )
-                critic_value =  critic(torch.cat((evaluator.saved_reset_states, actor(evaluator.saved_reset_states)), 1)).mean().item()
+                critic_value =  ddpg.critic(torch.cat((evaluator.saved_reset_states, ddpg.actor(evaluator.saved_reset_states)), 1)).mean().item()
                 evaluator.log({
                     "train/frame": step,
                     "train/critic_loss": loss_critic_value,
@@ -186,8 +164,8 @@ def train(config: Dict = {},
                 pbar.update(1)
 
             if checkpoint and step % frames_per_checkpoint == 0:
-                evaluator.checkpoint(actor.net, "actor", step)
-                evaluator.checkpoint(critic.net, "critic", step)
+                evaluator.checkpoint(ddpg.actor.net, "actor", step)
+                evaluator.checkpoint(ddpg.critic.net, "critic", step)
 
         evaluator.close()
         env.close()

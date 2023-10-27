@@ -15,11 +15,8 @@ from curiosity.experience import (
     early_start
 )
 from curiosity.logging import EvaluationEnv, CuriosityArgumentParser
-from curiosity.nn import (
-    AddTargetNetwork,
-    build_actor,
-    build_critic
-)
+from curiosity.nn import AddTargetNetwork
+from curiosity.util import build_actor, build_critic
 
 parser = CuriosityArgumentParser(
     prog="TD3",
