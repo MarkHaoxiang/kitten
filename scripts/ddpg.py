@@ -110,9 +110,9 @@ def train(config: Dict = {},
 
     checkpoint = frames_per_checkpoint > 0
     if checkpoint:
-        evaluator.checkpoint(ddpg.actor.net, "actor")
-        evaluator.checkpoint(ddpg.critic.net, "critic")
-
+        evaluator.register(ddpg.actor.net, "actor")
+        evaluator.register(ddpg.critic.net, "critic")
+        evaluator.checkpoint_registered()
     # Training loop
     obs, _ = env.reset()
     epoch = 0
@@ -164,8 +164,7 @@ def train(config: Dict = {},
                 pbar.update(1)
 
             if checkpoint and step % frames_per_checkpoint == 0:
-                evaluator.checkpoint(ddpg.actor.net, "actor", step)
-                evaluator.checkpoint(ddpg.critic.net, "critic", step)
+                evaluator.checkpoint_registered(step)
 
         evaluator.close()
         env.close()

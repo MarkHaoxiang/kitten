@@ -115,11 +115,34 @@ class EvaluationEnv(Env):
             mode = "online" if wandb_enable else "offline"
         )
 
+        # Checkpoints
+        self.models = []
+
         # Seed
         if not seed is None:
             self.env.reset(seed=seed)
+    
+    def register(self, model: nn.Module, name: str) -> None:
+        """Register a torch module to checkpoint
 
-    def checkpoint(self, model: nn.Module, name: str, frame: Optional[int] = None):
+        Args:
+            model (nn.Module): model to checkpoint
+            name (str): model name
+        """
+        if name[-3:] != ".pt":
+            name = name + ".pt"
+        self.models.append((model, name))
+
+    def checkpoint_registered(self, frame: Optional[int] = None) -> None:
+        """ Utility to checkpoint registered models
+
+        Args:
+            frame (Optional[int], optional): training frame. Defaults to None.
+        """
+        for (model, name) in self.models:
+            self.checkpoint(model, name, frame)
+
+    def checkpoint(self, model: nn.Module, name: str, frame: Optional[int] = None) -> None:
         """Utility to save a model
 
         Args:

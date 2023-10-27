@@ -119,15 +119,17 @@ def train(config: Dict = {},
         config=config,
         video=eval_repeat*frames_per_video//frames_per_epoch if frames_per_video > 0 else None,
         wandb_enable=wandb,
+        seed=seed,
         device=DEVICE
     )
     evaluator.reset(seed=seed)
 
     checkpoint = frames_per_checkpoint > 0
     if checkpoint:
-        evaluator.checkpoint(td3.actor.net, "actor")
-        evaluator.checkpoint(td3.critic_1.net, "critic_1")
-        evaluator.checkpoint(td3.critic_2.net, "critic_2")
+        evaluator.register(td3.actor.net, "actor")
+        evaluator.register(td3.critic_1.net, "critic_1")
+        evaluator.register(td3.critic_2.net, "critic_2")
+        evaluator.checkpoint_registered()
 
     # Training loop
     obs, _ = env.reset()
@@ -189,9 +191,7 @@ def train(config: Dict = {},
                 pbar.update(1)
             
             if checkpoint and step % frames_per_checkpoint == 0:
-                evaluator.checkpoint(td3.actor.net, "actor", step)
-                evaluator.checkpoint(td3.critic_1.net, "critic_1", step)
-                evaluator.checkpoint(td3.critic_2.net, "critic_2", step)
+                evaluator.checkpoint_registered(step)
 
         evaluator.close()
         env.close()
