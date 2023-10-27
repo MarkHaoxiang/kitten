@@ -38,7 +38,7 @@ def train(config: Dict = {},
           tau: float = 0.005,
           lr: float = 0.0003,
           icm_encoding_features: int = 32,
-          eta: float = 0.01,
+          eta: float = 1,
           beta: float = 0.2,
           **kwargs):
     """ Train DDPG
