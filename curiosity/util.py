@@ -4,6 +4,7 @@ import torch
 import torch.nn as nn
 
 from curiosity.nn import ClassicalGaussianActor
+from curiosity.world import IntrinsicCuriosityModule
 
 def build_actor(env: Env, features: int = 128, exploration_factor: float=0.1) -> nn.Module:
     """Builds an actor for gym environment
@@ -95,3 +96,35 @@ def build_critic(env: Env, features: int) -> nn.Module:
                 return result
 
         return AtariNetwork()
+    
+
+def build_icm(env: Env, encoding_size: int, device: str, **kwargs):
+    """ Builds a default intrinsic curiosity module
+    Args:
+        env (Env): gym environment
+        encoding_size (int): Number of features for the encoding
+        device (str, optional): Tensor device. Defaults to "cpu".
+    Returns:
+        _type_: ICM
+    """
+    obs_size = env.observation_space.shape[0]
+    action_size = env.action_space.shape[0]
+
+    feature_net = nn.Sequential(
+        nn.Linear(in_features=obs_size, out_features=encoding_size),
+        nn.LeakyReLU(),
+        nn.Linear(in_features=encoding_size, out_features=encoding_size),
+        nn.LeakyReLU()
+    ).to(device=device)
+    forward_head = nn.Sequential(
+        nn.Linear(in_features=encoding_size+action_size, out_features=encoding_size),
+        nn.LeakyReLU(),
+        nn.Linear(in_features=encoding_size, out_features=encoding_size)
+    ).to(device=device)
+    inverse_head = nn.Sequential(
+        nn.Linear(in_features=encoding_size * 2, out_features=encoding_size),
+        nn.LeakyReLU(),
+        nn.Linear(in_features=encoding_size, out_features=action_size)
+    ).to(device=device)
+
+    return IntrinsicCuriosityModule(feature_net, forward_head, inverse_head, discrete_action_space=False, **kwargs)

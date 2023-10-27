@@ -1,5 +1,3 @@
-from datetime import datetime
-import json
 import random
 import sys
 from typing import Dict
@@ -7,17 +5,12 @@ from typing import Dict
 import gymnasium as gym
 from gymnasium.wrappers.autoreset import AutoResetWrapper
 import torch
-import torch.nn as nn
 from tqdm import tqdm
 
-from curiosity.experience import (
-    build_replay_buffer,
-    early_start
-)
+from curiosity.experience import build_replay_buffer, early_start
 from curiosity.logging import EvaluationEnv, CuriosityArgumentParser
 from curiosity.rl import TwinDelayedDeepDeterministicPolicyGradient
-from curiosity.util import build_actor, build_critic
-from curiosity.world import IntrinsicCuriosityModule
+from curiosity.util import build_actor, build_critic, build_icm
 
 parser = CuriosityArgumentParser(
     prog="TD3+ICM",
@@ -117,10 +110,9 @@ def train(config: Dict = {},
     ) 
 
     # Define curiosity
-    icm = IntrinsicCuriosityModule.build(
-        obs_size=env.observation_space.shape[0],
+    icm = build_icm(
+        env=env,
         encoding_size=icm_encoding_features,
-        action_size=env.action_space.shape[0],
         eta=eta,
         beta=beta,
         device=DEVICE
@@ -223,7 +215,7 @@ def train(config: Dict = {},
                 })
                 pbar.set_description(f"epoch {epoch} reward {reward} critic loss {loss_critic_value} actor loss {loss_actor_value}")
                 pbar.update(1)
-            
+
             if checkpoint and step % frames_per_checkpoint == 0:
                 evaluator.checkpoint_registered(step)
 

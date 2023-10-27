@@ -92,7 +92,6 @@ def train(config: Dict = {},
     env_action_min = torch.tensor(env.action_space.low, dtype=torch.float32, device=DEVICE)
     env_action_max = torch.tensor(env.action_space.high, dtype=torch.float32, device=DEVICE)
 
-
     # Define Actor / Critic
     td3 = TwinDelayedDeepDeterministicPolicyGradient(
         actor=build_actor(env, features, exploration_factor),
