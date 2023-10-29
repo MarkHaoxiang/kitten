@@ -1,3 +1,6 @@
+from typing import Union, List
+import random
+
 from gymnasium import Env
 from gymnasium.spaces import Box, Discrete
 import torch
@@ -128,3 +131,16 @@ def build_icm(env: Env, encoding_size: int, device: str, **kwargs):
     ).to(device=device)
 
     return IntrinsicCuriosityModule(feature_net, forward_head, inverse_head, discrete_action_space=False, **kwargs)
+
+def global_seed(seed: int, *envs):
+    """ Utility to help set determinism
+
+    Args:
+        seed (int): seed for rng generation
+        envs (Env): all environments
+    """
+    random.seed(seed)
+    torch.manual_seed(seed)
+    for env in envs:
+        env.reset(seed=seed)
+        env.action_space.seed(seed)

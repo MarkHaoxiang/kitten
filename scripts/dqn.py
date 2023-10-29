@@ -86,7 +86,6 @@ def train(config: Dict,
     env = AutoResetWrapper(env)    
     if not isinstance(env.action_space, Discrete):
         raise ValueError("DQN requires discrete actions")
-    env.reset(seed=seed)
 
     # Define Critic
     critic = AddTargetNetwork(build_critic(env, critic_features), device=DEVICE)

@@ -1,4 +1,3 @@
-import random
 import sys
 from typing import Dict
 
@@ -14,7 +13,8 @@ from curiosity.experience import (
 from curiosity.logging import EvaluationEnv, CuriosityArgumentParser
 from curiosity.util import (
     build_actor,
-    build_critic
+    build_critic,
+    global_seed
 )
 from curiosity.rl import DeepDeterministicPolicyGradient
 
@@ -77,12 +77,19 @@ def train(config: Dict = {},
     """
     # Metadata
     PROJECT_NAME = parser.generate_project_name(environment, "ddpg")
-    random.seed(seed)
-    torch.manual_seed(seed)
 
     # Create Environments
     env = AutoResetWrapper(gym.make(environment, render_mode="rgb_array"))
-    env.reset(seed=seed)
+    evaluator = EvaluationEnv(
+        env=env,
+        project_name=PROJECT_NAME,
+        config=config,
+        video=eval_repeat*frames_per_video//frames_per_epoch if frames_per_video > 0 else None,
+        wandb_enable=wandb,
+        device=DEVICE
+    )
+    # RNG
+    global_seed(seed, env, evaluator)
 
     # Define Actor / Critic
     ddpg = DeepDeterministicPolicyGradient(
@@ -98,37 +105,28 @@ def train(config: Dict = {},
     memory = build_replay_buffer(env, capacity=replay_buffer_capacity, device=DEVICE)
 
     # Logging
-    evaluator = EvaluationEnv(
-        env=env,
-        project_name=PROJECT_NAME,
-        config=config,
-        video=eval_repeat*frames_per_video//frames_per_epoch if frames_per_video > 0 else None,
-        wandb_enable=wandb,
-        seed=seed,
-        device=DEVICE
-    )
-
     checkpoint = frames_per_checkpoint > 0
     if checkpoint:
         evaluator.register(ddpg.actor.net, "actor")
         evaluator.register(ddpg.critic.net, "critic")
         evaluator.checkpoint_registered()
+
     # Training loop
-    obs, _ = env.reset()
     epoch = 0
     with tqdm(total=total_frames // frames_per_epoch, file=sys.stdout) as pbar:
         early_start(env, memory, initial_collection_size)
+        obs, _ = env.reset()
         # Logging
         for step in range(total_frames):
             # ====================
             # Data Collection
             # ====================
-
             # Calculate action
             with torch.no_grad():
                 action = ddpg.actor(torch.tensor(obs, device=DEVICE, dtype=torch.float32), noise=True) \
                     .cpu().detach().numpy() \
                     .clip(env.action_space.low, env.action_space.high)
+
             # Step environment
             n_obs, reward, terminated, _, _ = env.step(action)
             # Update memory buffer
@@ -145,7 +143,6 @@ def train(config: Dict = {},
                 # Critic
             if step % target_update_frequency == 0:
                 loss_critic_value, loss_actor_value = ddpg.update(memory.sample(minibatch_size, continuous=False))
-
             # Epoch Logging
             if step % frames_per_epoch == 0:
                 epoch += 1

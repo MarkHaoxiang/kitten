@@ -1,4 +1,3 @@
-import random
 import sys
 from typing import Dict
 
@@ -10,7 +9,7 @@ from tqdm import tqdm
 from curiosity.experience import build_replay_buffer, early_start
 from curiosity.logging import EvaluationEnv, CuriosityArgumentParser
 from curiosity.rl import TwinDelayedDeepDeterministicPolicyGradient
-from curiosity.util import build_actor, build_critic, build_icm
+from curiosity.util import build_actor, build_critic, build_icm, global_seed
 
 parser = CuriosityArgumentParser(
     prog="TD3+ICM",
@@ -81,17 +80,24 @@ def train(config: Dict = {},
     
     # Metadata
     PROJECT_NAME = parser.generate_project_name(environment, "td3_icm")
-    random.seed(seed)
-    torch.manual_seed(seed)
-
     policy_update_frequency = int(policy_update_frequency * critic_update_frequency)
 
     # Create Environments
     env = AutoResetWrapper(gym.make(environment, render_mode="rgb_array"))
-    env.reset(seed=seed)
     env_action_scale = torch.tensor(env.action_space.high-env.action_space.low, device=DEVICE) / 2.0
     env_action_min = torch.tensor(env.action_space.low, dtype=torch.float32, device=DEVICE)
     env_action_max = torch.tensor(env.action_space.high, dtype=torch.float32, device=DEVICE)
+    evaluator = EvaluationEnv(
+        env=env,
+        project_name=PROJECT_NAME,
+        config=config,
+        video=eval_repeat*frames_per_video//frames_per_epoch if frames_per_video > 0 else None,
+        wandb_enable=wandb,
+        device=DEVICE
+    )
+
+    # RNG
+    global_seed(seed, env, evaluator)
 
     # Define Actor / Critic
     td3 = TwinDelayedDeepDeterministicPolicyGradient(
@@ -125,16 +131,6 @@ def train(config: Dict = {},
     optim_icm = torch.optim.Adam(params=icm.parameters(), lr=lr)
 
     # Logging
-    evaluator = EvaluationEnv(
-        env=env,
-        project_name=PROJECT_NAME,
-        config=config,
-        video=eval_repeat*frames_per_video//frames_per_epoch if frames_per_video > 0 else None,
-        wandb_enable=wandb,
-        seed=seed,
-        device=DEVICE
-    )
-
     checkpoint = frames_per_checkpoint > 0
     if checkpoint:
         evaluator.register(td3.actor.net, "actor")
@@ -143,7 +139,7 @@ def train(config: Dict = {},
         evaluator.checkpoint_registered()
 
     # Training loop
-    obs, _ = env.reset()
+    obs, _ = env.reset(seed=seed)
     epoch = 0
     with tqdm(total=total_frames // frames_per_epoch, file=sys.stdout) as pbar:
         early_start(env, memory, initial_collection_size)

@@ -4,6 +4,7 @@ from datetime import datetime
 import math
 import warnings
 import os
+import shutil
 from typing import Callable, Dict, Optional
 import json
 
@@ -61,10 +62,10 @@ class CuriosityArgumentParser:
         train(config, **config)
 
 
-    def __getattr__(self, name: str):
+    def __getattr__(self, name: str):               
         return self.parser.__getattribute__(name)
 
-class EvaluationEnv(Env):
+class EvaluationEnv:
     """ Evaluate training runs and keep logs
     """
     def __init__(self,
@@ -75,7 +76,6 @@ class EvaluationEnv(Env):
                  video: Optional[int] = 10000,
                  wandb_enable: bool = False,
                  saved_reset_states: int = 10,
-                 seed: Optional[int] = None,
                  device: str ="cpu"):
         super().__init__()
         # State
@@ -118,10 +118,6 @@ class EvaluationEnv(Env):
         # Checkpoints
         self.models = []
 
-        # Seed
-        if not seed is None:
-            self.env.reset(seed=seed)
-    
     def register(self, model: nn.Module, name: str) -> None:
         """Register a torch module to checkpoint
 
@@ -194,9 +190,16 @@ class EvaluationEnv(Env):
         wandb.log(kwargs)
 
     def close(self):
+        """ Release resources
+        """
         self.env.close()
         if self.wandb_enable:
             wandb.finish()
+    
+    def clear(self):
+        """ Deletes associated files
+        """
+        shutil.rmtree(self.path)
 
     def __getattr__(self, name: str):
         return self.env.__getattribute__(name)

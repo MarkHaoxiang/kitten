@@ -1,4 +1,3 @@
-import random
 import sys
 from typing import Dict
 
@@ -10,7 +9,7 @@ from tqdm import tqdm
 from curiosity.experience import build_replay_buffer, early_start
 from curiosity.logging import EvaluationEnv, CuriosityArgumentParser
 from curiosity.rl import DeepDeterministicPolicyGradient
-from curiosity.util import build_actor, build_critic, build_icm
+from curiosity.util import build_actor, build_critic, build_icm, global_seed
 
 parser = CuriosityArgumentParser(
     prog="DDPG+ICM",
@@ -75,12 +74,20 @@ def train(config: Dict = {},
     """
     # Metadata
     PROJECT_NAME = parser.generate_project_name(environment, "ddpg_icm")
-    random.seed(seed)
-    torch.manual_seed(seed)
 
     # Create Environments
     env = AutoResetWrapper(gym.make(environment, render_mode="rgb_array"))
-    env.reset(seed=seed)
+    evaluator = EvaluationEnv(
+        env=env,
+        project_name=PROJECT_NAME,
+        config=config,
+        video=eval_repeat*frames_per_video//frames_per_epoch if frames_per_video > 0 else None,
+        wandb_enable=wandb,
+        device=DEVICE
+    )
+
+    # RNG
+    global_seed(seed, env, evaluator)
 
     # Define Actor / Critic
     ddpg = DeepDeterministicPolicyGradient(
@@ -108,17 +115,6 @@ def train(config: Dict = {},
     optim_icm = torch.optim.Adam(params=icm.parameters(), lr=lr)
 
     # Logging
-    evaluator = EvaluationEnv(
-        env=env,
-        project_name=PROJECT_NAME,
-        config=config,
-        video=eval_repeat*frames_per_video//frames_per_epoch if frames_per_video > 0 else None,
-        wandb_enable=wandb,
-        seed=seed,
-        device=DEVICE
-    )
-    evaluator.reset(seed=seed)
-
     checkpoint = frames_per_checkpoint > 0
     if checkpoint:
         evaluator.register(ddpg.actor.net, "actor")
@@ -126,10 +122,10 @@ def train(config: Dict = {},
         evaluator.checkpoint_registered()
 
     # Training loop
-    obs, _ = env.reset()
     epoch = 0
     with tqdm(total=total_frames // frames_per_epoch, file=sys.stdout) as pbar:
         early_start(env, memory, initial_collection_size)
+        obs, _ = env.reset()
         # Logging
         loss_critic_value = 0
         loss_actor_value = 0
