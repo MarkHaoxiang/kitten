@@ -111,6 +111,7 @@ def build_replay_buffer(env: Env, capacity: int = 10000, device: str = "cpu") ->
         device=device
     )
 
+# Deprecated
 def early_start(env: Env, memory: ReplayBuffer, steps: int, policy: Callable = None) -> ReplayBuffer:
     """ Fill the replay buffer for "steps" amount. In-place.
 

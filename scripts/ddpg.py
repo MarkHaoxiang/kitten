@@ -6,10 +6,8 @@ from gymnasium.wrappers.autoreset import AutoResetWrapper
 import torch
 from tqdm import tqdm
 
-from curiosity.experience import (
-    build_replay_buffer,
-    early_start
-)
+from curiosity.collector import build_collector
+from curiosity.experience import build_replay_buffer
 from curiosity.logging import EvaluationEnv, CuriosityArgumentParser
 from curiosity.util import (
     build_actor,
@@ -101,8 +99,9 @@ def train(config: Dict = {},
         device=DEVICE
     )
 
-    # Initialise Replay Buffer    
+    # Initialise Data Pipeline
     memory = build_replay_buffer(env, capacity=replay_buffer_capacity, device=DEVICE)
+    collector = build_collector(policy=lambda x: ddpg.actor(x, noise=True), env=env, memory=memory, device=DEVICE)
 
     # Logging
     checkpoint = frames_per_checkpoint > 0
@@ -114,31 +113,14 @@ def train(config: Dict = {},
     # Training loop
     epoch = 0
     with tqdm(total=total_frames // frames_per_epoch, file=sys.stdout) as pbar:
-        early_start(env, memory, initial_collection_size)
-        obs, _ = env.reset()
-        # Logging
+        collector.early_start(initial_collection_size)
         for step in range(total_frames):
-            # ====================
-            # Data Collection
-            # ====================
-            # Calculate action
-            with torch.no_grad():
-                action = ddpg.actor(torch.tensor(obs, device=DEVICE, dtype=torch.float32), noise=True) \
-                    .cpu().detach().numpy() \
-                    .clip(env.action_space.low, env.action_space.high)
-
-            # Step environment
-            n_obs, reward, terminated, _, _ = env.step(action)
-            # Update memory buffer
-                # (s_t, a_t, r_t, s_t+1, d)
-            memory.append((obs, action, reward, n_obs, terminated))
-            obs = n_obs
+            collector.collect(n=1)
 
             # ====================
             # Gradient Update 
             # Mostly Update this
             # ====================
-
             # DDPG Update
                 # Critic
             if step % target_update_frequency == 0:

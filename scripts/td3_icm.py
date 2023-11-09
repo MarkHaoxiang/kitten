@@ -6,7 +6,8 @@ from gymnasium.wrappers.autoreset import AutoResetWrapper
 import torch
 from tqdm import tqdm
 
-from curiosity.experience import build_replay_buffer, early_start
+from curiosity.collector import build_collector
+from curiosity.experience import build_replay_buffer
 from curiosity.logging import EvaluationEnv, CuriosityArgumentParser
 from curiosity.rl import TwinDelayedDeepDeterministicPolicyGradient
 from curiosity.util import build_actor, build_critic, build_icm, global_seed
@@ -126,6 +127,7 @@ def train(config: Dict = {},
 
     # Initialise Replay Buffer    
     memory = build_replay_buffer(env, capacity=replay_buffer_capacity, device=DEVICE)
+    collector = build_collector(policy=lambda x: td3.actor(x, noise=True), env=env, memory=memory, device=DEVICE)
 
     # Loss
     optim_icm = torch.optim.Adam(params=icm.parameters(), lr=lr)
@@ -142,35 +144,14 @@ def train(config: Dict = {},
     obs, _ = env.reset(seed=seed)
     epoch = 0
     with tqdm(total=total_frames // frames_per_epoch, file=sys.stdout) as pbar:
-        early_start(env, memory, initial_collection_size)
-        # Logging
-        loss_critic_value = 0
-        loss_actor_value = 0
-        loss_icm_value = 0
-
+        collector.early_start(initial_collection_size)
         for step in range(total_frames):
-            # ====================
-            # Data Collection
-            # ====================
-
-            # Calculate action
-            with torch.no_grad():
-                action = td3.actor(torch.tensor(obs, device=DEVICE, dtype=torch.float32), noise=True) \
-                    .cpu().detach().numpy() \
-                    .clip(env.action_space.low, env.action_space.high)
-            # Step environment
-            n_obs, reward, terminated, truncated, infos = env.step(action)
-            # Update memory buffer
-                # (s_t, a_t, r_t, s_t+1, d)
-            transition_tuple = (obs, action, reward, n_obs, terminated)
-            obs = n_obs
-            memory.append(transition_tuple)
+            collector.collect(n=1)
 
             # ====================
             # Gradient Update 
             # Mostly Update this
             # ====================
-
             # TD3 Update
             s_0, a, r_e, s_1, d = memory.sample(minibatch_size, continuous=False)
                 # Add intrinsic reward
