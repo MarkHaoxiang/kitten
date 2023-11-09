@@ -138,7 +138,6 @@ def train(config: Dict = {},
         evaluator.register(td3.actor.net, "actor")
         evaluator.register(td3.critic_1.net, "critic_1")
         evaluator.register(td3.critic_2.net, "critic_2")
-        evaluator.checkpoint_registered()
 
     # Training loop
     obs, _ = env.reset(seed=seed)

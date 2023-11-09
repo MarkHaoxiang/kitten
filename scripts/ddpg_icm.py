@@ -121,7 +121,6 @@ def train(config: Dict = {},
     if checkpoint:
         evaluator.register(ddpg.actor.net, "actor")
         evaluator.register(ddpg.critic.net, "critic")
-        evaluator.checkpoint_registered()
 
     # Training loop
     epoch = 0
@@ -161,6 +160,7 @@ def train(config: Dict = {},
                 critic_value =  ddpg.critic(torch.cat((evaluator.saved_reset_states, ddpg.actor(evaluator.saved_reset_states)), 1)).mean().item()
                 evaluator.log({
                     "train/frame": step,
+                    "train/wall_time": evaluator.get_wall_time(),
                     "train/critic_loss": loss_critic_value,
                     "train/actor_loss": loss_actor_value,
                     "train/critic_value": critic_value, 

@@ -55,18 +55,22 @@ class GymCollector(DataCollector):
         self.device = device
         super().__init__(policy, env, memory)
 
-    def collect(self, n: int) -> List:
+    def collect(self, n: int, *args, **kwargs) -> List:
         with torch.no_grad():
             result = []
             obs = self.obs
             for _ in range(n):
                 # Calculate actions
                 if self._transform_obs:
-                    action = self.policy(torch.tensor(obs, device=self.device, dtype=torch.float32))
+                    action = self.policy(
+                        torch.tensor(obs, device=self.device, dtype=torch.float32),
+                        *args,**kwargs
+                    )
                 else:
-                    action = self.policy(obs)
+                    action = self.policy(obs, *args, **kwargs)
                 if isinstance(action, torch.Tensor):
-                    action = action.cpu().detach().numpy().clip(self.env.action_space.low, self.env.action_space.high)
+                    action = action.cpu().detach().numpy()\
+                        .clip(self.env.action_space.low, self.env.action_space.high)
                 # Step
                 n_obs, reward, terminated, truncated, _ = self.env.step(action)
                 # Store buffer

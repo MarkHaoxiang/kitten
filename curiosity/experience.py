@@ -110,26 +110,3 @@ def build_replay_buffer(env: Env, capacity: int = 10000, device: str = "cpu") ->
         dtype=(torch.float32, torch.int if discrete else torch.float32, torch.float32, torch.float32, torch.bool),
         device=device
     )
-
-# Deprecated
-def early_start(env: Env, memory: ReplayBuffer, steps: int, policy: Callable = None) -> ReplayBuffer:
-    """ Fill the replay buffer for "steps" amount. In-place.
-
-    Args:
-        env (Env): Training Environment
-        replay_buffer (ReplayBuffer): Replay buffer
-        steps (int): Number of steps to run
-    """
-    if not isinstance(env, AutoResetWrapper):
-        env = AutoResetWrapper(env)
-    obs, _ = env.reset()
-    for _ in range(steps):
-        if not policy is None:
-            action = policy(obs)
-        else:
-            action = env.action_space.sample()
-        n_obs, reward, terminated, truncated, _ = env.step(action)
-        transition_tuple = (obs, action, reward, n_obs, terminated)
-        obs = n_obs
-        memory.append(transition_tuple)
-    return memory

@@ -33,8 +33,8 @@ class IntrinsicCuriosityModule(nn.Module):
         if self.discrete:
             raise NotImplementedError("Not yet implemented for discrete action space")
 
-        self._mse_loss = nn.MSELoss()
-
+        # self._mse_loss = nn.MSELoss()
+        self._huber_loss = nn.HuberLoss()
     def forward_model(self, s_0: torch.Tensor, a: torch.Tensor) -> torch.Tensor:
         """ Predicts next encoding
 
@@ -85,10 +85,10 @@ class IntrinsicCuriosityModule(nn.Module):
     def calc_loss(self, s_0: torch.Tensor, s_1: torch.Tensor, a: torch.Tensor):
         pred_phi_1 = self.forward_model(s_0, a)
         true_phi_1 = self.feature_net(s_1)
-        forward_loss = 0.5 * self._mse_loss(true_phi_1, pred_phi_1)
+        forward_loss = 0.5 * self._huber_loss(true_phi_1, pred_phi_1)
         pred_a = self.inverse_model(s_0, s_1)
         if self.discrete:
             raise NotImplementedError("Not yet implemented for discrete action space")
         else:
-            inverse_loss = self._mse_loss(a, pred_a)
+            inverse_loss = self._huber_loss(a, pred_a)
         return forward_loss * self.beta + inverse_loss * (1-self.beta) 

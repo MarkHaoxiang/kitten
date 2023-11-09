@@ -1,4 +1,4 @@
-from typing import Union, List
+from typing import Union, List, Optional
 import random
 
 from gymnasium import Env
@@ -9,7 +9,7 @@ import torch.nn as nn
 from curiosity.nn import ClassicalGaussianActor
 from curiosity.world import IntrinsicCuriosityModule
 
-def build_actor(env: Env, features: int = 128, exploration_factor: float=0.1) -> nn.Module:
+def build_actor(env: Env, features: int = 128, exploration_factor: float=0.1, clip_grad_norm: Optional[float] = 1) -> nn.Module:
     """Builds an actor for gym environment
 
     Args:
@@ -33,7 +33,7 @@ def build_actor(env: Env, features: int = 128, exploration_factor: float=0.1) ->
     if not pixels:
         if discrete:
             raise NotImplementedError("Discrete action space is a WiP")
-        return ClassicalGaussianActor(
+        result = ClassicalGaussianActor(
             env,
             features=features,
             exploration_factor=exploration_factor
@@ -41,7 +41,11 @@ def build_actor(env: Env, features: int = 128, exploration_factor: float=0.1) ->
     else:
         raise NotImplementedError("Pixel space is WIP")
 
-def build_critic(env: Env, features: int) -> nn.Module:
+    if not clip_grad_norm is None:
+        nn.utils.clip_grad_norm_(result.parameters(), clip_grad_norm)
+    return result
+
+def build_critic(env: Env, features: int, clip_grad_norm: Optional[float] = 1) -> nn.Module:
     """Builds a critic for gym environment
 
     Args:
@@ -62,7 +66,7 @@ def build_critic(env: Env, features: int) -> nn.Module:
     pixels = len(env.observation_space.shape) != 1
 
     if not pixels:
-        return nn.Sequential(
+        result =  nn.Sequential(
             nn.Linear(in_features=env.observation_space.shape[-1] + (0 if discrete else env.action_space.shape[0]), out_features=features),
             nn.LeakyReLU(),
             nn.Linear(in_features=features, out_features=features),
@@ -97,11 +101,13 @@ def build_critic(env: Env, features: int) -> nn.Module:
                 result = self.linear(result)
                 result = result.squeeze()
                 return result
+        result =  AtariNetwork()
 
-        return AtariNetwork()
-    
+    if not clip_grad_norm is None:
+        nn.utils.clip_grad_norm_(result.parameters(), clip_grad_norm)
+    return result
 
-def build_icm(env: Env, encoding_size: int, device: str, **kwargs):
+def build_icm(env: Env, encoding_size: int, device: str, clip_grad_norm: Optional[float] = 1, **kwargs):
     """ Builds a default intrinsic curiosity module
     Args:
         env (Env): gym environment
@@ -130,7 +136,10 @@ def build_icm(env: Env, encoding_size: int, device: str, **kwargs):
         nn.Linear(in_features=encoding_size, out_features=action_size)
     ).to(device=device)
 
-    return IntrinsicCuriosityModule(feature_net, forward_head, inverse_head, discrete_action_space=False, **kwargs)
+    result =  IntrinsicCuriosityModule(feature_net, forward_head, inverse_head, discrete_action_space=False, **kwargs)
+    if not clip_grad_norm is None:
+        nn.utils.clip_grad_norm_(result.parameters(), clip_grad_norm)
+    return result
 
 def global_seed(seed: int, *envs):
     """ Utility to help set determinism

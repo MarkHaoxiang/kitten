@@ -7,6 +7,7 @@ import os
 import shutil
 from typing import Callable, Dict, Optional
 import json
+import time
 
 import torch
 import torch.nn as nn
@@ -85,6 +86,7 @@ class EvaluationEnv:
         self.env = copy.deepcopy(env)
         self.path = os.path.join(path, project_name)
         self.saved_reset_states = []
+        self._start_time = time.time()
         for _ in range(saved_reset_states):
             obs, _ = self.env.reset()
             self.saved_reset_states.append(obs)
@@ -117,8 +119,16 @@ class EvaluationEnv:
 
         # Checkpoints
         self.models = []
+    
+    def get_wall_time(self) -> float:
+        """Gets elapsed time since creation
 
-    def register(self, model: nn.Module, name: str) -> None:
+        Returns:
+            float:
+        """
+        return time.time()-self._start_time
+
+    def register(self, model: nn.Module, name: str, watch: bool=True, watch_frequency: Optional[int]=None) -> None:
         """Register a torch module to checkpoint
 
         Args:
@@ -128,6 +138,14 @@ class EvaluationEnv:
         if name[-3:] != ".pt":
             name = name + ".pt"
         self.models.append((model, name))
+        self.checkpoint(model, name)
+        if watch and self.wandb_enable:
+            wandb.watch(
+                model,
+                log="all",
+                log_freq=watch_frequency if not watch_frequency is None else self.config['frames_per_epoch'],
+                idx=len(self.models)
+            )
 
     def checkpoint_registered(self, frame: Optional[int] = None) -> None:
         """ Utility to checkpoint registered models
@@ -215,11 +233,11 @@ def evaluate(env: Env, policy: Callable, repeat: int = 1):
     total_reward = 0
     maximum_reward = -math.inf
     episode_length = 0
-    for _ in range(repeat):
+    for seed in range(repeat):
         episode_reward = 0
         with torch.no_grad():
             env.close()
-            obs, _ = env.reset()
+            obs, _ = env.reset(seed=seed)
             terminated = False
             truncated = False
             while not terminated and not truncated:

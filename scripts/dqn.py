@@ -9,10 +9,8 @@ from gymnasium.spaces import Discrete
 import torch
 import torch.nn as nn
 from tqdm import tqdm
-from curiosity.experience import (
-    build_replay_buffer,
-    early_start
-)
+from curiosity.collector import build_collector
+from curiosity.experience import build_replay_buffer
 from curiosity.exploration import epsilon_greedy
 from curiosity.logging import CuriosityArgumentParser, EvaluationEnv
 from curiosity.nn import AddTargetNetwork
@@ -92,6 +90,12 @@ def train(config: Dict,
 
     # Initialise Replay Buffer
     memory = build_replay_buffer(env, capacity=replay_buffer_capacity, device=DEVICE)
+    collector = build_collector(
+        policy=lambda x, e: epsilon_greedy(torch.argmax(critic(x)), env.action_space, e),
+        env=env,
+        memory=memory,
+        device=DEVICE
+    )
 
     # Loss
     loss = nn.MSELoss()
@@ -113,7 +117,7 @@ def train(config: Dict,
     obs, _ = env.reset()
     epoch = 0
     with tqdm(total=total_frames // frames_per_epoch, file=sys.stdout) as pbar:
-        early_start(env, memory, initial_collection_size)
+        collector.early_start(initial_collection_size)
         # Logging
         for step in range(total_frames):
 
@@ -123,16 +127,8 @@ def train(config: Dict,
             train_step = max(0, step-initial_collection_size)
             exploration_stage = min(1, train_step / exploration_anneal_time)
             epsilon = exploration_stage * final_exploration_factor + (1-exploration_stage) * initial_exploration_factor
-            # Calculate action
-            action = epsilon_greedy(torch.argmax(critic(torch.tensor(obs, device=DEVICE, dtype=torch.float32))), env.action_space, epsilon)
-            # Step environment
-            n_obs, reward, terminated, truncated, _ = env.step(action)
-            # Update memory buffer
-                # (s_t, a_t, r_t, s_t+1)
-            transition_tuple = (obs, action, reward, n_obs, terminated)
-            obs = n_obs
-            memory.append(transition_tuple)
-
+            # Collection 
+            collector.collect(n=1, e=epsilon)
             # ====================
             # Gradient Update 
             # Mostly Update this

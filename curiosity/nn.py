@@ -67,7 +67,7 @@ class ClassicalGaussianActor(GaussianActor):
     """
     def __init__(self, env: Env, features=128, exploration_factor=0.1):
         mean = nn.Sequential(
-            nn.LazyLinear(out_features=features),
+            nn.Linear(in_features=env.observation_space.shape[0], out_features=features),
             nn.LeakyReLU(),
             nn.Linear(in_features=features, out_features=features),
             nn.LeakyReLU(),
