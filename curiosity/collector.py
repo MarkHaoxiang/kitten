@@ -1,16 +1,25 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Callable, List, Optional
+from typing import Any, Callable, List, Optional
+
 
 import gymnasium as gym
 from gymnasium.wrappers.autoreset import AutoResetWrapper
 import torch
 
 from curiosity.experience import ReplayBuffer
+from curiosity.policy import Policy
 
 class DataCollector(ABC):    
-    def __init__(self, policy: Callable, env, memory: Optional[ReplayBuffer]):
+    def __init__(self, policy: Policy, env: gym.Env, memory: Optional[ReplayBuffer]):
+        """ Constructs a data collector
+
+        Args:
+            policy (Callable): Policy for collection
+            env (Env): Collection environment
+            memory (Optional[ReplayBuffer]): If provided, add transition tuples into the replay buffer.
+        """
         self.policy = policy
         self.env = env
         self.memory = memory
@@ -36,21 +45,19 @@ class DataCollector(ABC):
         """
         raise NotImplementedError
 
-    def set_policy(self, policy: Callable):
+    def set_policy(self, policy: Policy):
         self.policy = policy
 
 class GymCollector(DataCollector):
     """ Gymnasium environment data collector
     """
     def __init__(self,
-                 policy: Callable,
+                 policy: Policy,
                  env: gym.Env,
                  memory: Optional[ReplayBuffer],
-                 transform_obs: bool = True,
                  device: torch.device ='cpu'):
         if not isinstance(env, AutoResetWrapper):
             env = AutoResetWrapper(env)
-        self._transform_obs = transform_obs
         self.obs, _ = env.reset()
         self.device = device
         super().__init__(policy, env, memory)
@@ -60,19 +67,16 @@ class GymCollector(DataCollector):
             result = []
             obs = self.obs
             for _ in range(n):
-                # Calculate actions
-                if self._transform_obs:
-                    action = self.policy(
-                        torch.tensor(obs, device=self.device, dtype=torch.float32),
-                        *args,**kwargs
-                    )
-                else:
-                    action = self.policy(obs, *args, **kwargs)
+                # Calculate actions 
+                action = self.policy(obs, *args, **kwargs)
+                    # Convert actions to numpy
                 if isinstance(action, torch.Tensor):
-                    action = action.cpu().detach().numpy()\
-                        .clip(self.env.action_space.low, self.env.action_space.high)
+                    action = action.cpu().detach().numpy()
+                action = action.clip(self.env.action_space.low, self.env.action_space.high)
                 # Step
                 n_obs, reward, terminated, truncated, _ = self.env.step(action)
+                if terminated or truncated:
+                    self.policy.reset()
                 # Store buffer
                 transition_tuple = (obs, action, reward, n_obs, terminated)
                 result.append(transition_tuple)
@@ -84,10 +88,10 @@ class GymCollector(DataCollector):
 
     def early_start(self, n: int) -> List:
         policy = self.policy
-        self.set_policy(lambda _: self.env.action_space.sample())
+        self.set_policy(Policy(lambda _: self.env.action_space.sample(), transform_obs=False))
         result = self.collect(n)
         self.policy = policy
         return result
 
 def build_collector(policy, env, memory, device: torch.device = 'cpu') -> DataCollector:
-    return GymCollector(policy, env, memory, transform_obs=True, device=device)
+    return GymCollector(policy, env, memory, device=device)

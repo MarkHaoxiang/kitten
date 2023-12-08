@@ -14,6 +14,7 @@ from curiosity.util import (
     build_critic,
     global_seed
 )
+from curiosity.policy import ColoredNoisePolicy
 from curiosity.rl import DeepDeterministicPolicyGradient
 
 parser = CuriosityArgumentParser(
@@ -36,6 +37,7 @@ def train(config: Dict = {},
           environment: str = "Pendulum-v1",
           discount_factor: float = 0.99,
           exploration_factor: float = 0.1,
+          exploration_beta: float = 1,
           features: int = 128,
           target_update_frequency: int = 1,
           replay_buffer_capacity: int = 10000,
@@ -73,25 +75,24 @@ def train(config: Dict = {},
     Raises:
         ValueError: Invalid configuration passed
     """
-    # Metadata
-    PROJECT_NAME = parser.generate_project_name(environment, "ddpg")
-
     # Create Environments
+    config["environment"] = environment # Hack to ensure visualise.ipynb works
     env = AutoResetWrapper(gym.make(environment, render_mode="rgb_array"))
     evaluator = EvaluationEnv(
         env=env,
-        project_name=PROJECT_NAME,
+        project_name=parser.generate_project_name(environment, "ddpg"),
         config=config,
         video=eval_repeat*frames_per_video//frames_per_epoch if frames_per_video > 0 else None,
         wandb_enable=wandb,
         device=DEVICE
     )
+
     # RNG
     global_seed(seed, env, evaluator)
 
     # Define Actor / Critic
     ddpg = DeepDeterministicPolicyGradient(
-        actor=build_actor(env, features, exploration_factor),
+        actor=build_actor(env, features),
         critic=build_critic(env, features),
         gamma=discount_factor,
         lr=lr,
@@ -101,7 +102,15 @@ def train(config: Dict = {},
 
     # Initialise Data Pipeline
     memory = build_replay_buffer(env, capacity=replay_buffer_capacity, device=DEVICE)
-    collector = build_collector(policy=lambda x: ddpg.actor(x, noise=True), env=env, memory=memory, device=DEVICE)
+    policy = ColoredNoisePolicy(
+        ddpg.actor,
+        env.action_space,
+        episode_length=env.spec.max_episode_steps,
+        exploration_factor=exploration_factor,
+        beta=exploration_beta,
+        device=DEVICE
+    )
+    collector = build_collector(policy, env, memory, device=DEVICE)
 
     # Logging
     checkpoint = frames_per_checkpoint > 0
@@ -124,13 +133,14 @@ def train(config: Dict = {},
                 # Critic
             if step % target_update_frequency == 0:
                 loss_critic_value, loss_actor_value = ddpg.update(memory.sample(minibatch_size, continuous=False))
+
+            # ====================
+            # Evaluation and Logging
+            # ====================
             # Epoch Logging
             if step % frames_per_epoch == 0:
                 epoch += 1
-                reward = evaluator.evaluate(
-                    policy = lambda x: ddpg.actor(torch.tensor(x, device=DEVICE, dtype=torch.float32)).cpu().numpy(),
-                    repeat=eval_repeat
-                )
+                reward = evaluator.evaluate(policy, repeat=eval_repeat)
                 critic_value =  ddpg.critic(torch.cat((evaluator.saved_reset_states, ddpg.actor(evaluator.saved_reset_states)), 1)).mean().item()
                 evaluator.log({
                     "train/frame": step,
@@ -141,7 +151,7 @@ def train(config: Dict = {},
                 })
                 pbar.set_description(f"epoch {epoch} reward {reward} critic loss {loss_critic_value} actor loss {loss_actor_value}")
                 pbar.update(1)
-
+            # Update checkpoints
             if checkpoint and step % frames_per_checkpoint == 0:
                 evaluator.checkpoint_registered(step)
 

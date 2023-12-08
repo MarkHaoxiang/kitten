@@ -11,7 +11,7 @@ import torch.nn as nn
 from tqdm import tqdm
 from curiosity.collector import build_collector
 from curiosity.experience import build_replay_buffer
-from curiosity.exploration import epsilon_greedy
+from curiosity.curiosity.policy import EpsilonGreedyPolicy
 from curiosity.logging import CuriosityArgumentParser, EvaluationEnv
 from curiosity.nn import AddTargetNetwork
 from curiosity.util import build_critic
@@ -91,7 +91,7 @@ def train(config: Dict,
     # Initialise Replay Buffer
     memory = build_replay_buffer(env, capacity=replay_buffer_capacity, device=DEVICE)
     collector = build_collector(
-        policy=lambda x, e: epsilon_greedy(torch.argmax(critic(x)), env.action_space, e),
+        policy=EpsilonGreedyPolicy(lambda x: torch.argmax(critic(x)), env.action_space),
         env=env,
         memory=memory,
         device=DEVICE
@@ -128,7 +128,7 @@ def train(config: Dict,
             exploration_stage = min(1, train_step / exploration_anneal_time)
             epsilon = exploration_stage * final_exploration_factor + (1-exploration_stage) * initial_exploration_factor
             # Collection 
-            collector.collect(n=1, e=epsilon)
+            collector.collect(n=1, epsilon=epsilon)
             # ====================
             # Gradient Update 
             # Mostly Update this

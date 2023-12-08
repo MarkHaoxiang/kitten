@@ -15,7 +15,6 @@ class DeepDeterministicPolicyGradient:
                  gamma: float = 0.99,
                  lr: float=1e-3,
                  tau: float = 0.005,
-                 target_update_frequency: int = 1,
                  device: str = "cpu"):
         """ DDPG
 

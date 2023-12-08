@@ -7,6 +7,9 @@ torch
 torchvision
 torchaudio
 
+# Algorithms
+pink-noise-rl
+
 # Logging
 wandb
 moviepy

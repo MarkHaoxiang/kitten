@@ -16,6 +16,8 @@ from gymnasium import Env
 from gymnasium.wrappers.record_video import RecordVideo
 import wandb
 
+from curiosity.policy import Policy
+
 class CuriosityArgumentParser:
     """ Argument parser for training scripts
     """
@@ -176,7 +178,7 @@ class EvaluationEnv:
                 os.makedirs(os.path.join(path, str(frame)))
             torch.save(model.state_dict(), os.path.join(path, str(frame), name))
 
-    def evaluate(self, policy: Callable, repeat: int = 1) -> float:
+    def evaluate(self, policy: Policy, repeat: int = 1) -> float:
         """Evaluation of a policy on the environment
 
         Args:
@@ -186,6 +188,7 @@ class EvaluationEnv:
         Returns:
             float: Mean reward
         """
+        policy.enable_evaluation()
         evaluation_reward, evaluation_maximum_reward, evaluation_episode_length = evaluate(self.env, policy=policy, repeat=repeat)
         self.log(
             ({
@@ -194,6 +197,7 @@ class EvaluationEnv:
                 "evaluation/episode_length": evaluation_episode_length
             })
         )
+        policy.disable_evaluation()
         return evaluation_reward
 
     def log(self, kwargs):
@@ -242,7 +246,10 @@ def evaluate(env: Env, policy: Callable, repeat: int = 1):
             truncated = False
             while not terminated and not truncated:
                 episode_length += 1
-                obs, reward, terminated, truncated, _ = env.step(policy(obs))
+                action = policy(obs)
+                if isinstance(action, torch.Tensor):
+                    action = action.cpu().numpy()
+                obs, reward, terminated, truncated, _ = env.step(action)
                 total_reward += reward
                 episode_reward += reward
         maximum_reward = max(episode_reward, maximum_reward)

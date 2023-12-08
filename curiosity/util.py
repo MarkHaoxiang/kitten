@@ -6,17 +6,16 @@ from gymnasium.spaces import Box, Discrete
 import torch
 import torch.nn as nn
 
-from curiosity.nn import ClassicalGaussianActor
+from curiosity.nn import ClassicalBoxActor
 from curiosity.world import IntrinsicCuriosityModule
 
-def build_actor(env: Env, features: int = 128, exploration_factor: float=0.1, clip_grad_norm: Optional[float] = 1) -> nn.Module:
+def build_actor(env: Env, features: int = 128, clip_grad_norm: Optional[float] = 1) -> nn.Module:
     """Builds an actor for gym environment
 
     Args:
         env (Env): Training gym environment
         feature (int): Width of each NN layer
-        exploration_factor (float): Exploration noise to add
-    
+ 
     Returns:
         nn.Module: Actor NNs
     """
@@ -33,11 +32,7 @@ def build_actor(env: Env, features: int = 128, exploration_factor: float=0.1, cl
     if not pixels:
         if discrete:
             raise NotImplementedError("Discrete action space is a WiP")
-        result = ClassicalGaussianActor(
-            env,
-            features=features,
-            exploration_factor=exploration_factor
-        )
+        result = ClassicalBoxActor(env, features=features)
     else:
         raise NotImplementedError("Pixel space is WIP")
 
