@@ -37,9 +37,13 @@ class Policy:
         pass
 
     def enable_evaluation(self) -> None:
+        """Disable exploration for evaluation
+        """
         self._evaluate = True
 
     def disable_evaluation(self) -> None:
+        """Enable exploration for training
+        """
         self._evaluate = False
 
     @property

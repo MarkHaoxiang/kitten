@@ -10,14 +10,14 @@ from curiosity.collector import build_collector
 from curiosity.experience import build_replay_buffer
 from curiosity.logging import EvaluationEnv, CuriosityArgumentParser
 from curiosity.rl import TwinDelayedDeepDeterministicPolicyGradient
+from curiosity.policy import ColoredNoisePolicy
 from curiosity.util import build_actor, build_critic, build_icm, global_seed
 
-parser = CuriosityArgumentParser(
-    prog="TD3+ICM",
-    description= """Fujimoto, et al. Addressing Function Approximation Error in Actor-Critic Methods. 2018. Adds clipped double critic, delayed policy updates, and value function smoothing  to DDPG. Pathak, Deepak, et al. Curiosity-Driven Exploration by Self-Supervised Prediction. 2017. Adds intrinsic curiosity, a type of exploration world model."""
-)
-
+ALGORITHM = "td3_icm"
+DESCRIPTION = """Fujimoto, et al. Addressing Function Approximation Error in Actor-Critic Methods. 2018. Pathak, Deepak, et al. Curiosity-Driven Exploration by Self-Supervised Prediction. 2017."""
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+parser = CuriosityArgumentParser(prog=ALGORITHM, description=DESCRIPTION)
 
 def train(config: Dict = {},
           seed: int = 0,
@@ -29,6 +29,7 @@ def train(config: Dict = {},
           environment: str = "Pendulum-v1",
           discount_factor: float = 0.99,
           exploration_factor: float = 0.1,
+          exploration_beta: float = 1,
           target_noise: float = 0.1,
           target_noise_clip: float = 0.2,
           features: int = 128,
@@ -60,6 +61,7 @@ def train(config: Dict = {},
         discount_factor (float): Reward discount
             # Algorithm
         exploration_factor (float): Gaussian noise standard deviation for exploration
+        exploration_beta (float): Colour of noise for exploration
         target_noise (float): Smoothing noise standard deviation added to policy for the critic update
         target_noise_clip (float): Clip target noise
         features (int): Helps define the complexity of neural nets used
@@ -80,7 +82,6 @@ def train(config: Dict = {},
     """
     
     # Metadata
-    PROJECT_NAME = parser.generate_project_name(environment, "td3_icm")
     policy_update_frequency = int(policy_update_frequency * critic_update_frequency)
 
     # Create Environments
@@ -90,7 +91,7 @@ def train(config: Dict = {},
     env_action_max = torch.tensor(env.action_space.high, dtype=torch.float32, device=DEVICE)
     evaluator = EvaluationEnv(
         env=env,
-        project_name=PROJECT_NAME,
+        project_name=parser.generate_project_name(environment, ALGORITHM),
         config=config,
         video=eval_repeat*frames_per_video//frames_per_epoch if frames_per_video > 0 else None,
         wandb_enable=wandb,
@@ -98,11 +99,11 @@ def train(config: Dict = {},
     )
 
     # RNG
-    global_seed(seed, env, evaluator)
+    rng = global_seed(seed, env, evaluator)
 
     # Define Actor / Critic
     td3 = TwinDelayedDeepDeterministicPolicyGradient(
-        actor=build_actor(env, features, exploration_factor),
+        actor=build_actor(env, features),
         critic_1=build_critic(env, features),
         critic_2=build_critic(env, features),
         gamma=discount_factor,
@@ -115,6 +116,15 @@ def train(config: Dict = {},
         env_action_max=env_action_max,
         device=DEVICE
     ) 
+    policy = ColoredNoisePolicy(
+        td3.actor,
+        env.action_space,
+        episode_length=env.spec.max_episode_steps,
+        exploration_factor=exploration_factor,
+        beta=exploration_beta,
+        rng=rng,
+        device=DEVICE
+    )
 
     # Define curiosity
     icm = build_icm(
@@ -127,7 +137,7 @@ def train(config: Dict = {},
 
     # Initialise Replay Buffer    
     memory = build_replay_buffer(env, capacity=replay_buffer_capacity, device=DEVICE)
-    collector = build_collector(policy=lambda x: td3.actor(x, noise=True), env=env, memory=memory, device=DEVICE)
+    collector = build_collector(policy=policy, env=env, memory=memory, device=DEVICE)
 
     # Loss
     optim_icm = torch.optim.Adam(params=icm.parameters(), lr=lr)
@@ -140,7 +150,6 @@ def train(config: Dict = {},
         evaluator.register(td3.critic_2.net, "critic_2")
 
     # Training loop
-    obs, _ = env.reset(seed=seed)
     epoch = 0
     with tqdm(total=total_frames // frames_per_epoch, file=sys.stdout) as pbar:
         collector.early_start(initial_collection_size)
@@ -175,10 +184,7 @@ def train(config: Dict = {},
             # Epoch Logging
             if step % frames_per_epoch == 0 :
                 epoch += 1
-                reward = evaluator.evaluate(
-                    policy = lambda x: td3.actor(torch.tensor(x, device=DEVICE, dtype=torch.float32)).cpu().numpy(),
-                    repeat=eval_repeat
-                )
+                reward = evaluator.evaluate(policy, repeat=eval_repeat)
                 critic_value = td3.critic_1(torch.cat((evaluator.saved_reset_states, td3.actor(evaluator.saved_reset_states)), 1)).mean().item()
                 evaluator.log({
                     "train/frame": step,

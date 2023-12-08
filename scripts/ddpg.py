@@ -17,15 +17,11 @@ from curiosity.util import (
 from curiosity.policy import ColoredNoisePolicy
 from curiosity.rl import DeepDeterministicPolicyGradient
 
-parser = CuriosityArgumentParser(
-    prog="DDPG",
-    description="Lillicrap, et al. Continuous control with deep reinforcement learning. 2015."
-)
-
-# An implementation of DDPG
-# Lillicrap, et al. Continuous control with deep reinforcement learning. 2015.
-
+ALGORITHM = "ddpg"
+DESCRIPTION = "Lillicrap, et al. Continuous control with deep reinforcement learning. 2015."
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+parser = CuriosityArgumentParser(prog=ALGORITHM, description=DESCRIPTION)
 
 def train(config: Dict = {},
           seed: int = 0,
@@ -81,7 +77,7 @@ def train(config: Dict = {},
     env = AutoResetWrapper(gym.make(environment, render_mode="rgb_array"))
     evaluator = EvaluationEnv(
         env=env,
-        project_name=parser.generate_project_name(environment, "ddpg"),
+        project_name=parser.generate_project_name(environment, ALGORITHM),
         config=config,
         video=eval_repeat*frames_per_video//frames_per_epoch if frames_per_video > 0 else None,
         wandb_enable=wandb,
@@ -100,9 +96,6 @@ def train(config: Dict = {},
         tau=tau,
         device=DEVICE
     )
-
-    # Initialise Data Pipeline
-    memory = build_replay_buffer(env, capacity=replay_buffer_capacity, device=DEVICE)
     policy = ColoredNoisePolicy(
         ddpg.actor,
         env.action_space,
@@ -112,6 +105,9 @@ def train(config: Dict = {},
         rng=rng,
         device=DEVICE
     )
+
+    # Initialise Data Pipeline  
+    memory = build_replay_buffer(env, capacity=replay_buffer_capacity, device=DEVICE)
     collector = build_collector(policy, env, memory, device=DEVICE)
 
     # Logging

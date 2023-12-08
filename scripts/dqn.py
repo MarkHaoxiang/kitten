@@ -15,6 +15,9 @@ from curiosity.curiosity.policy import EpsilonGreedyPolicy
 from curiosity.logging import CuriosityArgumentParser, EvaluationEnv
 from curiosity.nn import AddTargetNetwork
 from curiosity.util import build_critic
+
+# TODO: This script is out of date. Needs update to mesh with latest library changes.
+
 parser = CuriosityArgumentParser(
     prog="DQN",
     description="V Mnih, et al. Playing Atari with Deep Reinforcement Learning. 2013."

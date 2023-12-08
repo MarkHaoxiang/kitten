@@ -10,14 +10,14 @@ from curiosity.collector import build_collector
 from curiosity.experience import build_replay_buffer
 from curiosity.logging import EvaluationEnv, CuriosityArgumentParser
 from curiosity.rl import DeepDeterministicPolicyGradient
+from curiosity.policy import ColoredNoisePolicy
 from curiosity.util import build_actor, build_critic, build_icm, global_seed
 
-parser = CuriosityArgumentParser(
-    prog="DDPG+ICM",
-    description="Lillicrap, et al. Continuous control with deep reinforcement learning. 2015. Pathak, Deepak, et al. Curiosity-Driven Exploration by Self-Supervised Prediction. 2017. Adds intrinsic curiosity, a type of exploration world model."
-)
-
+ALGORITHM = "ddpg_icm"
+DESCRIPTION = "Lillicrap, et al. Continuous control with deep reinforcement learning. 2015. Pathak, Deepak, et al. Curiosity-Driven Exploration by Self-Supervised Prediction. 2017."
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+parser = CuriosityArgumentParser(prog=ALGORITHM,description=DESCRIPTION)
 
 def train(config: Dict = {},
           seed: int = 0,
@@ -29,6 +29,7 @@ def train(config: Dict = {},
           environment: str = "Pendulum-v1",
           discount_factor: float = 0.99,
           exploration_factor: float = 0.1,
+          exploration_beta: float = 1,
           features: int = 128,
           target_update_frequency: int = 1,
           replay_buffer_capacity: int = 10000,
@@ -57,6 +58,7 @@ def train(config: Dict = {},
         discount_factor (float): Reward discount
             # Algorithm
         exploration_factor (float): Gaussian noise standard deviation for exploration
+        exploration_beta (float): Colour of noise for exploration
         features (int): Helps define the complexity of neural nets used
         target_update_frequency (int): Frames between each network update
         replay_buffer_capacity (int): Capacity of replay buffer
@@ -74,7 +76,7 @@ def train(config: Dict = {},
         ValueError: Invalid configuration passed
     """
     # Metadata
-    PROJECT_NAME = parser.generate_project_name(environment, "ddpg_icm")
+    PROJECT_NAME = parser.generate_project_name(environment, ALGORITHM)
 
     # Create Environments
     env = AutoResetWrapper(gym.make(environment, render_mode="rgb_array"))
@@ -88,17 +90,26 @@ def train(config: Dict = {},
     )
 
     # RNG
-    global_seed(seed, env, evaluator)
+    rng = global_seed(seed, env, evaluator)
 
     # Define Actor / Critic
     ddpg = DeepDeterministicPolicyGradient(
-        actor=build_actor(env, features, exploration_factor),
+        actor=build_actor(env, features),
         critic=build_critic(env, features),
         gamma=discount_factor,
         lr=lr,
         tau=tau,
         device=DEVICE
-    ) 
+    )
+    policy = ColoredNoisePolicy(
+        ddpg.actor,
+        env.action_space,
+        episode_length=env.spec.max_episode_steps,
+        exploration_factor=exploration_factor,
+        beta=exploration_beta,
+        rng=rng,
+        device=DEVICE
+    )
 
     # Define curiosity
     icm = build_icm(
@@ -111,7 +122,7 @@ def train(config: Dict = {},
 
     # Initialise Replay Buffer    
     memory = build_replay_buffer(env, capacity=replay_buffer_capacity, device=DEVICE)
-    collector = build_collector(policy=lambda x: ddpg.actor(x, noise=True), env=env, memory=memory, device=DEVICE)
+    collector = build_collector(policy, env=env, memory=memory, device=DEVICE)
 
     # Loss
     optim_icm = torch.optim.Adam(params=icm.parameters(), lr=lr)
@@ -126,7 +137,7 @@ def train(config: Dict = {},
     epoch = 0
     with tqdm(total=total_frames // frames_per_epoch, file=sys.stdout) as pbar:
         collector.early_start(initial_collection_size)
-        for step in range(total_frames):
+        for step in range(1, total_frames+1):
             collector.collect(n=1)
 
             # ====================
@@ -153,10 +164,7 @@ def train(config: Dict = {},
             # Epoch Logging
             if step % frames_per_epoch == 0:
                 epoch += 1
-                reward = evaluator.evaluate(
-                    policy = lambda x: ddpg.actor(torch.tensor(x, device=DEVICE, dtype=torch.float32)).cpu().numpy(),
-                    repeat=eval_repeat
-                )
+                reward = evaluator.evaluate(policy, repeat=eval_repeat)
                 critic_value =  ddpg.critic(torch.cat((evaluator.saved_reset_states, ddpg.actor(evaluator.saved_reset_states)), 1)).mean().item()
                 evaluator.log({
                     "train/frame": step,
