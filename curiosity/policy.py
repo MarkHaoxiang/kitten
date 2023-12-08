@@ -77,6 +77,7 @@ class ColoredNoisePolicy(Policy):
                  episode_length: Optional[int],
                  exploration_factor: float = 1,
                  beta: float = 1,
+                 rng = None,
                  device: str = "cpu"):
         """ Pink Noise Exploration
 
@@ -103,7 +104,8 @@ class ColoredNoisePolicy(Policy):
         self._noise = pink.ColoredNoiseProcess(
             beta=beta,
             size=(*size, episode_length),
-            scale=exploration_factor
+            scale=exploration_factor,
+            rng = rng
         )
         self._device = device
 

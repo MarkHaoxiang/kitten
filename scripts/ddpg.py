@@ -62,7 +62,8 @@ def train(config: Dict = {},
         environment (str): Environment name in registry. Defaults to "Pendulum-v1"
         discount_factor (float): Reward discount
             # Algorithm
-        exploration_factor (float): Gaussian noise standard deviation for exploration
+        exploration_factor (float): Noise scale for exploration
+        exploration_beta (float): Colour of noise for exploration
         features (int): Helps define the complexity of neural nets used
         target_update_frequency (int): Frames between each network update
         replay_buffer_capacity (int): Capacity of replay buffer
@@ -88,7 +89,7 @@ def train(config: Dict = {},
     )
 
     # RNG
-    global_seed(seed, env, evaluator)
+    rng = global_seed(seed, env, evaluator)
 
     # Define Actor / Critic
     ddpg = DeepDeterministicPolicyGradient(
@@ -108,6 +109,7 @@ def train(config: Dict = {},
         episode_length=env.spec.max_episode_steps,
         exploration_factor=exploration_factor,
         beta=exploration_beta,
+        rng=rng,
         device=DEVICE
     )
     collector = build_collector(policy, env, memory, device=DEVICE)

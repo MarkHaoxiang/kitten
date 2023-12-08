@@ -1,8 +1,9 @@
-from typing import Union, List, Optional
+from typing import Optional
 import random
 
 from gymnasium import Env
 from gymnasium.spaces import Box, Discrete
+import numpy as np
 import torch
 import torch.nn as nn
 
@@ -148,3 +149,4 @@ def global_seed(seed: int, *envs):
     for env in envs:
         env.reset(seed=seed)
         env.action_space.seed(seed)
+    return np.random.default_rng(seed)

@@ -7,6 +7,7 @@
     "environment":"Pendulum-v1",
     "discount_factor": 0.99,
     "exploration_factor": 0.1,
+    "exploration_beta": 2,
     "features": 128,
     "target_update_frequency": 1,
     "replay_buffer_capacity": 10000,
