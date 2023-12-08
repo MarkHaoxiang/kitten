@@ -10,7 +10,7 @@ import torch.nn as nn
 from curiosity.nn import ClassicalBoxActor
 from curiosity.world import IntrinsicCuriosityModule
 
-def build_actor(env: Env, features: int = 128, clip_grad_norm: Optional[float] = 1) -> nn.Module:
+def build_actor(env: Env, features: int = 128) -> nn.Module:
     """Builds an actor for gym environment
 
     Args:
@@ -37,11 +37,9 @@ def build_actor(env: Env, features: int = 128, clip_grad_norm: Optional[float] =
     else:
         raise NotImplementedError("Pixel space is WIP")
 
-    if not clip_grad_norm is None:
-        nn.utils.clip_grad_norm_(result.parameters(), clip_grad_norm)
     return result
 
-def build_critic(env: Env, features: int, clip_grad_norm: Optional[float] = 1) -> nn.Module:
+def build_critic(env: Env, features: int) -> nn.Module:
     """Builds a critic for gym environment
 
     Args:
@@ -99,8 +97,6 @@ def build_critic(env: Env, features: int, clip_grad_norm: Optional[float] = 1) -
                 return result
         result =  AtariNetwork()
 
-    if not clip_grad_norm is None:
-        nn.utils.clip_grad_norm_(result.parameters(), clip_grad_norm)
     return result
 
 def build_icm(env: Env, encoding_size: int, device: str, clip_grad_norm: Optional[float] = 1, **kwargs):

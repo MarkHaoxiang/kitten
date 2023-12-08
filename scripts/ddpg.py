@@ -124,7 +124,7 @@ def train(config: Dict = {},
     epoch = 0
     with tqdm(total=total_frames // frames_per_epoch, file=sys.stdout) as pbar:
         collector.early_start(initial_collection_size)
-        for step in range(total_frames):
+        for step in range(1,  total_frames+1):
             collector.collect(n=1)
 
             # ====================

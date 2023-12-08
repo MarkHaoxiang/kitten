@@ -29,7 +29,7 @@ class AddTargetNetwork(nn.Module):
             target_param.data.copy_(net_param.data * tau + target_param.data*(1-tau))
 
 class ClassicalBoxActor(nn.Module):
-    """ an actor for continuous low-dimensionality gym environments
+    """ Actor for continuous low-dimensionality gym environments
     """
     def __init__(self, env: Env, features=128):
         super().__init__()

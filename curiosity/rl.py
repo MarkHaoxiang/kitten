@@ -1,4 +1,4 @@
-from typing import Tuple
+from typing import Optional, Tuple
 
 import torch
 from torch import Tensor
@@ -15,6 +15,7 @@ class DeepDeterministicPolicyGradient:
                  gamma: float = 0.99,
                  lr: float=1e-3,
                  tau: float = 0.005,
+                 clip_grad_norm: Optional[float] = 1,
                  device: str = "cpu"):
         """ DDPG
 
@@ -35,6 +36,7 @@ class DeepDeterministicPolicyGradient:
         self._optim_actor = torch.optim.Adam(params=self.actor.net.parameters(), lr=lr)
         self._optim_critic = torch.optim.Adam(params=self.critic.net.parameters(), lr=lr)
         self._tau = tau
+        self._clip_grad_norm = clip_grad_norm
 
     def _critic_update(self, s_0: Tensor, a: Tensor, r: Tensor, s_1: Tensor, d: Tensor) -> float:
         """ Runs a critic update
@@ -58,6 +60,8 @@ class DeepDeterministicPolicyGradient:
         loss_value = loss.item()
         self._optim_critic.zero_grad()
         loss.backward()
+        if not self._clip_grad_norm is None:
+            nn.utils.clip_grad_norm_(self.critic.net.parameters(), self._clip_grad_norm)
         self._optim_critic.step()
 
         return loss_value
@@ -80,6 +84,8 @@ class DeepDeterministicPolicyGradient:
         loss_value = loss.item()
         self._optim_actor.zero_grad()
         loss.backward()
+        if not self._clip_grad_norm is None:
+            nn.utils.clip_grad_norm_(self.actor.net.parameters(), self._clip_grad_norm)
         self._optim_actor.step()
 
         return loss_value
@@ -113,6 +119,7 @@ class TwinDelayedDeepDeterministicPolicyGradient(DeepDeterministicPolicyGradient
                  gamma: float = 0.99,
                  lr: float=1e-3,
                  tau: float = 0.005,
+                 clip_grad_norm: Optional[float] = 1,
                  target_noise: float = 0.1,
                  target_noise_clip: float = 0.2,
                  device: str = "cpu"):
@@ -135,6 +142,7 @@ class TwinDelayedDeepDeterministicPolicyGradient(DeepDeterministicPolicyGradient
             gamma=gamma,
             lr=lr,
             tau=tau,
+            clip_grad_norm=clip_grad_norm,
             device=device
         )
         self.critic_1 = self.critic
@@ -192,6 +200,9 @@ class TwinDelayedDeepDeterministicPolicyGradient(DeepDeterministicPolicyGradient
         loss_value = loss_critic.item()
         self._optim_critic.zero_grad()
         loss_critic.backward()
+        if not self._clip_grad_norm is None:
+            nn.utils.clip_grad_norm_(self.critic_1.net.parameters(), self._clip_grad_norm)
+            nn.utils.clip_grad_norm_(self.critic_2.net.parameters(), self._clip_grad_norm)
         self._optim_critic.step()
         # ==================== 
 
