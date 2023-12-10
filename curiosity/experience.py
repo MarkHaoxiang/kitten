@@ -2,7 +2,6 @@ from typing import Optional, Sequence, Union, Callable
 import random
 
 from gymnasium import Env
-from gymnasium.wrappers.autoreset import AutoResetWrapper
 from gymnasium.spaces.discrete import Discrete
 import torch
 from torch import Tensor
@@ -32,11 +31,14 @@ class ReplayBuffer:
         self._append_index = 0 # Position of next tensor to be inserted
         self._full = False # Bookmark to check if storage has looped around
 
-    def append(self, inputs: tuple[Tensor]) -> None:
+    def append(self, inputs: tuple[Tensor]) -> int:
         """ Add a transition experience to the buffer
 
         Args:
-            inputs (Tensor): A tensor containing the experience. 
+            inputs (Tensor): A tensor of size (types of experiences) containing (batch_size, experience data)
+
+        Returns:
+            (int): Number of inserted elements.
         """
         n_insert_unclipped = None
         n_insert = None
@@ -67,6 +69,7 @@ class ReplayBuffer:
         if self._append_index >= self.capacity:
             self._full = True
         self._append_index = self._append_index % self.capacity
+        return n_insert
 
     def sample(self,
                n: int,
@@ -87,11 +90,93 @@ class ReplayBuffer:
             return tuple(self.storage[i][start:start+n] for i in range(self.N))
         else:
             indices = random.sample(range(len(self)), n)
-            return tuple(self.storage[i][torch.tensor(indices, device=self.device)] for i in range(self.N))
+            return self._fetch_storage(indices)
 
     def __len__(self):
         return self.capacity if self._full else self._append_index
-    
+ 
+    def _fetch_storage(self, indices):
+        if not (isinstance(indices, torch.Tensor) or isinstance(indices, int)):
+            indices = torch.tensor(indices, device=self.device)
+        return tuple(self.storage[i][indices] for i in range(self.N))
+
+
+class PrioritizedReplayBuffer(ReplayBuffer):
+    """ Implements a replay buffer with proportional based priorized sampling
+
+    Uses an internal sum tree structure
+    Schaul et al. Prioritized Experience Replay. 
+    """
+    def __init__(self,
+                 error_fn: Callable,
+                 capacity: int,
+                 shape: Sequence[int],
+                 epsilon: float = 0.1,
+                 beta: float = 0,
+                 dtype: Optional[Union[torch.dtype, Sequence[torch.dtype]]] = None,
+                 device: str = "cpu") -> None:
+        super().__init__(capacity, shape, device, dtype)
+        
+        self.epsilon = epsilon
+        self.beta = beta
+        self.sum_tree_offset = (1 << (capacity-1).bit_length()) - 1
+        self.sum_tree = torch.zeros(self.sum_tree_offset+capacity, device=self.device)
+        self.error_fn = error_fn
+
+    def append(self, inputs: tuple[Tensor]) -> None:
+        initial_append_index = self._append_index
+        n_insert = super().append(inputs)
+
+        for i in range(initial_append_index, initial_append_index + n_insert):
+            j = i % self.capacity
+            priority = self.error_fn(self._fetch_storage(j)) + self.epsilon
+            self._sift_up(priority, j)
+
+    def sample(self, n: int, continuous: bool = False) -> tuple[Tensor]:
+        if n > len(self):
+            return ValueError(f"Trying to sample {n} values but only {len(self)} available")
+        if continuous:
+            raise NotImplementedError("Continuous samples not implemented with priority")
+        
+        # Select random priorities from evenly spaced buckets
+        priority_sum = self.sum_tree[0]
+        bucket_size = priority_sum / n
+        selection = torch.linspace(0, priority_sum-bucket_size, n, device=self.device)
+        selection += torch.rand_like(selection, device=self.device) * bucket_size
+
+        # Transform priorities to indices
+        for i in range(n):
+            selection[i] = self._get(selection[i])
+
+        # Transform indices to result tuples
+        return self._fetch_storage(selection.int())
+
+    def _sift_up(self, value: float, i: int) -> None:
+        """ Updates priority of storage[i] to value
+
+        Args:
+            value (float): priority
+            i (int): index within self.storage
+        """
+        index = i + self.sum_tree_offset
+        self.sum_tree[index] = value
+        while index > 0:
+            index = (index-1) // 2
+            self.sum_tree[index] = self.sum_tree[index*2+1] + self.sum_tree[index*2+2]
+        
+    def _get(self, value: float) -> int:
+        if value > self.sum_tree[0]:
+            raise ValueError("Value out of priority range")
+        result = 0
+        while result < self.sum_tree_offset:
+            left = self.sum_tree[result*2+1]
+            if value <= left:
+                result = result*2+1
+            else:
+                value -= left
+                result = result*2+2
+        return result - self.sum_tree_offset
+
 def build_replay_buffer(env: Env, capacity: int = 10000, device: str = "cpu") -> ReplayBuffer:
     """ Creates a replay buffer for env
 

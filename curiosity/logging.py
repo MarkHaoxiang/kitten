@@ -89,8 +89,8 @@ class EvaluationEnv:
         self.path = os.path.join(path, project_name)
         self.saved_reset_states = []
         self._start_time = time.time()
-        for _ in range(saved_reset_states):
-            obs, _ = self.env.reset()
+        for i in range(saved_reset_states):
+            obs, _ = self.env.reset(seed=i)
             self.saved_reset_states.append(obs)
         self.saved_reset_states = torch.tensor(np.array(self.saved_reset_states), device=device, dtype=torch.float32)
 
