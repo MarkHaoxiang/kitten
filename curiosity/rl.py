@@ -31,14 +31,13 @@ class DeepDeterministicPolicyGradient:
         self.critic = AddTargetNetwork(critic, device=device)
         self.device = device
 
-        self._calc_critic_loss = nn.MSELoss()
         self._gamma = gamma
         self._optim_actor = torch.optim.Adam(params=self.actor.net.parameters(), lr=lr)
         self._optim_critic = torch.optim.Adam(params=self.critic.net.parameters(), lr=lr)
         self._tau = tau
         self._clip_grad_norm = clip_grad_norm
 
-    def _critic_update(self, s_0: Tensor, a: Tensor, r: Tensor, s_1: Tensor, d: Tensor) -> float:
+    def _critic_update(self, s_0: Tensor, a: Tensor, r: Tensor, s_1: Tensor, d: Tensor, weights: Tensor) -> float:
         """ Runs a critic update
 
         Args:
@@ -47,16 +46,15 @@ class DeepDeterministicPolicyGradient:
             r (Tensor): Reward (s_0, a) -> (s_1)
             s_1 (Tensor): Observation after action
             d (Tensor): Dones
+            weights (Tensor): Loss importance weighting for off-policy
 
         Returns:
             float: critic loss
         """
-        x = self.critic(torch.cat((s_0, a), 1)).squeeze()
-        with torch.no_grad():
-            target_max = (~d) * self.critic.target(torch.cat((s_1, self.actor.target(s_1)), 1)).squeeze()
-            y = (r + target_max * self._gamma)
-        
-        loss = self._calc_critic_loss(y, x)
+        x, y = self.error(s_0, a, r, s_1, d)
+ 
+        loss = (y-x)**2
+        loss = torch.mean(torch.mean(loss, dim=list(range(1, len(loss.shape)))) * weights)
         loss_value = loss.item()
         self._optim_critic.zero_grad()
         loss.backward()
@@ -65,8 +63,17 @@ class DeepDeterministicPolicyGradient:
         self._optim_critic.step()
 
         return loss_value
+    
+    def error(self, s_0: Tensor, a: Tensor, r: Tensor, s_1: Tensor, d: Tensor) -> float:
+        """ Returns TD difference for a transition
+        """
+        x = self.critic(torch.cat((s_0, a), 1)).squeeze()
+        with torch.no_grad():
+            target_max = (~d) * self.critic.target(torch.cat((s_1, self.actor.target(s_1)), 1)).squeeze()
+            y = (r + target_max * self._gamma)
+        return x, y
 
-    def _actor_update(self, s_0: Tensor) -> float:
+    def _actor_update(self, s_0: Tensor, weights: Tensor) -> float:
         """ Runs a critic update
 
         Args:
@@ -75,12 +82,14 @@ class DeepDeterministicPolicyGradient:
             r (Tensor): Reward (s_0, a) -> (s_1)
             s_1 (Tensor): Observation after action
             d (Tensor): Dones
+            weights (Tensor): Loss importance weighting for off-policy
 
         Returns:
             float: actor loss
         """
         desired_action = self.actor(s_0)
-        loss = -self.critic(torch.cat((s_0, desired_action), 1)).mean()
+        loss = -self.critic(torch.cat((s_0, desired_action), 1))
+        loss = torch.mean(torch.mean(loss, dim=list(range(1, len(loss.shape)))) * weights)
         loss_value = loss.item()
         self._optim_actor.zero_grad()
         loss.backward()
@@ -99,8 +108,9 @@ class DeepDeterministicPolicyGradient:
         Returns:
             Tuple[float, float]: Critic loss and actor loss
         """
-        loss_critic_value = self._critic_update(*batch)
-        loss_actor_value = self._actor_update(batch[0])
+        transitions, weights = batch
+        loss_critic_value = self._critic_update(*transitions, weights)
+        loss_actor_value = self._actor_update(transitions[0], weights)
         self.critic.update_target_network(tau=self._tau)
         self.actor.update_target_network(tau=self._tau)
 

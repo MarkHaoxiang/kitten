@@ -7,7 +7,7 @@ import torch
 from tqdm import tqdm
 
 from curiosity.collector import build_collector
-from curiosity.experience import build_replay_buffer
+from curiosity.experience import PrioritizedReplayBuffer, build_replay_buffer
 from curiosity.logging import EvaluationEnv, CuriosityArgumentParser
 from curiosity.util import (
     build_actor,
@@ -106,8 +106,22 @@ def train(config: Dict = {},
         device=DEVICE
     )
 
-    # Initialise Data Pipeline  
-    memory = build_replay_buffer(env, capacity=replay_buffer_capacity, device=DEVICE)
+    # Initialise Data Pipeline
+    # def td_error(transition):
+    #     x,y = ddpg.error(*transition)
+    #     return torch.mean(torch.abs(x-y)).item()
+    # memory = build_replay_buffer(
+    #     env,
+    #     capacity=replay_buffer_capacity,
+    #     type=PrioritizedReplayBuffer,
+    #     error_fn=td_error,
+    #     device=DEVICE
+    # )
+    memory = build_replay_buffer(
+         env,
+         capacity=replay_buffer_capacity,
+         device=DEVICE
+    )
     collector = build_collector(policy, env, memory, device=DEVICE)
 
     # Logging

@@ -47,12 +47,12 @@ class TestReplayBuffer:
             (torch.arange(capacity).unsqueeze(-1),)
         )
         # Order should be correct
-        sample = replay_buffer.sample(number, continuous = True)
+        sample = replay_buffer.sample(number, continuous = True)[0]
         for i in range(len(sample[0])-1):
             assert sample[0][i+1] == (sample[0][i]+1) % capacity, "Samples not in order"
 
         # Random sample
-        sample = replay_buffer.sample(number, continuous=False)
+        sample = replay_buffer.sample(number, continuous=False)[0]
         for x in sample:
             assert x[0] in replay_buffer.storage[0], "Samples not in replay buffer"
 
@@ -98,7 +98,7 @@ class TestPrioritizedReplayBuffer:
             (torch.arange(capacity).unsqueeze(-1),)
         )
         # Random sample
-        sample = replay_buffer.sample(number, continuous=False)
+        sample = replay_buffer.sample(number, continuous=False)[0]
         for x in sample:
             assert x[0] in replay_buffer.storage[0], "Samples not in replay buffer"
 
@@ -110,6 +110,7 @@ class TestPrioritizedReplayBuffer:
             error_fn=lambda x: x[0].mean().item() + 1,
             capacity=capacity,
             shape=shape,
+            alpha=1,
             epsilon=0,
             device=DEVICE
         )
