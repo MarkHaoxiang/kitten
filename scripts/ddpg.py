@@ -109,7 +109,7 @@ def train(config: Dict = {},
     # Initialise Data Pipeline
     def td_error(transition):
         x,y = ddpg.error(*transition)
-        return torch.abs(x-y)
+        return torch.abs(x-y).detach().cpu().numpy()
     memory = build_replay_buffer(
         env, capacity=replay_buffer_capacity, device=DEVICE,
         type="prioritized_experience_replay", error_fn=td_error

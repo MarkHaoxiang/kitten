@@ -125,7 +125,7 @@ class PrioritizedReplayBuffer(ReplayBuffer):
                  shape: Sequence[int],
                  epsilon: float = 0.1,
                  alpha: float = 0.6,
-                 beta: float = 0.4,
+                 beta: float = 0,
                  dtype: Optional[Union[torch.dtype, Sequence[torch.dtype]]] = None,
                  device: str = "cpu") -> None:
         super().__init__(capacity, shape, device, dtype)
@@ -137,15 +137,16 @@ class PrioritizedReplayBuffer(ReplayBuffer):
         self.sum_tree = np.zeros(self.sum_tree_offset+capacity)
         self.error_fn = error_fn
 
-        self._previous_sampled = None
-
     def append(self, inputs: tuple[Tensor]) -> None:
         initial_append_index = self._append_index
         n_insert = super().append(inputs)
 
         for i in range(initial_append_index, initial_append_index + n_insert):
             j = i % self.capacity
+                # Insert maximum priority
             priority = self._calculate_priority(self.error_fn(self._fetch_storage([j])))
+            #priority = np.max([priority[0], np.max(self.sum_tree[self.sum_tree_offset:])])
+            #priority = np.max([100, np.max(self.sum_tree[self.sum_tree_offset:])])
             self._sift_up(priority, j)
 
     def sample(self, n: int, continuous: bool = False) -> tuple[Tensor]:
@@ -155,21 +156,13 @@ class PrioritizedReplayBuffer(ReplayBuffer):
         if continuous:
             raise NotImplementedError("Continuous samples not implemented with priority")
 
-        # Update previously sampled priorities
-        if not self._previous_sampled is None:
-            priorities = self.error_fn(self._fetch_storage(self._previous_sampled))
-            for i, j in enumerate(self._previous_sampled):
-                self._sift_up(priorities[i], j)
-
         # Select random priorities from evenly spaced buckets
         priority_sum = self.sum_tree[0]
         bucket_size = priority_sum / n
         selection = np.linspace(0, priority_sum - bucket_size, n) + np.random.rand(n) * bucket_size
 
         # Transform priorities to indices
-        for i in range(n):
-            selection[i] = self._get(selection[i])
-        selection = selection.astype(int)
+        selection = self._get(selection)
 
         # Calculate Weightings
         sampled_priorities = self.sum_tree[selection + self.sum_tree_offset]
@@ -178,12 +171,15 @@ class PrioritizedReplayBuffer(ReplayBuffer):
         w = w / np.max(w)
         w = torch.from_numpy(w).to(self.device)
 
-        # Hook for next update
-        self._previous_sampled = selection
+        results = self._fetch_storage(selection)
+        # Update errors 
+        priorities = self._calculate_priority(self.error_fn(results))
+        for i, j in enumerate(selection):
+            self._sift_up(priorities[i], j)
 
         # Transform indices to result tuples
-        return self._fetch_storage(selection), w
-    
+        return results, w
+
     def _calculate_priority(self, error):
         return (error + self.epsilon) ** self.alpha 
 
@@ -201,19 +197,16 @@ class PrioritizedReplayBuffer(ReplayBuffer):
         while index > 0:
             index = (index-1) // 2
             self.sum_tree[index] += change
-        
-    def _get(self, value: float) -> int:
-        if value > self.sum_tree[0]:
+
+    def _get(self, value: np.ndarray) -> np.ndarray:
+        if np.any(value > self.sum_tree[0]):
             raise ValueError("Value out of priority range")
-        value = float(value)
-        result = 0
-        while result < self.sum_tree_offset:
+        result = np.zeros(value.shape[0], dtype=int)
+        for _ in range((self.capacity-1).bit_length()):
             left = self.sum_tree[result*2+1]
-            if value <= left:
-                result = result*2+1
-            else:
-                value -= left
-                result = result*2+2
+            choice = (value <= left)
+            result = np.where(choice, result*2+1, result*2+2)
+            value -= (~choice) * left
         return result - self.sum_tree_offset
 
 def build_replay_buffer(env: Env,

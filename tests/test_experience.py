@@ -90,7 +90,7 @@ class TestPrioritizedReplayBuffer:
                            number: int,
                            capacity: int = 1000):
         replay_buffer = PrioritizedReplayBuffer(
-            error_fn=lambda x: x[0].mean().item(),
+            error_fn=lambda x: x[0].squeeze().numpy(),
             capacity=capacity,
             shape=(1,),
             device=DEVICE
@@ -108,7 +108,7 @@ class TestPrioritizedReplayBuffer:
         capacity = 6
 
         replay_buffer = PrioritizedReplayBuffer(
-            error_fn=lambda x: x[0].mean().item() + 1,
+            error_fn=lambda x: x[0].squeeze().numpy() + 1,
             capacity=capacity,
             shape=shape,
             alpha=1,
@@ -121,7 +121,7 @@ class TestPrioritizedReplayBuffer:
         assert torch.all(torch.eq(replay_buffer.storage[0].squeeze(), torch.tensor([1,2,3,0,0,0], device=DEVICE)))
         assert np.all(replay_buffer.sum_tree == np.array([9,9,0,5,4,0,0,2,3,4,0,0,0]))
 
-        assert replay_buffer._get(2) == 0
-        assert replay_buffer._get(6) == 2
+        assert replay_buffer._get(np.array([2.0]))[0] == 0
+        assert replay_buffer._get(np.array([6.0]))[0] == 2
 
         replay_buffer.sample(2)
