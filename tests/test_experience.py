@@ -1,6 +1,7 @@
 from typing import Sequence
 import pytest
 
+import numpy as np
 import torch
 
 from curiosity.experience import ReplayBuffer, PrioritizedReplayBuffer
@@ -118,10 +119,7 @@ class TestPrioritizedReplayBuffer:
         replay_buffer.append(tuple(torch.ones(s, device=DEVICE) * 1 for s in shape))
         replay_buffer.append((torch.tensor([[2],[3]], device=DEVICE), ))
         assert torch.all(torch.eq(replay_buffer.storage[0].squeeze(), torch.tensor([1,2,3,0,0,0], device=DEVICE)))
-        assert torch.all(torch.eq(
-            replay_buffer.sum_tree,
-            torch.tensor([9,9,0,5,4,0,0,2,3,4,0,0,0], device=DEVICE))
-        )
+        assert np.all(replay_buffer.sum_tree == np.array([9,9,0,5,4,0,0,2,3,4,0,0,0]))
 
         assert replay_buffer._get(2) == 0
         assert replay_buffer._get(6) == 2

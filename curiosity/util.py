@@ -142,6 +142,7 @@ def global_seed(seed: int, *envs):
     """
     random.seed(seed)
     torch.manual_seed(seed)
+    np.random.seed(seed)
     for env in envs:
         env.reset(seed=seed)
         env.action_space.seed(seed)

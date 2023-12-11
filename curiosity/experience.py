@@ -3,6 +3,7 @@ import random
 
 from gymnasium import Env
 from gymnasium.spaces.discrete import Discrete
+import numpy as np
 import torch
 from torch import Tensor
 
@@ -40,16 +41,11 @@ class ReplayBuffer:
         Returns:
             (int): Number of inserted elements.
         """
+        inputs = self._append_preprocess(inputs)
         n_insert_unclipped = None
         n_insert = None
         for i in range(self.N):
             x = inputs[i]
-            if not isinstance(x, torch.Tensor):
-                x = torch.tensor(x, device=self.device)
-            if x.shape[-len(self.shape[i]):] != self.shape[i]:
-                raise ValueError(f"Expected data ending with {self.shape[i]} but got {x.shape[-len(self.shape):]}")
-            if len(x.shape) == len(self.shape[i]):
-                x = x.unsqueeze(0)
             if n_insert is None:
                 n_insert_unclipped = len(x)
                 n_insert = min(len(x), self.capacity)
@@ -70,6 +66,21 @@ class ReplayBuffer:
             self._full = True
         self._append_index = self._append_index % self.capacity
         return n_insert
+
+    def _append_preprocess(self, inputs: tuple[Tensor]):
+        """ Utility to transform new transitions into expected format before entry
+        """
+        res = []
+        for i in range(self.N):
+            x = inputs[i]
+            if not isinstance(x, torch.Tensor):
+                x = torch.tensor(x, device=self.device)
+            if x.shape[-len(self.shape[i]):] != self.shape[i]:
+                raise ValueError(f"Expected data ending with {self.shape[i]} but got {x.shape[-len(self.shape):]}")
+            if len(x.shape) == len(self.shape[i]):
+                x = x.unsqueeze(0)
+            res.append(x)
+        return res
 
     def sample(self,
                n: int,
@@ -123,8 +134,10 @@ class PrioritizedReplayBuffer(ReplayBuffer):
         self.alpha = alpha
         self.beta = beta
         self.sum_tree_offset = (1 << (capacity-1).bit_length()) - 1
-        self.sum_tree = torch.zeros(self.sum_tree_offset+capacity, device=self.device)
+        self.sum_tree = np.zeros(self.sum_tree_offset+capacity)
         self.error_fn = error_fn
+
+        self._previous_sampled = None
 
     def append(self, inputs: tuple[Tensor]) -> None:
         initial_append_index = self._append_index
@@ -132,31 +145,41 @@ class PrioritizedReplayBuffer(ReplayBuffer):
 
         for i in range(initial_append_index, initial_append_index + n_insert):
             j = i % self.capacity
-            priority = self._calculate_priority(self.error_fn(self._fetch_storage(j)))
+            priority = self._calculate_priority(self.error_fn(self._fetch_storage([j])))
             self._sift_up(priority, j)
 
     def sample(self, n: int, continuous: bool = False) -> tuple[Tensor]:
+        # Invariant checks
         if n > len(self):
             return ValueError(f"Trying to sample {n} values but only {len(self)} available")
         if continuous:
             raise NotImplementedError("Continuous samples not implemented with priority")
-        
+
+        # Update previously sampled priorities
+        if not self._previous_sampled is None:
+            priorities = self.error_fn(self._fetch_storage(self._previous_sampled))
+            for i, j in enumerate(self._previous_sampled):
+                self._sift_up(priorities[i], j)
+
         # Select random priorities from evenly spaced buckets
         priority_sum = self.sum_tree[0]
         bucket_size = priority_sum / n
-        selection = torch.linspace(0, priority_sum-bucket_size, n, device=self.device)
-        selection += torch.rand_like(selection, device=self.device) * bucket_size
+        selection = np.linspace(0, priority_sum - bucket_size, n) + np.random.rand(n) * bucket_size
 
         # Transform priorities to indices
         for i in range(n):
             selection[i] = self._get(selection[i])
-        selection = selection.int()
+        selection = selection.astype(int)
 
         # Calculate Weightings
         sampled_priorities = self.sum_tree[selection + self.sum_tree_offset]
         sampled_probabilities = sampled_priorities / self.sum_tree[0]
         w = 1 / (len(self) * sampled_probabilities)**self.beta
-        w = w / torch.max(w)
+        w = w / np.max(w)
+        w = torch.from_numpy(w).to(self.device)
+
+        # Hook for next update
+        self._previous_sampled = selection
 
         # Transform indices to result tuples
         return self._fetch_storage(selection), w
@@ -171,15 +194,18 @@ class PrioritizedReplayBuffer(ReplayBuffer):
             value (float): priority
             i (int): index within self.storage
         """
+        value, i = float(value), int(i)
         index = i + self.sum_tree_offset
-        self.sum_tree[index] = value
+        change = value - self.sum_tree[index]
+        self.sum_tree[index] += change
         while index > 0:
             index = (index-1) // 2
-            self.sum_tree[index] = self.sum_tree[index*2+1] + self.sum_tree[index*2+2]
+            self.sum_tree[index] += change
         
     def _get(self, value: float) -> int:
         if value > self.sum_tree[0]:
             raise ValueError("Value out of priority range")
+        value = float(value)
         result = 0
         while result < self.sum_tree_offset:
             left = self.sum_tree[result*2+1]
@@ -192,7 +218,7 @@ class PrioritizedReplayBuffer(ReplayBuffer):
 
 def build_replay_buffer(env: Env,
                         capacity: int = 10000,
-                        type = ReplayBuffer,
+                        type = "experience_replay",
                         error_fn: Optional[Callable] = None,
                         device: str = "cpu") -> ReplayBuffer:
     """ Creates a replay buffer for env
@@ -206,14 +232,16 @@ def build_replay_buffer(env: Env,
         Replay Buffer: A replay buffer designed to hold tuples (State, Action, Reward, Next State, Done)
     """
     discrete = isinstance(env.action_space, Discrete)
-    if type == ReplayBuffer:
+    if type == "experience_replay":
         return ReplayBuffer(
             capacity=capacity,
             shape=(env.observation_space.shape, env.action_space.shape, (), env.observation_space.shape, ()),
             dtype=(torch.float32, torch.int if discrete else torch.float32, torch.float32, torch.float32, torch.bool),
             device=device
         )
-    elif type == PrioritizedReplayBuffer:
+    elif type == "prioritized_experience_replay":
+        if error_fn is None:
+            raise ValueError("Provide an error function for priority calculation")
         return PrioritizedReplayBuffer(
             error_fn=error_fn,
             capacity=capacity,
