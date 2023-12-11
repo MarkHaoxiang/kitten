@@ -107,12 +107,11 @@ def train(config: Dict = {},
     )
 
     # Initialise Data Pipeline
-    def td_error(transition):
-        x,y = ddpg.error(*transition)
-        return torch.abs(x-y).detach().cpu().numpy()
     memory = build_replay_buffer(
         env, capacity=replay_buffer_capacity, device=DEVICE,
-        type="prioritized_experience_replay", error_fn=td_error
+        type="prioritized_experience_replay",
+        error_fn=lambda x: torch.abs(ddpg.td_error(*x)).detach().cpu().numpy(),
+        beta_annealing_steps = total_frames
     )
     collector = build_collector(policy, env, memory, device=DEVICE)
 

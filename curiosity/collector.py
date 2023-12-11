@@ -62,7 +62,7 @@ class GymCollector(DataCollector):
         self.device = device
         super().__init__(policy, env, memory)
 
-    def collect(self, n: int, *args, **kwargs) -> List:
+    def collect(self, n: int, early_start: bool=False, *args, **kwargs) -> List:
         with torch.no_grad():
             result = []
             obs = self.obs
@@ -81,7 +81,7 @@ class GymCollector(DataCollector):
                 transition_tuple = (obs, action, reward, n_obs, terminated)
                 result.append(transition_tuple)
                 if not self.memory is None:
-                    self.memory.append(transition_tuple)
+                    self.memory.append(transition_tuple, update=not early_start)
                 obs = n_obs
             self.obs = obs
             return result
@@ -89,7 +89,7 @@ class GymCollector(DataCollector):
     def early_start(self, n: int) -> List:
         policy = self.policy
         self.set_policy(Policy(lambda _: self.env.action_space.sample(), transform_obs=False))
-        result = self.collect(n)
+        result = self.collect(n, early_start=True)
         self.policy = policy
         return result
 

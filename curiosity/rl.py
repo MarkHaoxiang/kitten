@@ -51,10 +51,8 @@ class DeepDeterministicPolicyGradient:
         Returns:
             float: critic loss
         """
-        x, y = self.error(s_0, a, r, s_1, d)
- 
-        loss = (y-x)**2
-        loss = torch.mean(torch.mean(loss, dim=list(range(1, len(loss.shape)))) * weights)
+        td_error = self.td_error(s_0, a, r, s_1, d) * weights
+        loss = torch.mean(td_error**2)
         loss_value = loss.item()
         self._optim_critic.zero_grad()
         loss.backward()
@@ -64,14 +62,14 @@ class DeepDeterministicPolicyGradient:
 
         return loss_value
     
-    def error(self, s_0: Tensor, a: Tensor, r: Tensor, s_1: Tensor, d: Tensor) -> float:
+    def td_error(self, s_0: Tensor, a: Tensor, r: Tensor, s_1: Tensor, d: Tensor) -> float:
         """ Returns TD difference for a transition
         """
         x = self.critic(torch.cat((s_0, a), 1)).squeeze()
         with torch.no_grad():
             target_max = (~d) * self.critic.target(torch.cat((s_1, self.actor.target(s_1)), 1)).squeeze()
             y = (r + target_max * self._gamma)
-        return x, y
+        return y-x
 
     def _actor_update(self, s_0: Tensor, weights: Tensor) -> float:
         """ Runs a critic update

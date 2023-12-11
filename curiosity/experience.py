@@ -32,7 +32,7 @@ class ReplayBuffer:
         self._append_index = 0 # Position of next tensor to be inserted
         self._full = False # Bookmark to check if storage has looped around
 
-    def append(self, inputs: tuple[Tensor]) -> int:
+    def append(self, inputs: tuple[Tensor], **kwargs) -> int:
         """ Add a transition experience to the buffer
 
         Args:
@@ -125,29 +125,36 @@ class PrioritizedReplayBuffer(ReplayBuffer):
                  shape: Sequence[int],
                  epsilon: float = 0.1,
                  alpha: float = 0.6,
-                 beta: float = 0,
+                 beta_0: float = 0.4,
                  dtype: Optional[Union[torch.dtype, Sequence[torch.dtype]]] = None,
+                 beta_annealing_steps: int = 10000,
                  device: str = "cpu") -> None:
         super().__init__(capacity, shape, device, dtype)
         
         self.epsilon = epsilon
         self.alpha = alpha
-        self.beta = beta
+        self.beta_0 = beta_0
+        self.beta_annealing_steps = beta_annealing_steps
+        self.timestep = 0
         self.sum_tree_offset = (1 << (capacity-1).bit_length()) - 1
         self.sum_tree = np.zeros(self.sum_tree_offset+capacity)
         self.error_fn = error_fn
+        self._maximum_priority = 1.0
 
-    def append(self, inputs: tuple[Tensor]) -> None:
+    def append(self, inputs: tuple[Tensor], update: bool= True) -> None:
+        """ Add transitions to the replay buffer
+
+        Args:
+            inputs (tuple[Tensor]): Transitions
+            update (bool, optional): Update annealing step. Defaults to True.
+        """
         initial_append_index = self._append_index
         n_insert = super().append(inputs)
-
+        if update:
+            self.timestep = min(self.beta_annealing_steps, self.timestep + n_insert)
         for i in range(initial_append_index, initial_append_index + n_insert):
             j = i % self.capacity
-                # Insert maximum priority
-            priority = self._calculate_priority(self.error_fn(self._fetch_storage([j])))
-            #priority = np.max([priority[0], np.max(self.sum_tree[self.sum_tree_offset:])])
-            #priority = np.max([100, np.max(self.sum_tree[self.sum_tree_offset:])])
-            self._sift_up(priority, j)
+            self._sift_up(self._maximum_priority, j)
 
     def sample(self, n: int, continuous: bool = False) -> tuple[Tensor]:
         # Invariant checks
@@ -165,9 +172,13 @@ class PrioritizedReplayBuffer(ReplayBuffer):
         selection = self._get(selection)
 
         # Calculate Weightings
-        sampled_priorities = self.sum_tree[selection + self.sum_tree_offset]
-        sampled_probabilities = sampled_priorities / self.sum_tree[0]
-        w = 1 / (len(self) * sampled_probabilities)**self.beta
+            # Annealing
+        beta = self.beta_0 + (self.timestep / self.beta_annealing_steps) * (1-self.beta_0)
+            # Probabities = Priority / Total Priority
+        sampled_probabilities = (self.sum_tree[selection + self.sum_tree_offset]) / self.sum_tree[0]
+            # Importance sampling
+        w = (len(self) * sampled_probabilities)**(-beta)
+            # Numerical stability
         w = w / np.max(w)
         w = torch.from_numpy(w).to(self.device)
 
@@ -175,6 +186,7 @@ class PrioritizedReplayBuffer(ReplayBuffer):
         # Update errors 
         priorities = self._calculate_priority(self.error_fn(results))
         for i, j in enumerate(selection):
+            self._maximum_priority = max(self._maximum_priority, priorities[i])
             self._sift_up(priorities[i], j)
 
         # Transform indices to result tuples
@@ -213,7 +225,8 @@ def build_replay_buffer(env: Env,
                         capacity: int = 10000,
                         type = "experience_replay",
                         error_fn: Optional[Callable] = None,
-                        device: str = "cpu") -> ReplayBuffer:
+                        device: str = "cpu",
+                        **kwargs) -> ReplayBuffer:
     """ Creates a replay buffer for env
 
     Args:
@@ -230,7 +243,8 @@ def build_replay_buffer(env: Env,
             capacity=capacity,
             shape=(env.observation_space.shape, env.action_space.shape, (), env.observation_space.shape, ()),
             dtype=(torch.float32, torch.int if discrete else torch.float32, torch.float32, torch.float32, torch.bool),
-            device=device
+            device=device,
+            **kwargs
         )
     elif type == "prioritized_experience_replay":
         if error_fn is None:
@@ -240,6 +254,7 @@ def build_replay_buffer(env: Env,
             capacity=capacity,
             shape=(env.observation_space.shape, env.action_space.shape, (), env.observation_space.shape, ()),
             dtype=(torch.float32, torch.int if discrete else torch.float32, torch.float32, torch.float32, torch.bool),
-            device=device
+            device=device,
+            **kwargs
         )
     raise NotImplementedError("Replay buffer type not supported")
