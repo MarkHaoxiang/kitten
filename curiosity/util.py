@@ -1,7 +1,9 @@
 from typing import Optional
 import random
 
+import gymnasium as gym
 from gymnasium import Env
+from gymnasium.wrappers.autoreset import AutoResetWrapper 
 from gymnasium.spaces import Box, Discrete
 import numpy as np
 import torch
@@ -9,6 +11,9 @@ import torch.nn as nn
 
 from curiosity.nn import ClassicalBoxActor
 from curiosity.world import IntrinsicCuriosityModule
+
+def build_env(environment_configuration):
+    return AutoResetWrapper(gym.make(environment_configuration.name, render_mode="rgb_array"))
 
 def build_actor(env: Env, features: int = 128) -> nn.Module:
     """Builds an actor for gym environment

@@ -1,41 +1,57 @@
-import argparse
 import copy
 from datetime import datetime
 import math
 import warnings
 import os
+from os.path import join
 import shutil
-from typing import Callable, Dict, Optional
-import json
+from typing import Callable, Optional, Tuple, List
 import time
 
 import torch
 import torch.nn as nn
 import numpy as np
+from omegaconf import OmegaConf, DictConfig
 from gymnasium import Env
 from gymnasium.wrappers.record_video import RecordVideo
 import wandb
 
 from curiosity.policy import Policy
 
-class CuriosityArgumentParser:
-    """ Argument parser for training scripts
+class CuriosityLogger:
+    """ Logging tool for reinforcement learning experiments
     """
-    def __init__(self, prog: str, description: str):
-        self.parser = argparse.ArgumentParser(prog=prog, description=description)
-        self.parser.add_argument(
-            '-c',
-            "--config",
-            required=False,
-            help="The configuration file to pass in."
+    def __init__(self, cfg: DictConfig, algorithm: str, path: str = "log") -> None:
+        """_summary_
+
+        Args:
+            cfg (DictConfig): _description_
+            algorithm (str): _description_
+            path (str, optional): _description_. Defaults to "log".
+        """
+        self.cfg = cfg
+        self.name = self.generate_project_name(cfg.env.name, algorithm)
+        self.checkpoint_enable = cfg.log.checkpoint.enable
+        self.wandb_enable = cfg.log.wandb
+        self._start_time = time.time()
+        self._epoch = 0
+        self.models = []
+        self.providers = []
+
+        # Log
+        self.path = join(path, self.name)
+        cfg.log.evaluation.video.path = self.video_path
+        os.makedirs(self.path)
+        if self.checkpoint_enable:
+            os.makedirs(join(self.path, "checkpoint"))
+        OmegaConf.save(cfg, join(self.path, "config.yaml"))
+        wandb.init(
+            project="curiosity",
+            name=self.name,
+            config=OmegaConf.to_container(cfg, resolve=True, throw_on_missing=True),
+            dir=self.path,
+            mode = "online" if self.wandb_enable else "offline"
         )
-        self.parser.add_argument(
-            "-n",
-            "--name",
-            required=False,
-            help="Project name"
-        )
-        self.args = self.parser.parse_args()
 
     def generate_project_name(self, environment: str, algorithm: str) -> str:
         """ Generates an identifier for the experiment
@@ -47,96 +63,20 @@ class CuriosityArgumentParser:
         Returns:
             str: Project name
         """
-        if self.args.name is None:
+        if not self.cfg.log.name:
             return "{}_{}_{}".format(algorithm, environment, str(datetime.now()).replace(":","-").replace(".","-"))
-        return f"{algorithm}_{self.args.name}"
-
-    def run(self, train: Callable):
-        """ Executes a training loop with this configuration
-
-        Args:
-            train (Callable): Handle to the training function
-        """
-        if self.args.config is None:
-            config = {}
-        else:
-            with open(self.args.config, 'r') as f:
-                config = json.load(f)
-        train(config, **config)
-
-
-    def __getattr__(self, name: str):               
-        return self.parser.__getattribute__(name)
-
-class EvaluationEnv:
-    """ Evaluate training runs and keep logs
-    """
-    def __init__(self,
-                 env: Env,
-                 project_name: str,
-                 config: Dict,
-                 path: str = "log",
-                 video: Optional[int] = 10000,
-                 wandb_enable: bool = False,
-                 saved_reset_states: int = 10,
-                 device: str ="cpu"):
-        super().__init__()
-        # State
-        self.project_name = project_name
-        self.wandb_enable = wandb_enable
-        self.config = config
-        self.env = copy.deepcopy(env)
-        self.path = os.path.join(path, project_name)
-        self.saved_reset_states = []
-        self._start_time = time.time()
-        for i in range(saved_reset_states):
-            obs, _ = self.env.reset(seed=i)
-            self.saved_reset_states.append(obs)
-        self.saved_reset_states = torch.tensor(np.array(self.saved_reset_states), device=device, dtype=torch.float32)
-
-        # Log
-        os.makedirs(self.path)
-        os.makedirs(os.path.join(self.path, "checkpoint"))
-
-        if video:
-            if env.render_mode != "rgb_array":
-                raise ValueError(f"Video mode requires rgb_array render mode but got {env.render_mode}")
-            self.env = RecordVideo(
-                self.env,
-                os.path.join(self.path, "video"),
-                episode_trigger=lambda x: x%video == 0,
-                disable_logger=True
-            )
-        
-        with open(os.path.join(self.path, "config.json"), "w") as f:
-            json.dump(config, f)
-
-        wandb.init(
-            project = "curiosity",
-            name = self.project_name,
-            config = self.config,
-            dir = self.path,
-            mode = "online" if wandb_enable else "offline"
-        )
-
-        # Checkpoints
-        self.models = []
+        return f"{algorithm}_{self.cfg.log.name}"
     
-    def get_wall_time(self) -> float:
-        """Gets elapsed time since creation
-
-        Returns:
-            float:
-        """
-        return time.time()-self._start_time
-
-    def register(self, model: nn.Module, name: str, watch: bool=True, watch_frequency: Optional[int]=None) -> None:
+    def register_model(self, model: nn.Module, name: str, watch: bool=True, watch_frequency: Optional[int]=None):
         """Register a torch module to checkpoint
 
         Args:
             model (nn.Module): model to checkpoint
             name (str): model name
         """
+        if not self.checkpoint_enable:
+            return
+
         if name[-3:] != ".pt":
             name = name + ".pt"
         self.models.append((model, name))
@@ -148,6 +88,33 @@ class EvaluationEnv:
                 log_freq=watch_frequency if not watch_frequency is None else self.config['frames_per_epoch'],
                 idx=len(self.models)
             )
+    
+    def register_models(self, batch: List[Tuple[nn.Module, str]], **kwargs):
+        """Register multiple models at once
+
+        Args:
+            batch (_type_):
+        """
+        for model, name in batch:
+            self.register_model(model, name, **kwargs)
+
+    def register_provider(self, provider, name: str):
+        """Register a log provider
+
+        Args:
+            provider (_type_): should provide get_log()
+            name (str): provider label
+        """
+        self.providers.append(((provider, name)))
+
+    def register_providers(self, batch):
+        """Register multiple providers at once
+
+        Args:
+            batch (_type_):
+        """
+        for provider, name in batch:
+            self.register_provider(provider, name)
 
     def checkpoint_registered(self, frame: Optional[int] = None) -> None:
         """ Utility to checkpoint registered models
@@ -158,6 +125,25 @@ class EvaluationEnv:
         for (model, name) in self.models:
             self.checkpoint(model, name, frame)
 
+    def epoch(self):
+        self._epoch += 1
+        log = {
+            "train/wall_time": self.get_wall_time()
+        }
+        for provider, name in self.providers:
+            for k, v in provider.get_log():
+                log[f"{name}/{k}"] = v
+        self.log(log)
+        return self._epoch
+
+    def get_wall_time(self) -> float:
+        """Gets elapsed time since creation
+
+        Returns:
+            float:
+        """
+        return time.time()-self._start_time
+
     def checkpoint(self, model: nn.Module, name: str, frame: Optional[int] = None) -> None:
         """Utility to save a model
 
@@ -166,39 +152,23 @@ class EvaluationEnv:
             name (str): identifier
             frame (Optional[int], optional): training frame.
         """
-        path = os.path.join(self.path, "checkpoint")
+        if not self.checkpoint_enable:
+            return
+        path = join(self.path, "checkpoint")
         if name[-3:] != ".pt":
             name = name + ".pt"
         if frame is None:
             if not os.path.exists(path):
                 os.makedirs(path)
-            torch.save(model, os.path.join(path, name))
+            torch.save(model, join(path, name))
         else:
-            if not os.path.exists(os.path.join(path, str(frame))):
-                os.makedirs(os.path.join(path, str(frame)))
-            torch.save(model.state_dict(), os.path.join(path, str(frame), name))
+            if not os.path.exists(join(path, str(frame))):
+                os.makedirs(join(path, str(frame)))
+            torch.save(model.state_dict(), join(path, str(frame), name))
 
-    def evaluate(self, policy: Policy, repeat: int = 1) -> float:
-        """Evaluation of a policy on the environment
-
-        Args:
-            policy (Callable): Function from observations to actions
-            repeat (int, optional): Number of repeats. Defaults to 1.
-
-        Returns:
-            float: Mean reward
-        """
-        policy.enable_evaluation()
-        evaluation_reward, evaluation_maximum_reward, evaluation_episode_length = evaluate(self.env, policy=policy, repeat=repeat)
-        self.log(
-            ({
-                "evaluation/reward": evaluation_reward,
-                "evaluation/max_reward": evaluation_maximum_reward,
-                "evaluation/episode_length": evaluation_episode_length
-            })
-        )
-        policy.disable_evaluation()
-        return evaluation_reward
+    @property
+    def video_path(self) -> str:
+        return join(self.path, "video")
 
     def log(self, kwargs):
         """ Logging a metric
@@ -214,17 +184,85 @@ class EvaluationEnv:
     def close(self):
         """ Release resources
         """
-        self.env.close()
         if self.wandb_enable:
             wandb.finish()
-    
+
     def clear(self):
         """ Deletes associated files
         """
         shutil.rmtree(self.path)
 
+class CuriosityEvaluator:
+    """ Evaluate Training Runs
+    """
+    def __init__(self,
+                 env: Env,
+                 policy: Optional[Policy] = None,
+                 video = False,
+                 saved_reset_states: int=10,
+                 evaluation_repeats: int=10,
+                 device: str="cpu") -> None:
+        """ Evaluate Training Runs.
+
+        Use the evaluator on every evaluation epoch.
+
+        Args:
+            env (Env): Training environment.
+            policy (Policy): Evaluation policy.
+            video (_type_): Log evaluation videos.
+            saved_reset_states (int, optional): Set of stored observations. Defaults to 10.
+            device (str, optional): Device. Defaults to "cpu".
+        """
+        self.env = copy.deepcopy(env)
+        self.saved_reset_states = [self.env.reset(seed=i)[0] for i in range(saved_reset_states)]
+        self.saved_reset_states = torch.tensor(np.array(self.saved_reset_states), device=device, dtype=torch.float32)
+
+        self.repeats = evaluation_repeats
+        self.policy = policy
+
+        if video.enable:
+            if env.render_mode != "rgb_array":
+                raise ValueError(f"Video mode requires rgb_array render mode but got {env.render_mode}")
+            self.env = RecordVideo(
+                env=self.env,
+                video_folder=video.path,
+                episode_trigger=lambda x: x%video.frames_per_video == 0,
+                disable_logger=True
+            )
+    
+        self.info = {}
+
+    def evaluate(self, policy: Optional[Policy] = None, repeats: Optional[int] = None) -> float:
+        """Evaluation of a policy on the environment
+
+        Args:
+            repeats (int): Number of repeats. Defaults to value set at initialisation.
+
+        Returns:
+            float: Mean reward
+        """
+        if policy is None:
+            policy = self.policy
+        if policy is None:
+            raise ValueError("Provide a policy to evaluate")
+        if repeats is None:
+            repeats = self.repeats
+        
+        self.policy.enable_evaluation()
+        reward, maximum_reward, episode_length = evaluate(self.env, policy=policy, repeat=repeats)
+        self.policy.disable_evaluation()
+
+        self.info["reward"] = reward
+        self.info["max_reward"] = maximum_reward
+        self.info["episode_length"] = episode_length
+
+        return reward
+
     def __getattr__(self, name: str):
         return self.env.__getattribute__(name)
+    
+    def close(self):
+        self.env.close()
 
 def evaluate(env: Env, policy: Callable, repeat: int = 1):
     """ Evaluates an episode

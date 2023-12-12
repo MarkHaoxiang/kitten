@@ -10,7 +10,8 @@ torchaudio
 # Algorithms
 pink-noise-rl
 
-# Logging
+# Configurations and Logging
+hydra-core
 wandb
 moviepy
 

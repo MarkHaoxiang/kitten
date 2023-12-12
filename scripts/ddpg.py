@@ -15,7 +15,7 @@ from curiosity.util import (
     global_seed
 )
 from curiosity.policy import ColoredNoisePolicy
-from curiosity.rl import DeepDeterministicPolicyGradient
+from curiosity.rl.ddpg import DeepDeterministicPolicyGradient
 
 ALGORITHM = "ddpg"
 DESCRIPTION = "Lillicrap, et al. Continuous control with deep reinforcement learning. 2015."

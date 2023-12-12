@@ -79,7 +79,7 @@ class ColoredNoisePolicy(Policy):
                  fn: Callable[..., Any],
                  action_space: Space,
                  episode_length: Optional[int],
-                 exploration_factor: float = 1,
+                 scale: float = 1,
                  beta: float = 1,
                  rng = None,
                  device: str = "cpu"):
@@ -92,6 +92,7 @@ class ColoredNoisePolicy(Policy):
             fn (Callable[..., Any]): Policy.
             action_space (Space): Environment action space.
             episode_length (int): Maximum episode length.
+            scale (float): Exploration factor scaling
             beta (float, optional): Correlation parameter. 0 is white noise, 2 is OU. Defaults to 1.
             device (str, optional): Training device. Defaults to "cpu".
         """
@@ -108,7 +109,7 @@ class ColoredNoisePolicy(Policy):
         self._noise = pink.ColoredNoiseProcess(
             beta=beta,
             size=(*size, episode_length),
-            scale=exploration_factor,
+            scale=scale,
             rng = rng
         )
         self._device = device

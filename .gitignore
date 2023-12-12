@@ -163,3 +163,5 @@ napkin.ipynb
 log
 wandb
 config/test.json
+config_old
+outputs
