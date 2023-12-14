@@ -115,4 +115,11 @@ class DeepDeterministicPolicyGradient:
         self.critic.update_target_network(tau=self._tau)
         self.actor.update_target_network(tau=self._tau)
 
+        self.loss_critic_value, self.loss_actor_value = loss_critic_value, loss_actor_value
         return loss_critic_value, loss_actor_value
+
+    def get_log(self):
+        return {
+            "critic_loss": self.loss_critic_value,
+            "actor_loss": self.loss_actor_value
+        }

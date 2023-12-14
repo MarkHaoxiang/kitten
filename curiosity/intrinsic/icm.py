@@ -13,6 +13,7 @@ class IntrinsicCuriosityModule(nn.Module):
                  inverse_head: nn.Module,
                  eta: float = 0.01,
                  beta: float = 0.2,
+                 lr: float = 1e-3,
                  discrete_action_space: bool = False):
         """ Creates the intrinsic curiosity module
 
@@ -30,11 +31,12 @@ class IntrinsicCuriosityModule(nn.Module):
         self.eta = eta
         self.beta = beta
         self.discrete = discrete_action_space
+        self.info = {}
         if self.discrete:
             raise NotImplementedError("Not yet implemented for discrete action space")
+        self._mse_loss = nn.MSELoss()
+        self._optim = torch.optim.Adam(params=self.parameters(), lr=lr)
 
-        # self._mse_loss = nn.MSELoss()
-        self._huber_loss = nn.HuberLoss()
     def forward_model(self, s_0: torch.Tensor, a: torch.Tensor) -> torch.Tensor:
         """ Predicts next encoding
 
@@ -82,13 +84,24 @@ class IntrinsicCuriosityModule(nn.Module):
         r_i = torch.linalg.vector_norm(true_phi_1-pred_phi_1, dim=(-1)) * self.eta / 2
         return r_i
     
-    def calc_loss(self, s_0: torch.Tensor, s_1: torch.Tensor, a: torch.Tensor):
+    def _calc_loss(self, s_0: torch.Tensor, s_1: torch.Tensor, a: torch.Tensor, weights: torch.Tensor):
         pred_phi_1 = self.forward_model(s_0, a)
         true_phi_1 = self.feature_net(s_1)
-        forward_loss = 0.5 * self._huber_loss(true_phi_1, pred_phi_1)
+        forward_loss = 0.5 * torch.mean(((true_phi_1-pred_phi_1) * weights) ** 2)
+        self.info["forward_loss"] = forward_loss.item()
         pred_a = self.inverse_model(s_0, s_1)
         if self.discrete:
             raise NotImplementedError("Not yet implemented for discrete action space")
         else:
-            inverse_loss = self._huber_loss(a, pred_a)
+            inverse_loss = torch.mean(((a-pred_a) * weights) ** 2)
+            self.info["inverse_loss"] = inverse_loss.item()
         return forward_loss * self.beta + inverse_loss * (1-self.beta) 
+
+    def update(self, s_0: torch.Tensor, s_1: torch.Tensor, a: torch.Tensor, weights: torch.Tensor):
+        self._optim.zero_grad()
+        loss = self._calc_loss(s_0, s_1, a, weights)
+        loss.backward()
+        self._optim.step()
+
+    def get_log(self):
+        return self.info

@@ -14,7 +14,8 @@ class ReplayBuffer:
                  capacity: int,
                  shape: Sequence[int],
                  device: str = "cpu",
-                 dtype: Optional[Union[torch.dtype, Sequence[torch.dtype]]] = None) -> None:
+                 dtype: Optional[Union[torch.dtype, Sequence[torch.dtype]]] = None,
+                 **kwargs) -> None:
         shape = list(shape)
         for i, s in enumerate(shape):
             if isinstance(s, int):
@@ -104,6 +105,9 @@ class ReplayBuffer:
             indices = random.sample(range(len(self)), n)
             return self._fetch_storage(indices), torch.ones(n, device=self.device)
 
+    def get_log(self):
+        return {"size": len(self)}
+
     def __len__(self):
         return self.capacity if self._full else self._append_index
  
@@ -111,7 +115,6 @@ class ReplayBuffer:
         if not (isinstance(indices, torch.Tensor) or isinstance(indices, int)):
             indices = torch.tensor(indices, device=self.device)
         return tuple(self.storage[i][indices] for i in range(self.N))
-
 
 class PrioritizedReplayBuffer(ReplayBuffer):
     """ Implements a replay buffer with proportional based priorized sampling
@@ -140,6 +143,9 @@ class PrioritizedReplayBuffer(ReplayBuffer):
         self.sum_tree = np.zeros(self.sum_tree_offset+capacity)
         self.error_fn = error_fn
         self._maximum_priority = 1.0
+
+        # Logging
+        self.mean_batch_error = 0
 
     def append(self, inputs: tuple[Tensor], update: bool= True) -> None:
         """ Add transitions to the replay buffer
@@ -184,7 +190,9 @@ class PrioritizedReplayBuffer(ReplayBuffer):
 
         results = self._fetch_storage(selection)
         # Update errors 
-        priorities = self._calculate_priority(self.error_fn(results))
+        errors = self.error_fn(results)
+        self.mean_batch_error = np.mean(errors)
+        priorities = self._calculate_priority(errors)
         for i, j in enumerate(selection):
             self._maximum_priority = max(self._maximum_priority, priorities[i])
             self._sift_up(priorities[i], j)
@@ -220,6 +228,13 @@ class PrioritizedReplayBuffer(ReplayBuffer):
             result = np.where(choice, result*2+1, result*2+2)
             value -= (~choice) * left
         return result - self.sum_tree_offset
+
+    def get_log(self):
+        log = super().get_log()
+        log["total_priority"] = self.sum_tree[0]
+        log["maximum_priority"] = self._maximum_priority
+        log["mean_batch_error"] = self.mean_batch_error
+        return log
 
 def build_replay_buffer(env: Env,
                         capacity: int = 10000,

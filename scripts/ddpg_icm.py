@@ -1,189 +1,79 @@
 import sys
-from typing import Dict
 
-import gymnasium as gym
-from gymnasium.wrappers.autoreset import AutoResetWrapper
+from omegaconf import DictConfig
+import hydra
 import torch
 from tqdm import tqdm
 
 from curiosity.collector import build_collector
 from curiosity.experience import build_replay_buffer
-from curiosity.logging import EvaluationEnv, CuriosityArgumentParser
-from curiosity.rl import DeepDeterministicPolicyGradient
 from curiosity.policy import ColoredNoisePolicy
-from curiosity.util import build_actor, build_critic, build_icm, global_seed
+from curiosity.rl.ddpg import DeepDeterministicPolicyGradient
+from curiosity.util import build_env, build_actor, build_critic, build_icm, global_seed
+from curiosity.logging import CuriosityEvaluator, CuriosityLogger
 
-ALGORITHM = "ddpg_icm"
-DESCRIPTION = "Lillicrap, et al. Continuous control with deep reinforcement learning. 2015. Pathak, Deepak, et al. Curiosity-Driven Exploration by Self-Supervised Prediction. 2017."
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-parser = CuriosityArgumentParser(prog=ALGORITHM,description=DESCRIPTION)
+@hydra.main(version_base=None, config_path="../config", config_name="defaults")
+def train(cfg: DictConfig) -> None:
+    # Environment
+    env = build_env(cfg.env)
 
-def train(config: Dict = {},
-          seed: int = 0,
-          frames_per_epoch: int = 1000,
-          frames_per_video: int = -1,
-          eval_repeat: int = 10,
-          wandb: bool = False,
-          frames_per_checkpoint: int = 10000,
-          environment: str = "Pendulum-v1",
-          discount_factor: float = 0.99,
-          exploration_factor: float = 0.1,
-          exploration_beta: float = 1,
-          features: int = 128,
-          target_update_frequency: int = 1,
-          replay_buffer_capacity: int = 10000,
-          total_frames: int = 50000,
-          minibatch_size: int = 128,
-          initial_collection_size: int = 1000,
-          tau: float = 0.005,
-          lr: float = 0.0003,
-          icm_encoding_features: int = 32,
-          eta: float = 1,
-          beta: float = 0.2,
-          **kwargs):
-    """ Train DDPG
-
-    Args:
-            # Metadata
-        config (Dict): Dictionary containing all arguments
-            # Experimentation and Logging
-        seed (int): random seed used to setup experiment
-        frames_per_epoch (int): Number of frames between each logging point
-        frames_per_video (int): Number of frames between each video
-        eval_repeat (int): Number of episodes to run in an evaluation
-        wandb (bool): Toggle to log to Weights&Biases
-            # Environment
-        environment (str): Environment name in registry
-        discount_factor (float): Reward discount
-            # Algorithm
-        exploration_factor (float): Gaussian noise standard deviation for exploration
-        exploration_beta (float): Colour of noise for exploration
-        features (int): Helps define the complexity of neural nets used
-        target_update_frequency (int): Frames between each network update
-        replay_buffer_capacity (int): Capacity of replay buffer
-        total_frames (int): Total frames to train on
-        minibatch_size (int): Batch size to run gradient descent
-        initial_collection_size (int): Early start to help with explorations by taking random actions
-        tau (float): Speed at which target network follows main networks
-        lr (float): Optimiser step size
-            # Intrinsic Curiosity
-        icm_encoding_features: Size of the latent environment encoding
-        eta: Intrinsic reward scale
-        beta: Balances between forward and inverse
-
-    Raises:
-        ValueError: Invalid configuration passed
-    """
-    # Metadata
-    PROJECT_NAME = parser.generate_project_name(environment, ALGORITHM)
-
-    # Create Environments
-    env = AutoResetWrapper(gym.make(environment, render_mode="rgb_array"))
-    evaluator = EvaluationEnv(
-        env=env,
-        project_name=PROJECT_NAME,
-        config=config,
-        video=eval_repeat*frames_per_video//frames_per_epoch if frames_per_video > 0 else None,
-        wandb_enable=wandb,
-        device=DEVICE
-    )
+    # Logging and Evaluation
+    logger, evaluator = CuriosityLogger(cfg, "ddpg"), CuriosityEvaluator(env, device=DEVICE, **cfg.log.evaluation)
 
     # RNG
-    rng = global_seed(seed, env, evaluator)
+    rng = global_seed(cfg.seed, env, evaluator)
 
-    # Define Actor / Critic
-    ddpg = DeepDeterministicPolicyGradient(
-        actor=build_actor(env, features),
-        critic=build_critic(env, features),
-        gamma=discount_factor,
-        lr=lr,
-        tau=tau,
-        device=DEVICE
-    )
-    policy = ColoredNoisePolicy(
-        ddpg.actor,
-        env.action_space,
-        episode_length=env.spec.max_episode_steps,
-        exploration_factor=exploration_factor,
-        beta=exploration_beta,
-        rng=rng,
-        device=DEVICE
-    )
+    # Define actor-critic policy
+    ddpg = DeepDeterministicPolicyGradient(build_actor(env, **cfg.actor), build_critic(env, **cfg.critic), device=DEVICE, **cfg.ddpg)
+    policy = ColoredNoisePolicy(ddpg.actor,env.action_space, env.spec.max_episode_steps, rng=rng, device=DEVICE, **cfg.noise)
 
     # Define curiosity
-    icm = build_icm(
-        env=env,
-        encoding_size=icm_encoding_features,
-        eta=eta,
-        beta=beta,
-        device=DEVICE
-    )
+    icm = build_icm(env=env, device=DEVICE, **cfg.icm)
 
-    # Initialise Replay Buffer    
-    memory = build_replay_buffer(env, capacity=replay_buffer_capacity, device=DEVICE)
-    collector = build_collector(policy, env=env, memory=memory, device=DEVICE)
+    # Data pipeline
+    memory = build_replay_buffer(env, device=DEVICE, error_fn=lambda x: torch.abs(ddpg.td_error(*x)).detach().cpu().numpy(), **cfg.memory)
+    collector = build_collector(policy, env, memory, device=DEVICE)
+    evaluator.policy = policy
 
-    # Loss
-    optim_icm = torch.optim.Adam(params=icm.parameters(), lr=lr)
+    # Register logging and checkpoints
+    logger.register_models([(ddpg.actor.net, "actor"), (ddpg.critic.net, "critic")])
+    logger.register_providers([(ddpg, "train"), (icm, "intrinsic") (collector, "collector"), (evaluator, "evaluation"), (memory, "memory")])
 
-    # Logging
-    checkpoint = frames_per_checkpoint > 0
-    if checkpoint:
-        evaluator.register(ddpg.actor.net, "actor")
-        evaluator.register(ddpg.critic.net, "critic")
+    # Training Loop
+    pbar = tqdm(total=cfg.train.total_frames // cfg.log.frames_per_epoch, file=sys.stdout)
+    collector.early_start(cfg.train.initial_collection_size)
+    for step in range(1,  cfg.train.total_frames+1):
+        collector.collect(n=1)
 
-    # Training loop
-    epoch = 0
-    with tqdm(total=total_frames // frames_per_epoch, file=sys.stdout) as pbar:
-        collector.early_start(initial_collection_size)
-        for step in range(1, total_frames+1):
-            collector.collect(n=1)
+        # RL Update
+        if step % cfg.ddpg.target_update_frequency == 0:
+            (s_0, a, r_e, s_1, d), weights = memory.sample(cfg.train.minibatch_size)
+                # Add Intrinsic Reward
+            r_i = icm(s_0, s_1, a)
+            r_t = r_e + r_i
+                # DDPG Update
+            ddpg.update((s_0, a, r_t, s_1, d), weights)
+                # ICM Update
+            icm.update(s_0, s_1, a, weights)
 
-            # ====================
-            # Gradient Update 
-            # Mostly Update this
-            # ====================
+        # Epoch Logging
+        if  step % cfg.log.frames_per_epoch == 0:
+            critic_value =  ddpg.critic(torch.cat((evaluator.saved_reset_states, ddpg.actor(evaluator.saved_reset_states)), 1)).mean().item()
+            logger.log({
+                "train/critic_value": critic_value,
+                "intrinsic/intrinsic_reward": torch.mean(r_i),
+                "intrinsic/extrinsic_reward": torch.mean(r_e)
+            })
+            reward, epoch = evaluator.evaluate(policy), logger.epoch()
+            pbar.set_description(f"epoch {epoch} reward {reward}"), pbar.update(1)
+        # Update checkpoints
+        if step % cfg.log.checkpoint.frames_per_checkpoint == 0:
+            logger.checkpoint_registered(step)
 
-            # DDPG Update
-                # Critic
-            if step % target_update_frequency == 0:
-                s_0, a, r_e, s_1, d = memory.sample(minibatch_size, continuous=False)
-                # Add intrinsic reward
-                r_i = icm(s_0, s_1, a)
-                r_t = r_e + r_i
-
-                loss_critic_value, loss_actor_value = ddpg.update((s_0, a, r_t, s_1, d))
-                    # ICM
-                loss_icm = icm.calc_loss(s_0, s_1, a)
-                optim_icm.zero_grad()
-                loss_icm_value = loss_icm.item()
-                loss_icm.backward()
-                optim_icm.step()
-
-            # Epoch Logging
-            if step % frames_per_epoch == 0:
-                epoch += 1
-                reward = evaluator.evaluate(policy, repeat=eval_repeat)
-                critic_value =  ddpg.critic(torch.cat((evaluator.saved_reset_states, ddpg.actor(evaluator.saved_reset_states)), 1)).mean().item()
-                evaluator.log({
-                    "train/frame": step,
-                    "train/wall_time": evaluator.get_wall_time(),
-                    "train/critic_loss": loss_critic_value,
-                    "train/actor_loss": loss_actor_value,
-                    "train/critic_value": critic_value, 
-                    "train/icm_loss": loss_icm_value,
-                    "train/intrinsic_reward": torch.mean(r_i),
-                    "train/extrinsic_reward": torch.mean(r_e)
-                })
-                pbar.set_description(f"epoch {epoch} reward {reward} critic loss {loss_critic_value} actor loss {loss_actor_value}")
-                pbar.update(1)
-
-            if checkpoint and step % frames_per_checkpoint == 0:
-                evaluator.checkpoint_registered(step)
-
-        evaluator.close()
-        env.close()
+    # Close resources
+    env.close(), evaluator.close(), logger.close(), pbar.close()
 
 if __name__ == "__main__":
-    parser.run(train)
+    train()

@@ -10,10 +10,12 @@ import torch
 import torch.nn as nn
 
 from curiosity.nn import ClassicalBoxActor
-from curiosity.world import IntrinsicCuriosityModule
+from curiosity.intrinsic.icm import IntrinsicCuriosityModule
 
 def build_env(environment_configuration):
-    return AutoResetWrapper(gym.make(environment_configuration.name, render_mode="rgb_array"))
+    env = AutoResetWrapper(gym.make(environment_configuration.name, render_mode="rgb_array"))
+    env.reset()
+    return env
 
 def build_actor(env: Env, features: int = 128) -> nn.Module:
     """Builds an actor for gym environment

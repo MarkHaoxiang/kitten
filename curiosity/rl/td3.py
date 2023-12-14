@@ -23,7 +23,8 @@ class TwinDelayedDeepDeterministicPolicyGradient(DeepDeterministicPolicyGradient
                  clip_grad_norm: Optional[float] = 1,
                  target_noise: float = 0.1,
                  target_noise_clip: float = 0.2,
-                 device: str = "cpu"):
+                 device: str = "cpu",
+                 **kwargs):
         """TD3
 
         Args:
@@ -59,7 +60,7 @@ class TwinDelayedDeepDeterministicPolicyGradient(DeepDeterministicPolicyGradient
             lr=lr
         )
 
-    def _critic_update(self, s_0: Tensor, a: Tensor, r: Tensor, s_1: Tensor, d: Tensor) -> float:
+    def _critic_update(self, s_0: Tensor, a: Tensor, r: Tensor, s_1: Tensor, d: Tensor, weights: Tensor) -> float:
         """ Runs a critic update
 
         Args:
@@ -96,8 +97,7 @@ class TwinDelayedDeepDeterministicPolicyGradient(DeepDeterministicPolicyGradient
             target_max_1 = self.critic_1.target(s_1_a_1).squeeze()
             target_max_2 = self.critic_2.target(s_1_a_1).squeeze()
             y = r + (~d) * torch.minimum(target_max_1, target_max_2) * self._gamma
-
-        loss_critic = self._calc_critic_loss(y, x_1) + self._calc_critic_loss(y, x_2)
+        loss_critic = torch.mean((weights * (y-x_1)) ** 2) + torch.mean((weights * (y-x_2)) ** 2)
         loss_value = loss_critic.item()
         self._optim_critic.zero_grad()
         loss_critic.backward()
@@ -112,7 +112,7 @@ class TwinDelayedDeepDeterministicPolicyGradient(DeepDeterministicPolicyGradient
     def update(self, *args, **kwargs):
         raise AttributeError("Please use critic_update and policy_update")
     
-    def critic_update(self, batch: Tuple) -> float:
+    def critic_update(self, batch: Tuple, weights: Tensor) -> float:
         """ Runs a TD3 critic step
 
         Args:
@@ -121,10 +121,11 @@ class TwinDelayedDeepDeterministicPolicyGradient(DeepDeterministicPolicyGradient
         Returns:
             float: Critic loss
         """
-        loss_critic_value = self._critic_update(*batch)
+        loss_critic_value = self._critic_update(*batch, weights)
+        self.loss_critic_value = loss_critic_value
         return loss_critic_value
 
-    def actor_update(self, batch: Tuple) -> float:
+    def actor_update(self, batch: Tuple, weights: Tensor) -> float:
         """ Runs a TD3 actor step
 
         Args:
@@ -133,8 +134,9 @@ class TwinDelayedDeepDeterministicPolicyGradient(DeepDeterministicPolicyGradient
         Returns:
             float: Actor loss
         """
-        loss_actor_value = self._actor_update(batch[0])
+        loss_actor_value = self._actor_update(batch[0], weights)
         self.critic_1.update_target_network(self._tau)
         self.critic_2.update_target_network(self._tau)
         self.actor.update_target_network(self._tau)
+        self.loss_actor_value = loss_actor_value
         return loss_actor_value

@@ -85,7 +85,7 @@ class CuriosityLogger:
             wandb.watch(
                 model,
                 log="all",
-                log_freq=watch_frequency if not watch_frequency is None else self.config['frames_per_epoch'],
+                log_freq=watch_frequency if not watch_frequency is None else self.cfg.log.frames_per_epoch,
                 idx=len(self.models)
             )
     
@@ -131,7 +131,7 @@ class CuriosityLogger:
             "train/wall_time": self.get_wall_time()
         }
         for provider, name in self.providers:
-            for k, v in provider.get_log():
+            for k, v in provider.get_log().items():
                 log[f"{name}/{k}"] = v
         self.log(log)
         return self._epoch
@@ -257,6 +257,9 @@ class CuriosityEvaluator:
         self.info["episode_length"] = episode_length
 
         return reward
+
+    def get_log(self):
+        return self.info
 
     def __getattr__(self, name: str):
         return self.env.__getattribute__(name)

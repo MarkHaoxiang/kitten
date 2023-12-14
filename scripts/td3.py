@@ -1,178 +1,80 @@
 import sys
-from typing import Dict
 
-import gymnasium as gym
-from gymnasium.wrappers.autoreset import AutoResetWrapper
+from omegaconf import DictConfig
+import hydra
 import torch
 from tqdm import tqdm
 
 from curiosity.collector import build_collector
 from curiosity.experience import build_replay_buffer
-from curiosity.logging import EvaluationEnv, CuriosityArgumentParser
-from curiosity.rl import TwinDelayedDeepDeterministicPolicyGradient
 from curiosity.policy import ColoredNoisePolicy
-from curiosity.util import build_actor, build_critic, global_seed
+from curiosity.rl.td3 import TwinDelayedDeepDeterministicPolicyGradient
+from curiosity.util import build_env, build_actor, build_critic, global_seed
+from curiosity.logging import CuriosityEvaluator, CuriosityLogger
 
-ALGORITHM = "td3"
-DESCRIPTION = "Fujimoto, et al. Addressing Function Approximation Error in Actor-Critic Methods. 2018."
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-parser = CuriosityArgumentParser(prog=ALGORITHM,description=DESCRIPTION)
-
-def train(config: Dict = {},
-          seed: int = 0,
-          frames_per_epoch: int = 1000,
-          frames_per_video: int = -1,
-          eval_repeat: int = 10,
-          wandb: bool = False,
-          frames_per_checkpoint: int = 10000,
-          environment: str = "Pendulum-v1",
-          discount_factor: float = 0.99,
-          exploration_factor: float = 0.1,
-          exploration_beta: float = 1,
-          target_noise: float = 0.1,
-          target_noise_clip: float = 0.2,
-          features: int = 128,
-          critic_update_frequency: int = 1,
-          policy_update_frequency: float = 2.0,
-          replay_buffer_capacity: int = 10000,
-          total_frames: int = 50000,
-          minibatch_size: int = 128,
-          initial_collection_size: int = 1000,
-          tau: float = 0.005,
-          lr: float = 0.0003,
-          **kwargs):
-    """ Train TD3
-
-    Args:
-            # Metadata
-        config (Dict): Dictionary containing all arguments
-            # Experimentation and Logging
-        seed (int): random seed used to setup experiment
-        frames_per_epoch (int): Number of frames between each logging point
-        frames_per_video (int): Number of frames between each video
-        eval_repeat (int): Number of episodes to run in an evaluation
-        wandb (bool): Toggle to log to Weights&Biases
-            # Environment
-        environment (str): Environment name in registry
-        discount_factor (float): Reward discount
-            # Algorithm
-        exploration_factor (float): Gaussian noise standard deviation for exploration
-        exploration_beta (float): Colour of noise for exploration
-        target_noise (float): Smoothing noise standard deviation added to policy for the critic update
-        target_noise_clip (float): Clip target noise
-        features (int): Helps define the complexity of neural nets used
-        critic_update_frequency (int): Frames between each critic update
-        policy_update_frequency (float): Ratio of critic updates - actor updates
-        replay_buffer_capacity (int): Capacity of replay buffer
-        total_frames (int): Total frames to train on
-        minibatch_size (int): Batch size to run gradient descent
-        initial_collection_size (int): Early start to help with explorations by taking random actions
-        tau (float): Speed at which target network follows main networks
-        lr (float): Optimiser step size
-
-    Raises:
-        ValueError: Invalid configuration passed
-    """
-    
-    # Metadata
-    PROJECT_NAME = parser.generate_project_name(environment, ALGORITHM)
-    policy_update_frequency = int(policy_update_frequency * critic_update_frequency)
-
-    # Create Environments
-    env = AutoResetWrapper(gym.make(environment, render_mode="rgb_array"))
-    env.reset(seed=seed)
+@hydra.main(version_base=None, config_path="../config", config_name="defaults")
+def train(cfg: DictConfig) -> None:
+    # Environment
+    env = build_env(cfg.env)
     env_action_scale = torch.tensor(env.action_space.high-env.action_space.low, device=DEVICE) / 2.0
     env_action_min = torch.tensor(env.action_space.low, dtype=torch.float32, device=DEVICE)
     env_action_max = torch.tensor(env.action_space.high, dtype=torch.float32, device=DEVICE)
-    evaluator = EvaluationEnv(
-        env=env,
-        project_name=PROJECT_NAME,
-        config=config,
-        video=eval_repeat*frames_per_video//frames_per_epoch if frames_per_video > 0 else None,
-        wandb_enable=wandb,
-        device=DEVICE
-    )
+
+    # Logging and Evaluation
+    logger, evaluator = CuriosityLogger(cfg, "td3"), CuriosityEvaluator(env, device=DEVICE, **cfg.log.evaluation)
 
     # RNG
-    rng = global_seed(seed, env, evaluator)
+    rng = global_seed(cfg.seed, env, evaluator)
 
-    # Define Actor / Critic
+    # Define actor-critic policy
     td3 = TwinDelayedDeepDeterministicPolicyGradient(
-        actor=build_actor(env, features),
-        critic_1=build_critic(env, features),
-        critic_2=build_critic(env, features),
-        gamma=discount_factor,
-        lr=lr,
-        tau=tau,
-        target_noise=target_noise,
-        target_noise_clip=target_noise_clip,
+        build_actor(env, **cfg.actor),
+        build_critic(env, **cfg.critic),
+        build_critic(env, **cfg.critic),
+        device=DEVICE,
         env_action_scale=env_action_scale,
         env_action_min=env_action_min,
         env_action_max=env_action_max,
-        device=DEVICE
+        **cfg.td3
     )
-    policy = ColoredNoisePolicy(
-        td3.actor,
-        env.action_space,
-        episode_length=env.spec.max_episode_steps,
-        exploration_factor=exploration_factor,
-        beta=exploration_beta,
-        rng=rng,
-        device=DEVICE
-    ) 
+    policy = ColoredNoisePolicy(td3.actor,env.action_space, env.spec.max_episode_steps, rng=rng, device=DEVICE, **cfg.noise)
 
-    # Initialise Replay Buffer    
-    memory = build_replay_buffer(env, capacity=replay_buffer_capacity, device=DEVICE)
-    collector = build_collector(policy, env=env, memory=memory, device=DEVICE)
+    # Data pipeline
+    memory = build_replay_buffer(env, device=DEVICE, error_fn=lambda x: torch.abs(td3.td_error(*x)).detach().cpu().numpy(), **cfg.memory)
+    collector = build_collector(policy, env, memory, device=DEVICE)
+    evaluator.policy = policy
 
-    # Logging
-    checkpoint = frames_per_checkpoint > 0
-    if checkpoint:
-        evaluator.register(td3.actor.net, "actor")
-        evaluator.register(td3.critic_1.net, "critic_1")
-        evaluator.register(td3.critic_2.net, "critic_2")
+    # Register logging and checkpoints
+    logger.register_models([(td3.actor.net, "actor"), (td3.critic_1.net, "critic_1"), (td3.critic_2.net, "critic_2")])
+    logger.register_providers([(td3, "train"), (collector, "collector"), (evaluator, "evaluation"), (memory, "memory")])
 
-    # Training loop
-    epoch = 0
-    with tqdm(total=total_frames // frames_per_epoch, file=sys.stdout) as pbar:
-        collector.early_start(initial_collection_size)
-        for step in range(1, total_frames+1):
-            collector.collect(n=1)
+    # Training Loop
+    pbar = tqdm(total=cfg.train.total_frames // cfg.log.frames_per_epoch, file=sys.stdout)
+    collector.early_start(cfg.train.initial_collection_size)
+    for step in range(1,  cfg.train.total_frames+1):
+        collector.collect(n=1)
 
-            # ====================
-            # Gradient Update 
-            # Mostly Update this
-            # ====================
-            # TD3 Update
-            s_0, a, r, s_1, d = memory.sample(minibatch_size, continuous=False)
-            if step % critic_update_frequency == 0:
-                # Critic
-                loss_critic_value = td3.critic_update((s_0, a, r, s_1, d))
+        # RL Update
+        batch, weights = memory.sample(cfg.train.minibatch_size)
+        if step % cfg.td3.critic_update_frequency == 0:
+            td3.critic_update(batch, weights)
+        if step % cfg.td3.policy_update_frequency == 0:
+            td3.actor_update(batch, weights)
 
-            if step % policy_update_frequency == 0:
-                # Actor
-                loss_actor_value = td3.actor_update((s_0, a, r, s_1, d))
+        # Epoch Logging
+        if  step % cfg.log.frames_per_epoch == 0:
+            critic_value =  td3.critic(torch.cat((evaluator.saved_reset_states, td3.actor(evaluator.saved_reset_states)), 1)).mean().item()
+            logger.log({"train/critic_value": critic_value})
+            reward, epoch = evaluator.evaluate(policy), logger.epoch()
+            pbar.set_description(f"epoch {epoch} reward {reward}"), pbar.update(1)
+        # Update checkpoints
+        if step % cfg.log.checkpoint.frames_per_checkpoint == 0:
+            logger.checkpoint_registered(step)
 
-            # Epoch Logging
-            if step % frames_per_epoch == 0 :
-                epoch += 1
-                reward = evaluator.evaluate(policy, repeat=eval_repeat)
-                critic_value = td3.critic_1(torch.cat((evaluator.saved_reset_states, td3.actor(evaluator.saved_reset_states)), 1)).mean().item()
-                evaluator.log({
-                    "train/frame": step,
-                    "train/critic_loss": loss_critic_value,
-                    "train/actor_loss": loss_actor_value,
-                    "train/critic_value": critic_value 
-                })
-                pbar.set_description(f"epoch {epoch} reward {reward} critic loss {loss_critic_value} actor loss {loss_actor_value}")
-                pbar.update(1)
-            
-            if checkpoint and step % frames_per_checkpoint == 0:
-                evaluator.checkpoint_registered(step)
-
-        evaluator.close()
-        env.close()
+    # Close resources
+    env.close(), evaluator.close(), logger.close(), pbar.close()
 
 if __name__ == "__main__":
-    parser.run(train)
+    train()

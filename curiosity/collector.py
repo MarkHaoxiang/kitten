@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, Callable, List, Optional
+from typing import List, Optional
 
 
 import gymnasium as gym
@@ -48,6 +48,9 @@ class DataCollector(ABC):
     def set_policy(self, policy: Policy):
         self.policy = policy
 
+    def get_log(self):
+        return {}
+
 class GymCollector(DataCollector):
     """ Gymnasium environment data collector
     """
@@ -60,9 +63,13 @@ class GymCollector(DataCollector):
             env = AutoResetWrapper(env)
         self.obs, _ = env.reset()
         self.device = device
+        # Logging
+        self.frame = 0
         super().__init__(policy, env, memory)
 
     def collect(self, n: int, early_start: bool=False, *args, **kwargs) -> List:
+        if not early_start:
+            self.frame += n
         with torch.no_grad():
             result = []
             obs = self.obs
@@ -92,6 +99,11 @@ class GymCollector(DataCollector):
         result = self.collect(n, early_start=True)
         self.policy = policy
         return result
+
+    def get_log(self):
+        return {
+            "frame": self.frame
+        }
 
 def build_collector(policy, env, memory, device: torch.device = 'cpu') -> DataCollector:
     return GymCollector(policy, env, memory, device=device)
