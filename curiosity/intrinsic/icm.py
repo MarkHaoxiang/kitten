@@ -4,7 +4,7 @@ import torch.nn as nn
 class IntrinsicCuriosityModule(nn.Module):
     """ Intrinsic curiosity, intrinsic reward
 
-    https://arxiv.org/pdf/1705.05363.pdf
+    Pathak et al. https://arxiv.org/pdf/1705.05363.pdf
     """
     
     def __init__(self,
@@ -34,7 +34,6 @@ class IntrinsicCuriosityModule(nn.Module):
         self.info = {}
         if self.discrete:
             raise NotImplementedError("Not yet implemented for discrete action space")
-        self._mse_loss = nn.MSELoss()
         self._optim = torch.optim.Adam(params=self.parameters(), lr=lr)
 
     def forward_model(self, s_0: torch.Tensor, a: torch.Tensor) -> torch.Tensor:

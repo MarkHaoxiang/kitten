@@ -8,10 +8,11 @@ import gymnasium as gym
 from gymnasium.wrappers.autoreset import AutoResetWrapper
 import torch
 
-from curiosity.experience import ReplayBuffer
+from curiosity.experience.memory import ReplayBuffer
+from curiosity.logging import Loggable
 from curiosity.policy import Policy
 
-class DataCollector(ABC):    
+class DataCollector(Loggable, ABC):    
     def __init__(self, policy: Policy, env: gym.Env, memory: Optional[ReplayBuffer]):
         """ Constructs a data collector
 
@@ -105,5 +106,3 @@ class GymCollector(DataCollector):
             "frame": self.frame
         }
 
-def build_collector(policy, env, memory, device: torch.device = 'cpu') -> DataCollector:
-    return GymCollector(policy, env, memory, device=device)

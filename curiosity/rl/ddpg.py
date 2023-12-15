@@ -1,23 +1,27 @@
-from dataclasses import dataclass
-from hydra.core.config_store import ConfigStore
 from typing import Optional, Tuple
 
 import torch
 import torch.nn as nn
 from torch import Tensor
 
+from curiosity.experience import Transition
 from curiosity.nn import AddTargetNetwork
+from curiosity.rl.rl import Algorithm
 
-class DeepDeterministicPolicyGradient:
-    """ Implements DDPG loss
+class DeepDeterministicPolicyGradient(Algorithm):
+    """ Implements DDPG
+
+    Lillicrap et al. Continuous Control with Deep Reinforcement Learning. 2015.
     """
+
     def __init__(self,
                  actor: nn.Module,
                  critic: nn.Module,
                  gamma: float = 0.99,
-                 lr: float=1e-3,
+                 lr: float = 1e-3,
                  tau: float = 0.005,
                  clip_grad_norm: Optional[float] = 1,
+                 update_frequency: int = 1,
                  device: str = "cpu",
                  **kwargs):
         """ DDPG
@@ -28,6 +32,7 @@ class DeepDeterministicPolicyGradient:
             gamma (float, optional): Reward discount factor. Defaults to 0.99.
             lr (_type_, optional): Learning rate. Defaults to 1e-3.
             tau (float, optional): Target network update. Defaults to 0.005.
+            policy_improvement_frequency (int): Steps between policy improvement.
             device (str, optional): Training hardware. Defaults to "cpu".
         """
         self.actor = AddTargetNetwork(actor, device=device)
@@ -39,6 +44,9 @@ class DeepDeterministicPolicyGradient:
         self._optim_critic = torch.optim.Adam(params=self.critic.net.parameters(), lr=lr)
         self._tau = tau
         self._clip_grad_norm = clip_grad_norm
+        self._update_frequency = update_frequency
+
+        self.loss_critic_value, self.loss_actor_value = 0, 0
 
     def _critic_update(self, s_0: Tensor, a: Tensor, r: Tensor, s_1: Tensor, d: Tensor, weights: Tensor) -> float:
         """ Runs a critic update
@@ -65,7 +73,7 @@ class DeepDeterministicPolicyGradient:
 
         return loss_value
     
-    def td_error(self, s_0: Tensor, a: Tensor, r: Tensor, s_1: Tensor, d: Tensor) -> float:
+    def td_error(self, s_0: Tensor, a: Tensor, r: Tensor, s_1: Tensor, d: Tensor):
         """ Returns TD difference for a transition
         """
         x = self.critic(torch.cat((s_0, a), 1)).squeeze()
@@ -99,24 +107,26 @@ class DeepDeterministicPolicyGradient:
         self._optim_actor.step()
 
         return loss_value
-    
-    def update(self, batch: Tuple) -> Tuple[float, float]:
+
+    def update(self, batch: Transition, weights: Tensor, step: int) -> Tuple[float, float]:
         """ Runs a DDPG update step
 
         Args:
             batch (Tuple): Batch of training transitions from the replay buffer
+            weights (Tensor): Recommended importance sampling weights
+            step (int): Current step of training
 
         Returns:
             Tuple[float, float]: Critic loss and actor loss
         """
-        transitions, weights = batch
-        loss_critic_value = self._critic_update(*transitions, weights)
-        loss_actor_value = self._actor_update(transitions[0], weights)
-        self.critic.update_target_network(tau=self._tau)
-        self.actor.update_target_network(tau=self._tau)
-
-        self.loss_critic_value, self.loss_actor_value = loss_critic_value, loss_actor_value
-        return loss_critic_value, loss_actor_value
+        if step % self._update_frequency == 0:
+            loss_critic_value = self._critic_update(*batch, weights)
+            loss_actor_value = self._actor_update(batch.s_0, weights)
+            self.critic.update_target_network(tau=self._tau)
+            self.actor.update_target_network(tau=self._tau)
+    
+            self.loss_critic_value, self.loss_actor_value = loss_critic_value, loss_actor_value
+        return self.loss_critic_value, self.loss_actor_value 
 
     def get_log(self):
         return {

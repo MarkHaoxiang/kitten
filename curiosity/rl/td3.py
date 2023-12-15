@@ -3,6 +3,7 @@ from typing import Optional, Tuple
 import torch
 import torch.nn as nn
 from torch import Tensor
+from curiosity.curiosity.experience import Transition
 
 from curiosity.nn import AddTargetNetwork
 from curiosity.rl.ddpg import DeepDeterministicPolicyGradient
@@ -23,6 +24,8 @@ class TwinDelayedDeepDeterministicPolicyGradient(DeepDeterministicPolicyGradient
                  clip_grad_norm: Optional[float] = 1,
                  target_noise: float = 0.1,
                  target_noise_clip: float = 0.2,
+                 critic_update_frequency = 1,
+                 policy_update_frequency = 2,
                  device: str = "cpu",
                  **kwargs):
         """TD3
@@ -59,6 +62,8 @@ class TwinDelayedDeepDeterministicPolicyGradient(DeepDeterministicPolicyGradient
             params=list(self.critic_1.net.parameters()) + list(self.critic_2.net.parameters()),
             lr=lr
         )
+        self._critic_update_frequency = critic_update_frequency
+        self._policy_update_frequency = policy_update_frequency
 
     def _critic_update(self, s_0: Tensor, a: Tensor, r: Tensor, s_1: Tensor, d: Tensor, weights: Tensor) -> float:
         """ Runs a critic update
@@ -109,34 +114,19 @@ class TwinDelayedDeepDeterministicPolicyGradient(DeepDeterministicPolicyGradient
 
         return loss_value
     
-    def update(self, *args, **kwargs):
-        raise AttributeError("Please use critic_update and policy_update")
-    
-    def critic_update(self, batch: Tuple, weights: Tensor) -> float:
-        """ Runs a TD3 critic step
+    def update(self, batch: Transition, weights: Tensor, step: int) -> Tuple[float, float]:
+        """ Runs a DDPG update step
 
         Args:
             batch (Tuple): Batch of training transitions from the replay buffer
+            weights (Tensor): Recommended importance sampling weights
+            step (int): Current step of training
 
         Returns:
-            float: Critic loss
+            Tuple[float, float]: Critic loss and actor loss
         """
-        loss_critic_value = self._critic_update(*batch, weights)
-        self.loss_critic_value = loss_critic_value
-        return loss_critic_value
-
-    def actor_update(self, batch: Tuple, weights: Tensor) -> float:
-        """ Runs a TD3 actor step
-
-        Args:
-            batch (Tuple): Batch of training transitions from the replay buffer
-
-        Returns:
-            float: Actor loss
-        """
-        loss_actor_value = self._actor_update(batch[0], weights)
-        self.critic_1.update_target_network(self._tau)
-        self.critic_2.update_target_network(self._tau)
-        self.actor.update_target_network(self._tau)
-        self.loss_actor_value = loss_actor_value
-        return loss_actor_value
+        if step % self._critic_update_frequency == 0:
+            self.loss_critic_value = self._critic_update(*batch, weights)
+        if step % self._policy_update_frequency == 0:
+            self.loss_actor_value = self._actor_update(*batch, weights)
+        return self.loss_critic_value, self.loss_actor_value

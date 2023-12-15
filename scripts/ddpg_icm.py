@@ -5,8 +5,8 @@ import hydra
 import torch
 from tqdm import tqdm
 
-from curiosity.collector import build_collector
-from curiosity.experience import build_replay_buffer
+from curiosity.curiosity.experience.collector import build_collector
+from curiosity.curiosity.experience.memory import build_replay_buffer
 from curiosity.policy import ColoredNoisePolicy
 from curiosity.rl.ddpg import DeepDeterministicPolicyGradient
 from curiosity.util import build_env, build_actor, build_critic, build_icm, global_seed

@@ -1,3 +1,4 @@
+from abc import ABC
 import copy
 from datetime import datetime
 import math
@@ -5,7 +6,7 @@ import warnings
 import os
 from os.path import join
 import shutil
-from typing import Callable, Optional, Tuple, List
+from typing import Callable, Dict, Optional, Tuple, List
 import time
 
 import torch
@@ -17,6 +18,18 @@ from gymnasium.wrappers.record_video import RecordVideo
 import wandb
 
 from curiosity.policy import Policy
+
+class Loggable(ABC):
+    """ Interface signalling a module which can be logged
+    """
+
+    def get_log(self) -> Dict:
+        """ Collect logs for publishing
+
+        Returns:
+            Dict: Dictionary of key-value logging pairs
+        """
+        return {}
 
 class CuriosityLogger:
     """ Logging tool for reinforcement learning experiments

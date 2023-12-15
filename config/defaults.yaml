@@ -8,7 +8,7 @@ critic:
 log:
   name: false
   frames_per_epoch: 100
-  wandb: true
+  wandb: false
   evaluation:
     evaluation_repeats: 10
     video:
@@ -33,7 +33,7 @@ ddpg:
   gamma: 0.99
   tau: 0.005
   lr: 0.0003
-  target_update_frequency: 1
+  update_frequency: 1
 td3:
   gamma: 0.99
   tau: 0.005
