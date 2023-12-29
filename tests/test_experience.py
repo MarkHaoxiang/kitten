@@ -119,9 +119,10 @@ class TestPrioritizedReplayBuffer:
         replay_buffer.append(tuple(torch.ones(s, device=DEVICE) * 1 for s in shape))
         replay_buffer.append((torch.tensor([[2],[3]], device=DEVICE), ))
         assert torch.all(torch.eq(replay_buffer.storage[0].squeeze(), torch.tensor([1,2,3,0,0,0], device=DEVICE)))
+        assert np.all(replay_buffer.sum_tree == np.array([3,3,0,2,1,0,0,1,1,1,0,0,0]))
+        replay_buffer.sample(3)
         assert np.all(replay_buffer.sum_tree == np.array([9,9,0,5,4,0,0,2,3,4,0,0,0]))
 
         assert replay_buffer._get(np.array([2.0]))[0] == 0
         assert replay_buffer._get(np.array([6.0]))[0] == 2
 
-        replay_buffer.sample(2)

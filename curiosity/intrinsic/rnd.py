@@ -39,7 +39,7 @@ class RandomNetworkDistillation(nn.Module):
     def _update(self, s_1: Tensor, weights: Tensor):
         random_embedding = self.target_net(s_1)
         predicted_embedding = self.predictor_net(s_1)
-        weights = weights.unsqueeze(1)
+        weights = weights.unsqueeze(-1)
     
         self._optim.zero_grad()
         loss = torch.mean(((random_embedding - predicted_embedding) * weights)**2)

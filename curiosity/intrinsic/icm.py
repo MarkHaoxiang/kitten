@@ -90,7 +90,7 @@ class IntrinsicCuriosityModule(nn.Module, IntrinsicReward):
     def _calc_loss(self, s_0: torch.Tensor, s_1: torch.Tensor, a: torch.Tensor, weights: torch.Tensor):
         pred_phi_1 = self.forward_model(s_0, a)
         true_phi_1 = self.feature_net(s_1)
-        weights = weights.unsqueeze(1)
+        weights = weights.unsqueeze(-1)
         forward_loss = 0.5 * torch.mean(((true_phi_1-pred_phi_1) * weights) ** 2)
         self.info["forward_loss"] = forward_loss.item()
         pred_a = self.inverse_model(s_0, s_1)

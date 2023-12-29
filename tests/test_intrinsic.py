@@ -68,4 +68,4 @@ class TestIntrinsicCuriosityModule:
         assert r_i.shape == batch_size, f"Reward shape {r_i.shape} should match batch size {batch_size}"
 
         # Loss
-        icm.update(Transition(s_0, a, None, s_1, None), torch.ones(s_0.shape[0]), step=0)
+        icm.update(Transition(s_0, a, None, s_1, None), torch.ones(batch_size), step=0)
