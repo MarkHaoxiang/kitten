@@ -3,7 +3,7 @@ from typing import Optional, Tuple
 import torch
 import torch.nn as nn
 from torch import Tensor
-from curiosity.curiosity.experience import Transition
+from curiosity.experience import Transition
 
 from curiosity.nn import AddTargetNetwork
 from curiosity.rl.ddpg import DeepDeterministicPolicyGradient
@@ -12,9 +12,9 @@ class TwinDelayedDeepDeterministicPolicyGradient(DeepDeterministicPolicyGradient
     """ TD3
     """
     def __init__(self,
-                 actor: nn.Module,
-                 critic_1: nn.Module,
-                 critic_2: nn.Module,
+                 actor_network: nn.Module,
+                 critic_1_network: nn.Module,
+                 critic_2_network: nn.Module,
                  env_action_scale,
                  env_action_min,
                  env_action_max,
@@ -42,8 +42,8 @@ class TwinDelayedDeepDeterministicPolicyGradient(DeepDeterministicPolicyGradient
             device (str, optional): Training hardware. Defaults to "cpu".
         """
         super().__init__(
-            actor=actor,
-            critic=critic_1,
+            actor=actor_network,
+            critic=critic_1_network,
             gamma=gamma,
             lr=lr,
             tau=tau,
@@ -51,7 +51,7 @@ class TwinDelayedDeepDeterministicPolicyGradient(DeepDeterministicPolicyGradient
             device=device
         )
         self.critic_1 = self.critic
-        self.critic_2 = AddTargetNetwork(critic_2, device=device)
+        self.critic_2 = AddTargetNetwork(critic_2_network, device=device)
         self.target_noise = target_noise
         self.target_noise_clip = target_noise_clip
 

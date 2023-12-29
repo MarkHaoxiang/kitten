@@ -3,7 +3,8 @@ import pytest
 import torch
 import torch.nn as nn
 
-from curiosity.world import IntrinsicCuriosityModule
+from curiosity.intrinsic.icm import IntrinsicCuriosityModule
+from curiosity.experience import Transition
 
 DEVICE = 'cpu'
 torch.manual_seed(0)
@@ -67,5 +68,4 @@ class TestIntrinsicCuriosityModule:
         assert r_i.shape == batch_size, f"Reward shape {r_i.shape} should match batch size {batch_size}"
 
         # Loss
-        loss = icm.calc_loss(s_0, s_1, a)
-        loss.backward()
+        icm.update(Transition(s_0, a, None, s_1, None), torch.ones(s_0.shape[0]), step=0)

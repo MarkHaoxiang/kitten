@@ -1,7 +1,10 @@
 import torch
+from torch import Tensor
 import torch.nn as nn
+from curiosity.experience import Transition
 
-class IntrinsicCuriosityModule(nn.Module):
+from curiosity.intrinsic.intrinsic import IntrinsicReward
+class IntrinsicCuriosityModule(nn.Module, IntrinsicReward):
     """ Intrinsic curiosity, intrinsic reward
 
     Pathak et al. https://arxiv.org/pdf/1705.05363.pdf
@@ -14,7 +17,8 @@ class IntrinsicCuriosityModule(nn.Module):
                  eta: float = 0.01,
                  beta: float = 0.2,
                  lr: float = 1e-3,
-                 discrete_action_space: bool = False):
+                 discrete_action_space: bool = False,
+                 **kwargs):
         """ Creates the intrinsic curiosity module
 
         Args:
@@ -86,6 +90,7 @@ class IntrinsicCuriosityModule(nn.Module):
     def _calc_loss(self, s_0: torch.Tensor, s_1: torch.Tensor, a: torch.Tensor, weights: torch.Tensor):
         pred_phi_1 = self.forward_model(s_0, a)
         true_phi_1 = self.feature_net(s_1)
+        weights = weights.unsqueeze(1)
         forward_loss = 0.5 * torch.mean(((true_phi_1-pred_phi_1) * weights) ** 2)
         self.info["forward_loss"] = forward_loss.item()
         pred_a = self.inverse_model(s_0, s_1)
@@ -96,11 +101,17 @@ class IntrinsicCuriosityModule(nn.Module):
             self.info["inverse_loss"] = inverse_loss.item()
         return forward_loss * self.beta + inverse_loss * (1-self.beta) 
 
-    def update(self, s_0: torch.Tensor, s_1: torch.Tensor, a: torch.Tensor, weights: torch.Tensor):
+    def _update(self, s_0: torch.Tensor, s_1: torch.Tensor, a: torch.Tensor, weights: torch.Tensor):
         self._optim.zero_grad()
         loss = self._calc_loss(s_0, s_1, a, weights)
         loss.backward()
         self._optim.step()
+
+    def update(self, batch: Transition, weights: Tensor, step: int):
+        return self._update(batch.s_0, batch.s_1, batch.a, weights)
+
+    def reward(self, batch: Transition):
+        return self.forward(batch.s_0, batch.s_1, batch.a)
 
     def get_log(self):
         return self.info

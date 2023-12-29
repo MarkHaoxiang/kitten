@@ -1,10 +1,11 @@
+defaults:
+  - _self_
+  - algorithm: ddpg
+  - memory: er
+
 seed: 0
 env:
   name: Pendulum-v1
-actor:
-  features: 128
-critic:
-  features: 128
 log:
   name: false
   frames_per_epoch: 100
@@ -18,35 +19,12 @@ log:
   checkpoint:
     enable: true
     frames_per_checkpoint: 10000
-memory:
-  capacity: 10000
-  type: prioritized_experience_replay
-  alpha: 0.6
-  epsilon: 0.1
-  beta_0: 0.4
-  beta_annealing_steps: 50000
 train:
   initial_collection_size: 1000
   total_frames: 50000
   minibatch_size: 128
-ddpg:
-  gamma: 0.99
-  tau: 0.005
-  lr: 0.0003
-  update_frequency: 1
-td3:
-  gamma: 0.99
-  tau: 0.005
-  lr: 0.0003
-  target_noise: 0.1
-  target_noise_clip: 0.2
-  critic_update_frequency: 1
-  policy_update_frequency: 2
-icm:
-  encoding_size: 32
-  eta: 1
-  beta: 0.2
-  lr: 0.0003
+intrinsic:
+  type: false
 noise:
   scale: 0.1
   beta: 1

@@ -15,8 +15,8 @@ class DeepDeterministicPolicyGradient(Algorithm):
     """
 
     def __init__(self,
-                 actor: nn.Module,
-                 critic: nn.Module,
+                 actor_network: nn.Module,
+                 critic_network: nn.Module,
                  gamma: float = 0.99,
                  lr: float = 1e-3,
                  tau: float = 0.005,
@@ -35,8 +35,8 @@ class DeepDeterministicPolicyGradient(Algorithm):
             policy_improvement_frequency (int): Steps between policy improvement.
             device (str, optional): Training hardware. Defaults to "cpu".
         """
-        self.actor = AddTargetNetwork(actor, device=device)
-        self.critic = AddTargetNetwork(critic, device=device)
+        self.actor = AddTargetNetwork(actor_network, device=device)
+        self.critic = AddTargetNetwork(critic_network, device=device)
         self.device = device
 
         self._gamma = gamma

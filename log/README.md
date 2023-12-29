@@ -1,1 +1,0 @@
-Generated logs and checkpoints

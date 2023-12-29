@@ -8,8 +8,7 @@ from tqdm import tqdm
 from curiosity.experience import Transition
 from curiosity.experience.util import build_collector, build_replay_buffer
 from curiosity.policy import ColoredNoisePolicy
-from curiosity.rl.ddpg import DeepDeterministicPolicyGradient
-from curiosity.util import build_env, build_actor, build_critic, global_seed
+from curiosity.util import build_env, build_rl, build_intrinsic, global_seed
 from curiosity.logging import CuriosityEvaluator, CuriosityLogger
 
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -20,23 +19,27 @@ def train(cfg: DictConfig) -> None:
     env = build_env(cfg.env)
 
     # Logging and Evaluation
-    logger, evaluator = CuriosityLogger(cfg, "ddpg"), CuriosityEvaluator(env, device=DEVICE, **cfg.log.evaluation)
+    logger = CuriosityLogger(cfg, cfg.algorithm.type, path=hydra.core.hydra_config.HydraConfig.get().runtime.output_dir)
+    evaluator = CuriosityEvaluator(env, device=DEVICE, **cfg.log.evaluation)
 
     # RNG
     rng = global_seed(cfg.seed, env, evaluator)
 
     # Define actor-critic policy
-    algorithm = DeepDeterministicPolicyGradient(build_actor(env, **cfg.actor), build_critic(env, **cfg.critic), device=DEVICE, **cfg.ddpg)
+    algorithm = build_rl(env, cfg.algorithm, device=DEVICE)
     policy = ColoredNoisePolicy(algorithm.actor, env.action_space, env.spec.max_episode_steps, rng=rng, device=DEVICE, **cfg.noise)
 
+    # Define intrinsic reward
+    intrinsic = build_intrinsic(env, cfg.intrinsic, device=DEVICE)
+
     # Data pipeline
-    memory = build_replay_buffer(env, device=DEVICE, error_fn=lambda x: torch.abs(algorithm.td_error(*x)).detach().cpu().numpy(), **cfg.memory)
+    memory = build_replay_buffer(env, error_fn=lambda x: torch.abs(algorithm.td_error(*x)).detach().cpu().numpy(), device=DEVICE, **cfg.memory)
     collector = build_collector(policy, env, memory, device=DEVICE)
     evaluator.policy = policy
 
     # Register logging and checkpoints
     logger.register_models([(algorithm.actor.net, "actor"), (algorithm.critic.net, "critic")])
-    logger.register_providers([(algorithm, "train"), (collector, "collector"), (evaluator, "evaluation"), (memory, "memory")])
+    logger.register_providers([(algorithm, "train"), (intrinsic, "intrinsic"), (collector, "collector"), (evaluator, "evaluation"), (memory, "memory")])
 
     # Training Loop
     pbar = tqdm(total=cfg.train.total_frames // cfg.log.frames_per_epoch, file=sys.stdout)
@@ -47,6 +50,11 @@ def train(cfg: DictConfig) -> None:
         # RL Update
         batch, weights = memory.sample(cfg.train.minibatch_size)
         batch = Transition(*batch)
+            # Intrinsic Update
+        r_t = batch.r + intrinsic.reward(batch)
+        intrinsic.update(batch, weights, step=step)
+        batch = Transition(batch.s_0, batch.a, r_t, batch.s_1, batch.d)
+            # Algorithm Update
         algorithm.update(batch, weights, step=step)
 
         # Epoch Logging

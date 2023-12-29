@@ -1,5 +1,4 @@
-from abc import ABC
-from typing import Dict, Optional
+from typing import Optional
 import random
 
 import gymnasium as gym
@@ -11,12 +10,42 @@ import torch
 import torch.nn as nn
 
 from curiosity.nn import ClassicalBoxActor
+from curiosity.intrinsic.intrinsic import IntrinsicReward, NoIntrinsicReward
 from curiosity.intrinsic.icm import IntrinsicCuriosityModule
+from curiosity.intrinsic.rnd import RandomNetworkDistillation
+from curiosity.rl.ddpg import DeepDeterministicPolicyGradient
+from curiosity.rl.td3 import TwinDelayedDeepDeterministicPolicyGradient
 
 def build_env(environment_configuration):
     env = AutoResetWrapper(gym.make(environment_configuration.name, render_mode="rgb_array"))
     env.reset()
     return env
+
+def build_rl(env, algorithm_configuration, device: str) -> IntrinsicReward:
+    if algorithm_configuration.type == "ddpg":
+        return DeepDeterministicPolicyGradient(
+            build_actor(env, **algorithm_configuration.actor),
+            build_critic(env, **algorithm_configuration.critic),
+            device=device,
+            **algorithm_configuration
+        )
+    elif algorithm_configuration.type =="td3":
+        env_action_scale = torch.tensor(env.action_space.high-env.action_space.low, device=device) / 2.0
+        env_action_min = torch.tensor(env.action_space.low, dtype=torch.float32, device=device)
+        env_action_max = torch.tensor(env.action_space.high, dtype=torch.float32, device=device)
+        return TwinDelayedDeepDeterministicPolicyGradient(
+            build_actor(env, **algorithm_configuration.actor),
+            build_critic(env, **algorithm_configuration.critic),
+            build_critic(env, **algorithm_configuration.critic),
+            device=device,
+            env_action_scale=env_action_scale,
+            env_action_min=env_action_min,
+            env_action_max=env_action_max,
+            **algorithm_configuration.td3
+        )
+    elif algorithm_configuration.type == "dqn":
+        raise NotImplementedError()
+    raise ValueError("Reinforcement learning algorithm type not valid")
 
 def build_actor(env: Env, features: int = 128) -> nn.Module:
     """Builds an actor for gym environment
@@ -107,6 +136,14 @@ def build_critic(env: Env, features: int) -> nn.Module:
 
     return result
 
+
+def build_intrinsic(env, intrinsic_configuration, device: str) -> IntrinsicReward:
+    if intrinsic_configuration.type == "icm":
+        return build_icm(env=env, device=device, **intrinsic_configuration)
+    elif intrinsic_configuration.type =="rnd":
+        return build_rnd(env=env, device=device, **intrinsic_configuration)
+    return NoIntrinsicReward()
+
 def build_icm(env: Env, encoding_size: int, device: str, clip_grad_norm: Optional[float] = 1, **kwargs):
     """ Builds a default intrinsic curiosity module
     Args:
@@ -137,9 +174,23 @@ def build_icm(env: Env, encoding_size: int, device: str, clip_grad_norm: Optiona
     ).to(device=device)
 
     result =  IntrinsicCuriosityModule(feature_net, forward_head, inverse_head, discrete_action_space=False, **kwargs)
-    if not clip_grad_norm is None:
-        nn.utils.clip_grad_norm_(result.parameters(), clip_grad_norm)
     return result
+
+def build_rnd(env: Env, encoding_size: int, device:str, lr: float = 1e-3, **kwargs):
+    obs_size = env.observation_space.shape[0]
+    target_net = nn.Sequential(
+        nn.Linear(in_features=obs_size, out_features=encoding_size),
+        nn.LeakyReLU(),
+        nn.Linear(in_features=encoding_size, out_features=encoding_size),
+        nn.LeakyReLU()
+    ).to(device=device)
+    predictor_net = nn.Sequential(
+        nn.Linear(in_features=obs_size, out_features=encoding_size),
+        nn.LeakyReLU(),
+        nn.Linear(in_features=encoding_size, out_features=encoding_size),
+        nn.LeakyReLU()
+    ).to(device=device)
+    return RandomNetworkDistillation(target_net, predictor_net, lr)
 
 def global_seed(seed: int, *envs):
     """ Utility to help set determinism
