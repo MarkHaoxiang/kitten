@@ -6,7 +6,3 @@ target_noise: 0.1
 target_noise_clip: 0.2
 critic_update_frequency: 1
 policy_update_frequency: 2
-actor:
-  features: 128
-critic:
-  features: 128

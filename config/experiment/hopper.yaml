@@ -1,21 +1,21 @@
 # @package _global_
 env:
-  name: Pendulum-v1
+  name: Hopper-v4
 log:
-  frames_per_epoch: 100
+  frames_per_epoch: 1000
   checkpoint:
     enable: true
     frames_per_checkpoint: 10000
   video:
-    frames_per_video: 10000
+    enable: false
 train:
-  initial_collection_size: 1000
-  total_frames: 50000
-  minibatch_size: 128
+  initial_collection_size: 100000
+  total_frames: 1000000
+  minibatch_size: 512
 algorithm:
   actor:
     features: 128
   critic:
     features: 128
 memory:  
-  capacity: 10000
+  capacity: 1000000

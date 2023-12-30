@@ -6,7 +6,16 @@ log:
   checkpoint:
     enable: true
     frames_per_checkpoint: 10000
+  video:
+    frames_per_video: 10000
 train:
   initial_collection_size: 1000
   total_frames: 50000
   minibatch_size: 128
+algorithm:
+  actor:
+    features: 128
+  critic:
+    features: 128
+memory:  
+  capacity: 10000

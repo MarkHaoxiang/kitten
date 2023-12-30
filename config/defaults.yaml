@@ -13,5 +13,4 @@ log:
     evaluation_repeats: 10
     video:
       enable: false
-      frames_per_video: false
       path: 

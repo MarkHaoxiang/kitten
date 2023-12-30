@@ -5,7 +5,7 @@ import torch.nn as nn
 from curiosity.intrinsic.intrinsic import IntrinsicReward
 from curiosity.experience import Transition
 
-class RandomNetworkDistillation(nn.Module):
+class RandomNetworkDistillation(nn.Module, IntrinsicReward):
     """ Exploration by Random Network Distillation
 
     Burda et al. https://arxiv.org/pdf/1810.12894.pdf
@@ -18,8 +18,6 @@ class RandomNetworkDistillation(nn.Module):
         super().__init__()
         self.target_net = target_net
         self.predictor_net = predictor_net
-        self.info = {}
-
         self._optim = torch.optim.Adam(params=self.predictor_net.parameters(), lr=lr)
 
     def forward(self, s_1: Tensor) -> Tensor:
@@ -50,8 +48,5 @@ class RandomNetworkDistillation(nn.Module):
     def update(self, batch: Transition, weights: Tensor, step: int):
         return self._update(batch.s_1, weights)
 
-    def reward(self, batch: Transition):
+    def _reward(self, batch: Transition):
         return self.forward(batch.s_1)
-
-    def get_log(self):
-        return self.info

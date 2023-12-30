@@ -3,7 +3,3 @@ gamma: 0.99
 tau: 0.005
 lr: 0.0003
 update_frequency: 1
-actor:
-  features: 128
-critic:
-  features: 128

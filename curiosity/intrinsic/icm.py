@@ -4,7 +4,7 @@ import torch.nn as nn
 from curiosity.experience import Transition
 
 from curiosity.intrinsic.intrinsic import IntrinsicReward
-class IntrinsicCuriosityModule(nn.Module, IntrinsicReward):
+class IntrinsicCuriosityModule(IntrinsicReward, nn.Module):
     """ Intrinsic curiosity, intrinsic reward
 
     Pathak et al. https://arxiv.org/pdf/1705.05363.pdf
@@ -35,7 +35,6 @@ class IntrinsicCuriosityModule(nn.Module, IntrinsicReward):
         self.eta = eta
         self.beta = beta
         self.discrete = discrete_action_space
-        self.info = {}
         if self.discrete:
             raise NotImplementedError("Not yet implemented for discrete action space")
         self._optim = torch.optim.Adam(params=self.parameters(), lr=lr)
@@ -110,8 +109,5 @@ class IntrinsicCuriosityModule(nn.Module, IntrinsicReward):
     def update(self, batch: Transition, weights: Tensor, step: int):
         return self._update(batch.s_0, batch.s_1, batch.a, weights)
 
-    def reward(self, batch: Transition):
+    def _reward(self, batch: Transition):
         return self.forward(batch.s_0, batch.s_1, batch.a)
-
-    def get_log(self):
-        return self.info
