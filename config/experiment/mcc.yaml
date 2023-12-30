@@ -1,0 +1,12 @@
+# @package _global_
+env:
+  name: MountainCarContinuous-v0
+log:
+  frames_per_epoch: 100
+  checkpoint:
+    enable: true
+    frames_per_checkpoint: 10000
+train:
+  initial_collection_size: 1000
+  total_frames: 50000
+  minibatch_size: 128

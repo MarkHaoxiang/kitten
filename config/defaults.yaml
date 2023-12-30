@@ -2,30 +2,16 @@ defaults:
   - _self_
   - algorithm: ddpg
   - memory: er
+  - intrinsic: none
+  - noise: white
 
 seed: 0
-env:
-  name: Pendulum-v1
 log:
   name: false
-  frames_per_epoch: 100
   wandb: false
   evaluation:
     evaluation_repeats: 10
     video:
       enable: false
-      frames_per_video: 10000
-      path:
-  checkpoint:
-    enable: true
-    frames_per_checkpoint: 10000
-train:
-  initial_collection_size: 1000
-  total_frames: 50000
-  minibatch_size: 128
-intrinsic:
-  type: false
-noise:
-  scale: 0.1
-  beta: 1
-
+      frames_per_video: false
+      path: 
