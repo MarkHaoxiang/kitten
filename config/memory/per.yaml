@@ -2,4 +2,4 @@ type: prioritized_experience_replay
 alpha: 0.6
 epsilon: 0.1
 beta_0: 0.4
-beta_annealing_steps: 50000
+beta_annealing_steps: ???

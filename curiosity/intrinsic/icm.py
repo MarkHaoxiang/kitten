@@ -14,7 +14,7 @@ class IntrinsicCuriosityModule(IntrinsicReward, nn.Module):
                  feature_net: nn.Module,
                  forward_head: nn.Module,
                  inverse_head: nn.Module,
-                 eta: float = 0.01,
+                 eta: float = 1,
                  beta: float = 0.2,
                  lr: float = 1e-3,
                  discrete_action_space: bool = False,

@@ -234,4 +234,5 @@ class PrioritizedReplayBuffer(ReplayBuffer):
         log["total_priority"] = self.sum_tree[0]
         log["maximum_priority"] = self._maximum_priority
         log["mean_batch_error"] = self.mean_batch_error
+        log["beta"] = self.beta_0 + (self.timestep / self.beta_annealing_steps) * (1-self.beta_0)
         return log

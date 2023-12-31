@@ -5,7 +5,7 @@ import torch.nn as nn
 from curiosity.intrinsic.intrinsic import IntrinsicReward
 from curiosity.experience import Transition
 
-class RandomNetworkDistillation(nn.Module, IntrinsicReward):
+class RandomNetworkDistillation(IntrinsicReward, nn.Module):
     """ Exploration by Random Network Distillation
 
     Burda et al. https://arxiv.org/pdf/1810.12894.pdf

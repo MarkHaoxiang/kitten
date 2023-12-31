@@ -17,13 +17,11 @@ class IntrinsicReward(Loggable, ABC):
         """ Calculates the intrinsic exploration reward
 
         Args:
-            batch (Transition): _description_
-
-        Raises:
-            NotImplementedError: _description_
+            batch (Transition): Batch of transition tuples from experience
         """
         r_i = self._reward(batch)
-        self.info['r_i'] = r_i
+        self.info["mean_intrinsic_reward"] = torch.mean(r_i).item()
+        self.info["max_intrinsic_reward"] = torch.max(r_i).item()
         return r_i
 
     @abstractmethod

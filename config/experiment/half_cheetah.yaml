@@ -5,7 +5,7 @@ log:
   frames_per_epoch: 1000
   checkpoint:
     enable: true
-    frames_per_checkpoint: 10000
+    frames_per_checkpoint: 100000
   video:
     enable: false
 train:
@@ -19,3 +19,4 @@ algorithm:
     features: 128
 memory:  
   capacity: 1000000
+  beta_annealing_steps: 1000000

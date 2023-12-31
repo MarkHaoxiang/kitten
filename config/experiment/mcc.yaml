@@ -19,3 +19,4 @@ algorithm:
     features: 128
 memory:  
   capacity: 10000
+  beta_annealing_steps: 50000
