@@ -42,8 +42,8 @@ class TwinDelayedDeepDeterministicPolicyGradient(DeepDeterministicPolicyGradient
             device (str, optional): Training hardware. Defaults to "cpu".
         """
         super().__init__(
-            actor=actor_network,
-            critic=critic_1_network,
+            actor_network=actor_network,
+            critic_network=critic_1_network,
             gamma=gamma,
             lr=lr,
             tau=tau,
@@ -128,5 +128,9 @@ class TwinDelayedDeepDeterministicPolicyGradient(DeepDeterministicPolicyGradient
         if step % self._critic_update_frequency == 0:
             self.loss_critic_value = self._critic_update(*batch, weights)
         if step % self._policy_update_frequency == 0:
-            self.loss_actor_value = self._actor_update(*batch, weights)
+            self.loss_actor_value = self._actor_update(batch.s_0, weights)
+            self.critic_1.update_target_network(tau=self._tau)
+            self.critic_2.update_target_network(tau=self._tau)
+            self.actor.update_target_network(tau=self._tau)
+
         return self.loss_critic_value, self.loss_actor_value

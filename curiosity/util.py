@@ -41,7 +41,7 @@ def build_rl(env, algorithm_configuration, device: str) -> IntrinsicReward:
             env_action_scale=env_action_scale,
             env_action_min=env_action_min,
             env_action_max=env_action_max,
-            **algorithm_configuration.td3
+            **algorithm_configuration
         )
     elif algorithm_configuration.type == "dqn":
         raise NotImplementedError()
