@@ -1,10 +1,11 @@
 import random
 import pytest
+import unittest
 
 import torch
 import gymnasium as gym
 
-from curiosity.util import global_seed
+from curiosity.util import global_seed, RunningMeanVariance
 
 class TestDeterminism:
     @pytest.mark.parametrize("seed", [14,60])
@@ -27,8 +28,39 @@ class TestDeterminism:
         generated_2["env_space"] = env.action_space.sample()
 
         for (k, v) in generated_1.items():
-            print(v)
             try:
                 assert v == generated_2[k]
             except:
                 assert (v == generated_2[k]).all()
+
+class TestRunningMeanStd(unittest.TestCase):
+    def test_tensor(self):
+        torch.manual_seed(0)
+        stat = RunningMeanVariance()
+        data = torch.rand((7, 3, 2))
+
+        for x in data:
+            stat.add_tensor_batch(x)
+
+        data = data.reshape((data.shape[0] * data.shape[1], data.shape[-1]))
+        mean = data.mean(0)
+        assert torch.allclose(mean, stat.mean)
+        var = ((data - mean.unsqueeze(0))**2).sum(0) / (data.shape[0]-1)
+        assert torch.allclose(var, stat.var)
+
+    def test_number(self):
+        stat = RunningMeanVariance()
+        data = [random.random() for _ in range(10)]
+
+        # True    
+        mean = sum(data) / len(data)
+        var = 0
+        for x in data:
+            var += (x-mean)**2 / (len(data) - 1)
+
+        # Calculated
+        for x in data:
+            stat.add(x)
+
+        self.assertAlmostEqual(stat.mean, mean)
+        self.assertAlmostEqual(stat.var, var)

@@ -1,5 +1,4 @@
 import copy
-from typing import Union
 
 from gymnasium import Env
 import torch
