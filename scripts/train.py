@@ -8,7 +8,7 @@ from tqdm import tqdm
 from curiosity.experience import Transition
 from curiosity.experience.util import build_collector, build_replay_buffer
 from curiosity.policy import ColoredNoisePolicy
-from curiosity.util import build_env, build_rl, build_intrinsic, global_seed
+from curiosity.util.util import build_env, build_rl, build_intrinsic, global_seed
 from curiosity.logging import CuriosityEvaluator, CuriosityLogger
 
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -44,14 +44,15 @@ def train(cfg: DictConfig) -> None:
     # Training Loop
     pbar = tqdm(total=cfg.train.total_frames // cfg.log.frames_per_epoch, file=sys.stdout)
     collector.early_start(cfg.train.initial_collection_size)
-    for step in range(1,  cfg.train.total_frames+1):
+    intrinsic.initialise(Transition(*memory.sample(cfg.train.initial_collection_size)[0]))
+    for step in range(1, cfg.train.total_frames+1):
         collector.collect(n=1)
 
         # RL Update
         batch, weights = memory.sample(cfg.train.minibatch_size)
         batch = Transition(*batch)
             # Intrinsic Update
-        r_t = batch.r + intrinsic.reward(batch)
+        r_t, _, _ = intrinsic.reward(batch)
         intrinsic.update(batch, weights, step=step)
         batch = Transition(batch.s_0, batch.a, r_t, batch.s_1, batch.d)
             # Algorithm Update

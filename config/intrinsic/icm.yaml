@@ -1,5 +1,5 @@
 type: icm
 encoding_size: 32
-eta: 1
+int_coef: 1
 beta: 0.2
 lr: 0.0003

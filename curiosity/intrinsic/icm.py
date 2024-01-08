@@ -14,7 +14,6 @@ class IntrinsicCuriosityModule(IntrinsicReward, nn.Module):
                  feature_net: nn.Module,
                  forward_head: nn.Module,
                  inverse_head: nn.Module,
-                 eta: float = 1,
                  beta: float = 0.2,
                  lr: float = 1e-3,
                  discrete_action_space: bool = False,
@@ -25,14 +24,12 @@ class IntrinsicCuriosityModule(IntrinsicReward, nn.Module):
             feature_net (nn.Module): From observations to encodings
             forward_head (nn.Module): From encoding and action to encoding
             inverse_head (nn.Module): From two encodings to action
-            eta (float, optional): Intrinsic reward scaling factor. Default 0.01.
             beta (float, optional): Forward/Inverse loss scaling factor. Default 0.2.
         """
-        super().__init__()
+        super().__init__(**kwargs)
         self.feature_net = feature_net
         self.forward_head = forward_head
         self.inverse_head = inverse_head
-        self.eta = eta
         self.beta = beta
         self.discrete = discrete_action_space
         if self.discrete:
@@ -83,7 +80,7 @@ class IntrinsicCuriosityModule(IntrinsicReward, nn.Module):
         """
         pred_phi_1 = self.forward_model(s_0, a)
         true_phi_1 = self.feature_net(s_1)
-        r_i = torch.linalg.vector_norm(true_phi_1-pred_phi_1, dim=(-1)) * self.eta / 2
+        r_i = torch.linalg.vector_norm(true_phi_1-pred_phi_1, dim=(-1)) / 2
         return r_i
     
     def _calc_loss(self, s_0: torch.Tensor, s_1: torch.Tensor, a: torch.Tensor, weights: torch.Tensor):

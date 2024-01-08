@@ -5,7 +5,8 @@ import unittest
 import torch
 import gymnasium as gym
 
-from curiosity.util import global_seed, RunningMeanVariance
+from curiosity.util.util import global_seed
+from curiosity.util.stat import RunningMeanVariance
 
 class TestDeterminism:
     @pytest.mark.parametrize("seed", [14,60])

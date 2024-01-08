@@ -21,7 +21,7 @@ class IntrinsicCuriosityModule(IntrinsicReward):
                  **kwargs):
         """ Creates the disagreement module
         """
-        super().__init__()
+        super().__init__(**kwargs)
         self.feature_net = feature_net
         self.forward_heads = [build_forward_head() for _ in range(ensemble_number)]
         self.discrete = discrete_action_space

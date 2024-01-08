@@ -189,9 +189,6 @@ class CuriosityLogger:
         Args:
             kwargs (_type_): Passed to Wandb
         """
-        if not self.wandb_enable:
-            warnings.warn("Logging is not yet implemented without wandb")
-            return
         wandb.log(kwargs)
 
     def close(self):
