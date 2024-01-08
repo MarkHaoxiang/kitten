@@ -13,6 +13,7 @@ from curiosity.nn import ClassicalBoxActor
 from curiosity.intrinsic.intrinsic import IntrinsicReward, NoIntrinsicReward
 from curiosity.intrinsic.icm import IntrinsicCuriosityModule
 from curiosity.intrinsic.rnd import RandomNetworkDistillation
+from curiosity.intrinsic.disagreement import Disagreement
 from curiosity.rl.ddpg import DeepDeterministicPolicyGradient
 from curiosity.rl.td3 import TwinDelayedDeepDeterministicPolicyGradient
 
@@ -137,11 +138,13 @@ def build_critic(env: Env, features: int) -> nn.Module:
     return result
 
 
-def build_intrinsic(env, intrinsic_configuration, device: str) -> IntrinsicReward:
+def build_intrinsic(env, intrinsic_configuration, device: str = "cpu") -> IntrinsicReward:
     if intrinsic_configuration.type == "icm":
         return build_icm(env=env, device=device, **intrinsic_configuration)
     elif intrinsic_configuration.type =="rnd":
         return build_rnd(env=env, device=device, **intrinsic_configuration)
+    elif intrinsic_configuration.type =="disagreement":
+        return build_disagreement(env=env, device=device, **intrinsic_configuration)
     return NoIntrinsicReward()
 
 def build_icm(env: Env, encoding_size: int, device: str, clip_grad_norm: Optional[float] = 1, **kwargs):
@@ -176,7 +179,7 @@ def build_icm(env: Env, encoding_size: int, device: str, clip_grad_norm: Optiona
     result =  IntrinsicCuriosityModule(feature_net, forward_head, inverse_head, discrete_action_space=False, **kwargs)
     return result
 
-def build_rnd(env: Env, encoding_size: int, device:str, lr: float = 1e-3, **kwargs):
+def build_rnd(env: Env, encoding_size: int, lr: float = 1e-3, device: str = 'cpu', **kwargs):
     obs_size = env.observation_space.shape[0]
     target_net = nn.Sequential(
         nn.Linear(in_features=obs_size, out_features=encoding_size),
@@ -191,6 +194,20 @@ def build_rnd(env: Env, encoding_size: int, device:str, lr: float = 1e-3, **kwar
         nn.LeakyReLU()
     ).to(device=device)
     return RandomNetworkDistillation(target_net, predictor_net, lr)
+
+def build_disagreement(env: Env, encoding_size: int, lr: float = 1e-3, device: str = 'cpu', **kwargs):
+    obs_size = env.observation_space.shape[0]
+    action_size = env.action_space.shape[0]
+    # TODO: How to integrate different featurisers
+    def build_forward_head():
+        return nn.Sequential(
+            nn.Linear(in_features=obs_size + action_size, out_features=encoding_size),
+            nn.LeakyReLU(),
+            nn.Linear(in_features=encoding_size, out_features=encoding_size),
+            nn.LeakyReLU(),
+            nn.Linear(in_features=encoding_size, out_features=obs_size)
+        ).to(device=device)
+    return Disagreement(build_forward_head, feature_net= None, **kwargs)
 
 def global_seed(seed: int, *envs):
     """ Utility to help set determinism

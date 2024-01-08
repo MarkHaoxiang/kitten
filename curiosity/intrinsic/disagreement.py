@@ -6,7 +6,7 @@ import torch.nn as nn
 from curiosity.experience import Transition
 from curiosity.intrinsic.intrinsic import IntrinsicReward
 
-class IntrinsicCuriosityModule(IntrinsicReward):
+class Disagreement(IntrinsicReward):
     """ Self-Supervised Exploration via Disagreement
 
     Pathak et al. https://arxiv.org/pdf/1906.04161.pdf
@@ -35,11 +35,20 @@ class IntrinsicCuriosityModule(IntrinsicReward):
     def _forward_models(self, phi_0: torch.Tensor, a: torch.Tensor) -> torch.Tensor:
         """ Predicts next encodings
         """
-        batch_size = phi_0.shape[:-1]
-        return torch.stack([h(torch.cat((phi_0, a), len(batch_size)))for h in self.forward_heads])
+        return torch.stack([h(torch.cat((phi_0, a), -1)) for h in self.forward_heads])
 
-    def _featurise(self, s):
-        if self.feature_net is None:
+    def _featurise(self, s: Tensor) -> Tensor:
+        """ Encodes into a latent space
+
+        Ideally, the latent space should be easy to learn from and relevant to the goal
+
+        Args:
+            s (Tensor): Observations
+
+        Returns:
+            Tensor: Encoded states
+        """
+        if not self.feature_net is None:
             return self.feature_net(s)
         return s 
 
@@ -57,5 +66,5 @@ class IntrinsicCuriosityModule(IntrinsicReward):
     def _reward(self, batch: Transition):
         phi_0 = self._featurise(batch.s_0)
         pred_phi_1 = self._forward_models(phi_0, batch.a)
-        r_i = torch.mean(torch.var(pred_phi_1, dim=0))
+        r_i = torch.mean(torch.var(pred_phi_1, dim=0), dim=-1)
         return r_i

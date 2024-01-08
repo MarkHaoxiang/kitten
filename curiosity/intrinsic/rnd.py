@@ -47,7 +47,7 @@ class RandomNetworkDistillation(IntrinsicReward, nn.Module):
 
         random_embedding = self.target_net(s_1)
         predicted_embedding = self.predictor_net(s_1)
-        r_i = ((random_embedding - predicted_embedding)**2).sum(-1) / 2
+        r_i = ((random_embedding - predicted_embedding)**2).mean(-1)
         return r_i
 
     def update(self, batch: Transition, weights: Tensor, step: int):
