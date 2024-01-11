@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 from torch import Tensor
 
-from curiosity.curiosity.experience import Transition
+from curiosity.curiosity.experience import AuxiliaryMemoryData, Transition
 from curiosity.rl.rl import Algorithm
 
 from curiosity.nn import AddTargetNetwork
@@ -39,10 +39,10 @@ class DQN(Algorithm):
 
         return y-x
 
-    def update(self, batch: Transition, weights: Tensor, step: int):
+    def update(self, batch: Transition, aux: AuxiliaryMemoryData, step: int):
         if step % self._update_frequency == 0:
             self._optim.zero_grad()
-            loss = torch.mean((self.td_error(*batch) * weights)**2)
+            loss = torch.mean((self.td_error(*batch) * aux.weights)**2)
             self.loss_critic_value = loss.item()
             loss.backward()
             self._optim.step()

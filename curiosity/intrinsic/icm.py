@@ -1,7 +1,7 @@
 import torch
 from torch import Tensor
 import torch.nn as nn
-from curiosity.experience import Transition
+from curiosity.experience import AuxiliaryMemoryData, Transition
 
 from curiosity.intrinsic.intrinsic import IntrinsicReward
 class IntrinsicCuriosityModule(IntrinsicReward, nn.Module):
@@ -103,8 +103,8 @@ class IntrinsicCuriosityModule(IntrinsicReward, nn.Module):
         loss.backward()
         self._optim.step()
 
-    def update(self, batch: Transition, weights: Tensor, step: int):
-        return self._update(batch.s_0, batch.s_1, batch.a, weights)
+    def update(self, batch: Transition, aux: AuxiliaryMemoryData, step: int):
+        return self._update(batch.s_0, batch.s_1, batch.a, aux.weights)
 
     def _reward(self, batch: Transition):
         return self.forward(batch.s_0, batch.s_1, batch.a)

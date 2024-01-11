@@ -3,7 +3,7 @@ from abc import ABC, abstractmethod
 import torch
 from torch import Tensor
 
-from curiosity.experience import Transition
+from curiosity.experience import AuxiliaryMemoryData, Transition
 from curiosity.logging import Loggable
 
 class IntrinsicReward(Loggable, ABC):
@@ -24,6 +24,7 @@ class IntrinsicReward(Loggable, ABC):
         r_i = self._reward(batch)
         self.info["mean_intrinsic_reward"] = torch.mean(r_i).item()
         self.info["max_intrinsic_reward"] = torch.max(r_i).item()
+        self.info["mean_extrinsic_reward"] = torch.mean(batch.r)
         return (
             batch.r * self._ext_coef + r_i * self._int_coef, # Total Reward
             batch.r * self._ext_coef,                        # Extrinsic Reward (Scaled)
@@ -34,7 +35,7 @@ class IntrinsicReward(Loggable, ABC):
     def _reward(self, batch: Transition):
         raise NotImplementedError
 
-    def update(self, batch: Transition, weights: Tensor, step: int):
+    def update(self, batch: Transition, aux: AuxiliaryMemoryData, step: int):
         """ Intrinsic reward module update
 
         Args:

@@ -3,7 +3,6 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import List, Optional
 
-
 import gymnasium as gym
 from gymnasium.wrappers.autoreset import AutoResetWrapper
 import torch
@@ -105,4 +104,3 @@ class GymCollector(DataCollector):
         return {
             "frame": self.frame
         }
-

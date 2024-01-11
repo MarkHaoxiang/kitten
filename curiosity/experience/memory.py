@@ -1,11 +1,18 @@
 from typing import Optional, Sequence, Union, Callable, Tuple
-import random
+from collections import namedtuple
 
 import numpy as np
 import torch
 from torch import Tensor
 
 from curiosity.logging import Loggable
+
+# Auxiliary information contained on retrieval from memory
+AuxiliaryMemoryData = namedtuple('AuxiliaryMemoryData', [
+    "weights", # Recommended importance weighting to match memory data distribution
+    "random",  # Random number associated with sample - eg. for bootstrapping split
+    "indices", # Index of sample within memory 
+])
 
 class ReplayBuffer(Loggable):
     """ Store history of episode transitions
@@ -30,27 +37,34 @@ class ReplayBuffer(Loggable):
             self.storage = [torch.zeros((capacity, *s), device=self.device, dtype=dtype[i]) for i, s in enumerate(shape)]
         else:
             self.storage = [torch.zeros((capacity, *s), device=self.device, dtype=dtype) for s in shape]
+        self._random = torch.zeros(capacity, device=self.device)
         self._append_index = 0 # Position of next tensor to be inserted
         self._full = False # Bookmark to check if storage has looped around
 
-    def append(self, inputs: tuple[Tensor], **kwargs) -> int:
+    def append(self, inputs: Tuple[Tensor], **kwargs) -> int:
         """ Add a transition experience to the buffer
 
         Args:
-            inputs (Tensor): A tensor of size (types of experiences) containing (batch_size, experience data)
+            inputs (Tuple[Tensor): A tuple of size (types of experiences) containing (batch_size, experience data)
 
         Returns:
             (int): Number of inserted elements.
         """
         inputs = self._append_preprocess(inputs)
-        n_insert_unclipped = None
-        n_insert = None
+        n_insert_unclipped = len(inputs[0])
+        n_insert = min(n_insert_unclipped, self.capacity) 
+        # Update Random IDs
+        random_ids = torch.rand(n_insert, device=self.device)
+        if n_insert + self._append_index <= self.capacity:
+            self._random[self._append_index:self._append_index+n_insert] = random_ids
+        else:
+            self._random[self._append_index:self.capacity+1] = random_ids[:self.capacity-self._append_index]
+            self._random[:n_insert+self._append_index-self.capacity] = random_ids[self.capacity-self._append_index:]
+
+        # Update Data
         for i in range(self.N):
             x = inputs[i]
-            if n_insert is None:
-                n_insert_unclipped = len(x)
-                n_insert = min(len(x), self.capacity)
-            elif len(x) != n_insert_unclipped:
+            if len(x) != n_insert_unclipped:
                 raise ValueError(f"Input is jagged, expected batch of {n_insert_unclipped} but got {len(x)}")
             # Flatten batch
             x = torch.flatten(x, end_dim=-len(x.shape))
@@ -62,13 +76,14 @@ class ReplayBuffer(Loggable):
                 self.storage[i][self._append_index:self.capacity+1] = x[:self.capacity-self._append_index]
                 self.storage[i][:n_insert+self._append_index-self.capacity] = x[self.capacity-self._append_index:]
 
+        # Update internal state
         self._append_index += n_insert
         if self._append_index >= self.capacity:
             self._full = True
         self._append_index = self._append_index % self.capacity
         return n_insert
 
-    def _append_preprocess(self, inputs: tuple[Tensor]):
+    def _append_preprocess(self, inputs: Tuple[Tensor]):
         """ Utility to transform new transitions into expected format before entry
         """
         res = []
@@ -83,27 +98,26 @@ class ReplayBuffer(Loggable):
             res.append(x)
         return res
 
-    def sample(self,
-               n: int,
-               continuous: bool = False) -> Tuple[torch.Tensor]:
+    def sample(self, n: int) -> Tuple[Tuple, AuxiliaryMemoryData]:
         """ Sample from the replay buffer
 
         Args:
             n (int): number of samples
-            continuous (bool, optional): If true, samples are ordered as the order they are inserted. Defaults to True.
-
         Returns:
             Tuple[Tensor]: sampled elements
-            Tensor: recommended importance weightings
+            AuxiliaryMemoryData
         """
         if n > len(self):
             raise ValueError(f"Trying to sample {n} values but only {len(self)} available")
-        if continuous:
-            start = random.randint(0, len(self)-n)
-            return tuple(self.storage[i][start:start+n] for i in range(self.N))
-        else:
-            indices = random.sample(range(len(self)), n)
-            return self._fetch_storage(indices), torch.ones(n, device=self.device)
+        indices = torch.randint(0, len(self), (n,), device=self.device)
+        return (
+            self._fetch_storage(indices),
+            AuxiliaryMemoryData(
+                weights=torch.ones(n, device=self.device),
+                random=self._random[indices].to(self.device),
+                indices=indices
+            )
+        )
 
     def get_log(self):
         return {"size": len(self)}
@@ -147,7 +161,7 @@ class PrioritizedReplayBuffer(ReplayBuffer):
         # Logging
         self.mean_batch_error = 0
 
-    def append(self, inputs: tuple[Tensor], update: bool= True) -> None:
+    def append(self, inputs: Tuple[Tensor], update: bool= True) -> None:
         """ Add transitions to the replay buffer
 
         Args:
@@ -162,12 +176,10 @@ class PrioritizedReplayBuffer(ReplayBuffer):
             j = i % self.capacity
             self._sift_up(self._maximum_priority, j)
 
-    def sample(self, n: int, continuous: bool = False) -> tuple[Tensor]:
+    def sample(self, n: int) -> Tuple[Tuple, AuxiliaryMemoryData]:
         # Invariant checks
         if n > len(self):
             return ValueError(f"Trying to sample {n} values but only {len(self)} available")
-        if continuous:
-            raise NotImplementedError("Continuous samples not implemented with priority")
 
         # Select random priorities from evenly spaced buckets
         priority_sum = self.sum_tree[0]
@@ -176,6 +188,7 @@ class PrioritizedReplayBuffer(ReplayBuffer):
 
         # Transform priorities to indices
         selection = self._get(selection)
+        selection = torch.tensor(selection, device=self.device)
 
         # Calculate Weightings
             # Annealing
@@ -198,7 +211,10 @@ class PrioritizedReplayBuffer(ReplayBuffer):
             self._sift_up(priorities[i], j)
 
         # Transform indices to result tuples
-        return results, w
+        return (
+            results,
+            AuxiliaryMemoryData(w, self._random[selection], selection)
+        )
 
     def _calculate_priority(self, error):
         return (error + self.epsilon) ** self.alpha 

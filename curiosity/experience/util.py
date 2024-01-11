@@ -1,6 +1,6 @@
 from typing import Optional, Callable
-
 from collections import namedtuple
+
 import torch
 from gymnasium import Env
 from gymnasium.spaces.discrete import Discrete
@@ -8,6 +8,7 @@ from gymnasium.spaces.discrete import Discrete
 from .memory import ReplayBuffer, PrioritizedReplayBuffer
 from .collector import DataCollector, GymCollector
 
+# A class representing a standard Markov Decision Process Transition
 Transition = namedtuple('Transition', ["s_0", "a", "r", "s_1", "d"])
 
 def build_replay_buffer(env: Env,

@@ -14,6 +14,7 @@ from curiosity.intrinsic.intrinsic import IntrinsicReward, NoIntrinsicReward
 from curiosity.intrinsic.icm import IntrinsicCuriosityModule
 from curiosity.intrinsic.rnd import RandomNetworkDistillation
 from curiosity.intrinsic.disagreement import Disagreement
+from curiosity.rl.rl import Algorithm
 from curiosity.rl.ddpg import DeepDeterministicPolicyGradient
 from curiosity.rl.td3 import TwinDelayedDeepDeterministicPolicyGradient
 
@@ -22,7 +23,7 @@ def build_env(environment_configuration):
     env.reset()
     return env
 
-def build_rl(env, algorithm_configuration, device: str) -> IntrinsicReward:
+def build_rl(env, algorithm_configuration, device: str) -> Algorithm:
     if algorithm_configuration.type == "ddpg":
         return DeepDeterministicPolicyGradient(
             build_actor(env, **algorithm_configuration.actor),

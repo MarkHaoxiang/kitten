@@ -3,7 +3,7 @@ import warnings
 import torch
 from torch import Tensor
 import torch.nn as nn
-from curiosity.experience import Transition
+from curiosity.experience import AuxiliaryMemoryData, Transition
 
 from curiosity.intrinsic.intrinsic import IntrinsicReward
 from curiosity.experience import Transition
@@ -50,9 +50,9 @@ class RandomNetworkDistillation(IntrinsicReward, nn.Module):
         r_i = ((random_embedding - predicted_embedding)**2).mean(-1)
         return r_i
 
-    def update(self, batch: Transition, weights: Tensor, step: int):
+    def update(self, batch: Transition, aux: AuxiliaryMemoryData, step: int):
         # Update Obs Normalisation
-        if torch.max(weights) != torch.min(weights):
+        if torch.max(aux.weights) != torch.min(aux.weights):
             warnings.warn("Weighted sample normalisation is not yet implemented. Assuming weights are equal.")           
         self.obs_normalisation.add_tensor_batch(batch.s_1)
 
@@ -63,8 +63,8 @@ class RandomNetworkDistillation(IntrinsicReward, nn.Module):
         # Train Predictor Network
         random_embedding = self.target_net(batch.s_1)
         predicted_embedding = self.predictor_net(batch.s_1)
-        weights = weights.unsqueeze(-1)
-    
+        weights = aux.weights.unsqueeze(-1)
+
         self._optim.zero_grad()
         loss = torch.mean(((random_embedding - predicted_embedding) * weights)**2)
         self.info['loss'] = loss.item()

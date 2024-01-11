@@ -3,7 +3,7 @@ from typing import Callable, Optional
 import torch
 from torch import Tensor
 import torch.nn as nn
-from curiosity.experience import Transition
+from curiosity.experience import AuxiliaryMemoryData, Transition
 from curiosity.intrinsic.intrinsic import IntrinsicReward
 
 class Disagreement(IntrinsicReward):
@@ -52,12 +52,12 @@ class Disagreement(IntrinsicReward):
             return self.feature_net(s)
         return s 
 
-    def update(self, batch: Transition, weights: Tensor, step: int):
+    def update(self, batch: Transition, aux: AuxiliaryMemoryData, step: int):
         self._optim.zero_grad()
         phi_0 = self._featurise(batch.s_0)
         pred_phi_1 = self._forward_models(phi_0, batch.a)
         true_phi_1 = self._featurise(batch.s_0).unsqueeze(0)
-        weights = weights.unsqueeze(0).unsqueeze(-1)
+        weights = aux.weights.unsqueeze(0).unsqueeze(-1)
         loss = torch.mean(((true_phi_1-pred_phi_1) * weights) ** 2)
         self.info['loss'] = loss.item()
         loss.backward()

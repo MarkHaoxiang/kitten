@@ -49,14 +49,14 @@ def train(cfg: DictConfig) -> None:
         collector.collect(n=1)
 
         # RL Update
-        batch, weights = memory.sample(cfg.train.minibatch_size)
+        batch, aux = memory.sample(cfg.train.minibatch_size)
         batch = Transition(*batch)
             # Intrinsic Update
         r_t, _, _ = intrinsic.reward(batch)
-        intrinsic.update(batch, weights, step=step)
+        intrinsic.update(batch, aux, step=step)
         batch = Transition(batch.s_0, batch.a, r_t, batch.s_1, batch.d)
             # Algorithm Update
-        algorithm.update(batch, weights, step=step)
+        algorithm.update(batch, aux, step=step)
 
         # Epoch Logging
         if  step % cfg.log.frames_per_epoch == 0:

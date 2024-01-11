@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 from torch import Tensor
 
-from curiosity.experience import Transition
+from curiosity.experience import AuxiliaryMemoryData, Transition
 from curiosity.nn import AddTargetNetwork
 from curiosity.rl.rl import Algorithm
 
@@ -108,23 +108,23 @@ class DeepDeterministicPolicyGradient(Algorithm):
 
         return loss_value
 
-    def update(self, batch: Transition, weights: Tensor, step: int) -> Tuple[float, float]:
+    def update(self, batch: Transition, aux: AuxiliaryMemoryData, step: int) -> Tuple[float, float]:
         """ Runs a DDPG update step
 
         Args:
             batch (Tuple): Batch of training transitions from the replay buffer
-            weights (Tensor): Recommended importance sampling weights
+            aux (AuxiliaryMemoryData): Recommended importance sampling weights among other things
             step (int): Current step of training
 
         Returns:
             Tuple[float, float]: Critic loss and actor loss
         """
         if step % self._update_frequency == 0:
-            loss_critic_value = self._critic_update(*batch, weights)
-            loss_actor_value = self._actor_update(batch.s_0, weights)
+            loss_critic_value = self._critic_update(*batch, aux.weights)
+            loss_actor_value = self._actor_update(batch.s_0, aux.weights)
             self.critic.update_target_network(tau=self._tau)
             self.actor.update_target_network(tau=self._tau)
-    
+
             self.loss_critic_value, self.loss_actor_value = loss_critic_value, loss_actor_value
         return self.loss_critic_value, self.loss_actor_value 
 
