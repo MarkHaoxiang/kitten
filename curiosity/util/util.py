@@ -194,7 +194,7 @@ def build_rnd(env: Env, encoding_size: int, lr: float = 1e-3, device: str = 'cpu
         nn.Linear(in_features=encoding_size, out_features=encoding_size),
         nn.LeakyReLU()
     ).to(device=device)
-    return RandomNetworkDistillation(target_net, predictor_net, lr)
+    return RandomNetworkDistillation(target_net, predictor_net, lr, **kwargs)
 
 def build_disagreement(env: Env, encoding_size: int, lr: float = 1e-3, device: str = 'cpu', **kwargs):
     obs_size = env.observation_space.shape[0]

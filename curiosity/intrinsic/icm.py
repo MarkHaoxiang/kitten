@@ -1,9 +1,8 @@
 import torch
-from torch import Tensor
 import torch.nn as nn
 from curiosity.experience import AuxiliaryMemoryData, Transition
-
 from curiosity.intrinsic.intrinsic import IntrinsicReward
+
 class IntrinsicCuriosityModule(IntrinsicReward, nn.Module):
     """ Intrinsic curiosity, intrinsic reward
 
@@ -82,7 +81,7 @@ class IntrinsicCuriosityModule(IntrinsicReward, nn.Module):
         true_phi_1 = self.feature_net(s_1)
         r_i = torch.linalg.vector_norm(true_phi_1-pred_phi_1, dim=(-1)) / 2
         return r_i
-    
+
     def _calc_loss(self, s_0: torch.Tensor, s_1: torch.Tensor, a: torch.Tensor, weights: torch.Tensor):
         pred_phi_1 = self.forward_model(s_0, a)
         true_phi_1 = self.feature_net(s_1)
@@ -97,14 +96,11 @@ class IntrinsicCuriosityModule(IntrinsicReward, nn.Module):
             self.info["inverse_loss"] = inverse_loss.item()
         return forward_loss * self.beta + inverse_loss * (1-self.beta) 
 
-    def _update(self, s_0: torch.Tensor, s_1: torch.Tensor, a: torch.Tensor, weights: torch.Tensor):
+    def _update(self, batch: Transition, aux: AuxiliaryMemoryData, step: int):
         self._optim.zero_grad()
-        loss = self._calc_loss(s_0, s_1, a, weights)
+        loss = self._calc_loss(batch.s_0, batch.s_1, batch.a, aux.weights)
         loss.backward()
         self._optim.step()
-
-    def update(self, batch: Transition, aux: AuxiliaryMemoryData, step: int):
-        return self._update(batch.s_0, batch.s_1, batch.a, aux.weights)
 
     def _reward(self, batch: Transition):
         return self.forward(batch.s_0, batch.s_1, batch.a)
