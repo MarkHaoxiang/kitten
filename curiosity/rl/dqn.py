@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 from torch import Tensor
 
-from curiosity.curiosity.experience import AuxiliaryMemoryData, Transition
+from curiosity.experience import AuxiliaryMemoryData, Transition
 from curiosity.rl.rl import Algorithm
 
 from curiosity.nn import AddTargetNetwork

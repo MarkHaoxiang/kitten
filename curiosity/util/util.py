@@ -19,7 +19,10 @@ from curiosity.rl.ddpg import DeepDeterministicPolicyGradient
 from curiosity.rl.td3 import TwinDelayedDeepDeterministicPolicyGradient
 
 def build_env(environment_configuration):
-    env = AutoResetWrapper(gym.make(environment_configuration.name, render_mode="rgb_array"))
+    env = AutoResetWrapper(gym.make(
+        environment_configuration.name,
+        render_mode="rgb_array")
+    )
     env.reset()
     return env
 
@@ -78,7 +81,7 @@ def build_actor(env: Env, features: int = 128) -> nn.Module:
 
     return result
 
-def build_critic(env: Env, features: int) -> nn.Module:
+def build_critic(env: Env, features: int = 128) -> nn.Module:
     """Builds a critic for gym environment
 
     Args:

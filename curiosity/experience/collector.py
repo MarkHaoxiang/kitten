@@ -86,10 +86,14 @@ class GymCollector(DataCollector):
                     self.policy.reset()
                 # Store buffer
                 transition_tuple = (obs, action, reward, n_obs, terminated)
-                result.append(transition_tuple)
                 if not self.memory is None:
                     self.memory.append(transition_tuple, update=not early_start)
+                # Add Truncation info back in
+                transition_tuple = (obs, action, reward, n_obs, terminated, truncated)
+                result.append(transition_tuple)
+                # Crucial Step
                 obs = n_obs
+
             self.obs = obs
             return result
 

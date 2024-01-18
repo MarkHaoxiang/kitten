@@ -44,7 +44,9 @@ def train(cfg: DictConfig) -> None:
     # Training Loop
     pbar = tqdm(total=cfg.train.total_frames // cfg.log.frames_per_epoch, file=sys.stdout)
     collector.early_start(cfg.train.initial_collection_size)
-    intrinsic.initialise(Transition(*memory.sample(cfg.train.initial_collection_size)[0]))
+    batch, aux = memory.sample(cfg.train.initial_collection_size)
+    intrinsic.initialise(Transition(*batch), aux)
+
     for step in range(1, cfg.train.total_frames+1):
         collector.collect(n=1)
 
