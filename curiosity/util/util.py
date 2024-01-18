@@ -1,3 +1,4 @@
+import copy
 from typing import Optional
 import random
 
@@ -8,6 +9,7 @@ from gymnasium.spaces import Box, Discrete
 import numpy as np
 import torch
 import torch.nn as nn
+from omegaconf import DictConfig
 
 from curiosity.nn import ClassicalBoxActor
 from curiosity.intrinsic.intrinsic import IntrinsicReward, NoIntrinsicReward
@@ -18,11 +20,9 @@ from curiosity.rl.rl import Algorithm
 from curiosity.rl.ddpg import DeepDeterministicPolicyGradient
 from curiosity.rl.td3 import TwinDelayedDeepDeterministicPolicyGradient
 
-def build_env(environment_configuration):
-    env = AutoResetWrapper(gym.make(
-        environment_configuration.name,
-        render_mode="rgb_array")
-    )
+def build_env(name: str, **kwargs):
+
+    env = AutoResetWrapper(gym.make(name, render_mode="rgb_array", **kwargs))
     env.reset()
     return env
 

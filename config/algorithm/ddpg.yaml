@@ -1,5 +1,6 @@
 type: ddpg
 gamma: 0.99
 tau: 0.005
-lr: 0.0003
+lr: 0.001
 update_frequency: 1
+clip_grad_norm: 1

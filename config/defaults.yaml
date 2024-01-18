@@ -5,12 +5,12 @@ defaults:
   - intrinsic: none
   - noise: white
 
-seed: 0
+seed: 0 
 log:
   name: false
   wandb: false
   evaluation:
-    evaluation_repeats: 10
+    evaluation_repeats: 1
     video:
       enable: false
       path: 

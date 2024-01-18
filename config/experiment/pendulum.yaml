@@ -10,7 +10,7 @@ log:
     frames_per_video: 10000
 train:
   initial_collection_size: 1000
-  total_frames: 50000
+  total_frames: 20000
   minibatch_size: 128
 algorithm:
   actor:
@@ -18,5 +18,5 @@ algorithm:
   critic:
     features: 128
 memory:  
-  capacity: 10000
-  beta_annealing_steps: 50000
+  capacity: 20000
+  beta_annealing_steps: 20000

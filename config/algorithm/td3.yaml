@@ -1,8 +1,9 @@
 type: td3
 gamma: 0.99
 tau: 0.005
-lr: 0.0003
+lr: 0.001
 target_noise: 0.1
 target_noise_clip: 0.2
 critic_update_frequency: 1
 policy_update_frequency: 2
+clip_grad_norm: 1

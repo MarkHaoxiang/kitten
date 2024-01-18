@@ -16,7 +16,7 @@ DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 @hydra.main(version_base=None, config_path="../config", config_name="defaults")
 def train(cfg: DictConfig) -> None:
     # Environment
-    env = build_env(cfg.env)
+    env = build_env(**cfg.env)
 
     # Logging and Evaluation
     logger = CuriosityLogger(cfg, cfg.algorithm.type, path=hydra.core.hydra_config.HydraConfig.get().runtime.output_dir)
