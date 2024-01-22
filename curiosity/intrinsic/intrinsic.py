@@ -71,15 +71,13 @@ class IntrinsicReward(Loggable, ABC):
         """
         # Update Obs Normalisation
         if self._obs_normalisation:
-            if torch.max(aux.weights) != torch.min(aux.weights):
-                warnings.warn("Weighted sample normalisation is not yet implemented. Assuming weights are equal.")           
-            self._obs_normalisation.add_tensor_batch(batch.s_1)
+            self._obs_normalisation.add_tensor_batch(batch.s_1, aux.weights)
         batch = self._normalise_batch(batch)
 
         # Update Reward Normalisation
         if self._reward_normalisation:
             rewards = self._reward(batch)
-            self._reward_normalisation.add_tensor_batch(rewards)
+            self._reward_normalisation.add_tensor_batch(rewards, aux.weights)
 
         # Update assistance networks
         self._update(batch, aux, step)
@@ -95,14 +93,14 @@ class IntrinsicReward(Loggable, ABC):
             batch: Transition
         """
         if self._obs_normalisation:
-            self._obs_normalisation.add_tensor_batch(batch.s_1)
+            self._obs_normalisation.add_tensor_batch(batch.s_1, aux.weights)
         batch = self._normalise_batch(batch)
         # Fit on the initial observations for a bit
         # for _ in range(20):
         #     self._update(batch, aux, 0)
         if self._reward_normalisation:
             rewards = self._reward(batch)
-            self._reward_normalisation.add_tensor_batch(rewards)
+            self._reward_normalisation.add_tensor_batch(rewards, aux.weights)
 
     def get_log(self):
         return self.info

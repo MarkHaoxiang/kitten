@@ -1,3 +1,5 @@
+from typing import Optional
+
 import torch
 
 class RunningMeanVariance:
@@ -10,6 +12,13 @@ class RunningMeanVariance:
         self._var = 0
     
     def add_batch(self, batch_size, batch_mean, batch_squared_difference):
+        """ Adds batch statistics to track
+
+        Args:
+            batch_size: number of items within the batch.
+            batch_mean: mean value of batch.
+            batch_squared_difference: sum of squared differences to the mean within the batch.
+        """
         n = self._n + batch_size
         delta = batch_mean - self._mean
 
@@ -17,18 +26,27 @@ class RunningMeanVariance:
         self._sum_squared_difference = self._sum_squared_difference + batch_squared_difference + delta**2 * self._n * batch_size / n
         self._n = n
 
-    def add_tensor_batch(self, batch: torch.Tensor):
+    def add_tensor_batch(self, batch: torch.Tensor, weights: Optional[torch.Tensor] = None):
         """ Adds tensor to track
 
         Args:
             batch (torch.Tensor): Tensor of shape (batch, *data)
         """
-        mean = batch.mean(0)
-        bsd = torch.sum((batch - mean)**2, 0)
-        n = batch.shape[0]
+        if weights is None:
+            weights = torch.ones(batch.shape[0], device=batch.device)
+        weights = weights.view(weights.shape[0], *[1 for _ in range(len(batch.shape-1))])
+
+        mean = (weights * batch).mean(0)
+        bsd = torch.sum((batch - mean)**2 * weights, 0)
+        n = weights.sum()
         self.add_batch(n, mean, bsd)
 
     def add(self, data):
+        """ Adds a single data point
+
+        Args:
+            data
+        """
         self.add_batch(1, data, 0)
 
     @property
