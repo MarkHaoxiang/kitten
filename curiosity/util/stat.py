@@ -34,7 +34,7 @@ class RunningMeanVariance:
         """
         if weights is None:
             weights = torch.ones(batch.shape[0], device=batch.device)
-        weights = weights.view(weights.shape[0], *[1 for _ in range(len(batch.shape-1))])
+        weights = weights.view(weights.shape[0], *[1 for _ in range(len(batch.shape)-1)])
 
         mean = (weights * batch).mean(0)
         bsd = torch.sum((batch - mean)**2 * weights, 0)
