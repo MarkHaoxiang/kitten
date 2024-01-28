@@ -91,16 +91,17 @@ class GymCollector(DataCollector):
                 action = self._policy(obs, *args, **kwargs)
                 # Step
                 n_obs, reward, terminated, truncated, _ = self.env.step(action)
-                if terminated or truncated:
-                    self.env.reset()
-                    self.policy.reset()
-                # Store buffer
                 transition_tuple = (obs, action, reward, n_obs, terminated)
+                # Store buffer
                 if not self.memory is None:
                     self.memory.append(transition_tuple, update=not early_start)
                 # Add Truncation info back in
                 transition_tuple = (obs, action, reward, n_obs, terminated, truncated)
                 result.append(transition_tuple)
+                # Reset
+                if terminated or truncated:
+                    n_obs, _ = self.env.reset()
+                    self.policy.reset()
                 # Crucial Step
                 obs = n_obs
 
