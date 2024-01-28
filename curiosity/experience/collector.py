@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from typing import List, Optional
 
 import gymnasium as gym
-from gymnasium.wrappers.autoreset import AutoResetWrapper
+import numpy as np
 import torch
 
 from curiosity.experience.memory import ReplayBuffer
@@ -57,15 +57,28 @@ class GymCollector(DataCollector):
     def __init__(self,
                  policy: Policy,
                  env: gym.Env,
-                 memory: Optional[ReplayBuffer],
+                 memory: Optional[ReplayBuffer] = None,
                  device: torch.device ='cpu'):
-        if not isinstance(env, AutoResetWrapper):
-            env = AutoResetWrapper(env)
         self.obs, _ = env.reset()
         self.device = device
         # Logging
         self.frame = 0
         super().__init__(policy, env, memory)
+
+    def _policy(self, obs: np.ndarray, *args, **kwargs) -> np.ndarray:
+        """ Obtain action from observations
+
+        Args:
+            obs (np.ndarray): Gymnasium environment
+
+        Returns:
+            np.ndarray: _description_
+        """
+        action = self.policy(obs, *args, **kwargs)
+        if isinstance(action, torch.Tensor):
+            action = action.cpu().detach().numpy()
+        action = action.clip(self.env.action_space.low, self.env.action_space.high)
+        return action
 
     def collect(self, n: int, early_start: bool=False, *args, **kwargs) -> List:
         if not early_start:
@@ -75,14 +88,11 @@ class GymCollector(DataCollector):
             obs = self.obs
             for _ in range(n):
                 # Calculate actions 
-                action = self.policy(obs, *args, **kwargs)
-                    # Convert actions to numpy
-                if isinstance(action, torch.Tensor):
-                    action = action.cpu().detach().numpy()
-                action = action.clip(self.env.action_space.low, self.env.action_space.high)
+                action = self._policy(obs, *args, **kwargs)
                 # Step
                 n_obs, reward, terminated, truncated, _ = self.env.step(action)
                 if terminated or truncated:
+                    self.env.reset()
                     self.policy.reset()
                 # Store buffer
                 transition_tuple = (obs, action, reward, n_obs, terminated)

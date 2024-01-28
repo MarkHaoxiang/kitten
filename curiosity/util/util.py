@@ -4,7 +4,6 @@ import random
 
 import gymnasium as gym
 from gymnasium import Env
-from gymnasium.wrappers.autoreset import AutoResetWrapper 
 from gymnasium.spaces import Box, Discrete
 import numpy as np
 import torch
@@ -22,7 +21,7 @@ from curiosity.rl.td3 import TwinDelayedDeepDeterministicPolicyGradient
 
 def build_env(name: str, **kwargs):
 
-    env = AutoResetWrapper(gym.make(name, render_mode="rgb_array", **kwargs))
+    env = gym.make(name, render_mode="rgb_array", **kwargs)
     env.reset()
     return env
 
@@ -211,7 +210,7 @@ def build_disagreement(env: Env, encoding_size: int, lr: float = 1e-3, device: s
             nn.LeakyReLU(),
             nn.Linear(in_features=encoding_size, out_features=obs_size)
         ).to(device=device)
-    return Disagreement(build_forward_head, feature_net= None, **kwargs)
+    return Disagreement(build_forward_head, feature_net= None, lr=lr, **kwargs)
 
 def global_seed(seed: int, *envs):
     """ Utility to help set determinism
