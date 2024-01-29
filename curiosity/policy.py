@@ -6,16 +6,25 @@ from gymnasium.spaces import Space
 import pink
 import torch
 
+from curiosity.util.stat import RunningMeanVariance
+
 class Policy:
-    def __init__(self, fn: Callable, transform_obs: bool = True, device="cpu"):
+    def __init__(self,
+                 fn: Callable,
+                 transform_obs: bool = True,
+                 normalise_obs: Optional[RunningMeanVariance] = None,
+                 device="cpu"):
         """ Policy API to pass into data collection pipeline
 
         Args:
             fn (Callable): Policy taking observations and returning actions.
+            transform_obs (bool): Transform observations into tensors.
+            normalise_obs (Optional[RunningMeanVariance]): Normalise incoming observations
         """
         self.fn = fn
         self._evaluate = False
         self._transform_obs = transform_obs
+        self.normalise_obs = normalise_obs
         self.device = device
 
     def __call__(self, obs: Any, *args, **kwargs) -> Any:
@@ -28,7 +37,14 @@ class Policy:
             Any: actions.
         """
         if self._transform_obs:
-            obs = torch.tensor(obs, device=self.device, dtype=torch.float32)
+            obs = torch.tensor(
+                obs,
+                device=self.device,
+                dtype=torch.float32
+            )
+        if not self.normalise_obs is None:
+            obs = (obs - self.normalise_obs.mean) / self.normalise_obs.std
+
         return self.fn(obs)
 
     def reset(self) -> None:

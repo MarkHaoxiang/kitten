@@ -5,6 +5,9 @@ defaults:
   - intrinsic: none
   - noise: white
 
+memory:
+  normalise_observation: True
+
 seed: 0 
 log:
   name: false

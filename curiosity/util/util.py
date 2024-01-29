@@ -1,4 +1,3 @@
-import copy
 from typing import Optional
 import random
 
@@ -8,7 +7,6 @@ from gymnasium.spaces import Box, Discrete
 import numpy as np
 import torch
 import torch.nn as nn
-from omegaconf import DictConfig
 
 from curiosity.nn import ClassicalBoxActor
 from curiosity.intrinsic.intrinsic import IntrinsicReward, NoIntrinsicReward
@@ -19,9 +17,27 @@ from curiosity.rl.rl import Algorithm
 from curiosity.rl.ddpg import DeepDeterministicPolicyGradient
 from curiosity.rl.td3 import TwinDelayedDeepDeterministicPolicyGradient
 
-def build_env(name: str, **kwargs):
+def build_env(name: str,
+              normalise_observation: bool = False,
+              **kwargs) -> gym.Env:
+    """Utility to construct an environment
 
+    Calls gym.make, applies extra wrappers and resets
+
+    Args:
+        name (str): Environment name within registry
+        normalise_observation (bool, optional): Wraps NormalizeObservation. 
+            Use with online methods, and normalise with replay buffer otherwise. Defaults to False.
+
+    Returns:
+        gym.Env: Constructed environment
+    """
+    # Gym Make
     env = gym.make(name, render_mode="rgb_array", **kwargs)
+    # Wrappers
+    if normalise_observation:
+        env = gym.wrappers.NormalizeObservation(env)
+    # Reset
     env.reset()
     return env
 

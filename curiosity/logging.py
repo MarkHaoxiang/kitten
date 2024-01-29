@@ -230,6 +230,13 @@ class CuriosityEvaluator:
         self.repeats = evaluation_repeats
         self.policy = policy
 
+        # Link evaluation environment with train environment statistics
+        for wrapper in self.env.spec.additional_wrappers:
+            if wrapper.name == "NormalizeObservation":
+                self.env.obs_rms = env.obs_rms
+            elif wrapper.name == "NormalizeReward":
+                self.env.return_rms = env.return_rms
+
         if video.enable:
             if env.render_mode != "rgb_array":
                 raise ValueError(f"Video mode requires rgb_array render mode but got {env.render_mode}")
@@ -251,13 +258,14 @@ class CuriosityEvaluator:
         Returns:
             float: Mean reward
         """
+        # Initialise policy and repeats
         if policy is None:
             policy = self.policy
         if policy is None:
             raise ValueError("Provide a policy to evaluate")
         if repeats is None:
             repeats = self.repeats
-        
+
         self.policy.enable_evaluation()
         reward, maximum_reward, episode_length = evaluate(self.env, policy=policy, repeat=repeats)
         self.policy.disable_evaluation()

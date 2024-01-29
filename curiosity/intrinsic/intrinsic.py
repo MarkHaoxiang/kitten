@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-import warnings
+from typing import Optional
 
 import torch
 from torch import Tensor
@@ -14,10 +14,17 @@ class IntrinsicReward(Loggable, ABC):
     def __init__(self,
                  int_coef: float = 1,
                  ext_coef: float = 1,
-                 obs_normalisation: bool = False,
                  reward_normalisation: bool = False,
-                 normalised_obs_clip: float = 5,
+                 normalised_obs_clip: Optional[float] = None,
                  **kwargs) -> None:
+        """ Initialises an intrinsic reward module
+
+        Args:
+            int_coef (float, optional): Intrinsic reward scaling factor. Defaults to 1.
+            ext_coef (float, optional): Extrinsic reward scaling factor. Defaults to 1.
+            reward_normalisation (bool, optional): Normalise output reward with unit variance. Defaults to False.
+            normalised_obs_clip (float, optional): Clip observations. Introduced in RND. Defaults to 5.
+        """
         super().__init__()
         self.info = {}
         # Intrinsic Reward Weighting
@@ -25,16 +32,13 @@ class IntrinsicReward(Loggable, ABC):
         self._ext_coef = ext_coef
 
         # Normalisation
-        self._obs_normalisation = RunningMeanVariance() if obs_normalisation else False
         self._reward_normalisation = RunningMeanVariance() if reward_normalisation else False
         self._normalised_obs_clip = normalised_obs_clip
 
-    def _normalise_batch(self, batch: Transition):
-        if self._obs_normalisation:
-            s_0 = (batch.s_0 - self._obs_normalisation.mean.unsqueeze(0)) / self._obs_normalisation.std.unsqueeze(0)
-            s_1 = (batch.s_1 - self._obs_normalisation.mean.unsqueeze(0)) / self._obs_normalisation.std.unsqueeze(0)
-            s_0 = torch.clamp(s_0, -self._normalised_obs_clip, self._normalised_obs_clip)
-            s_1 = torch.clamp(s_1, -self._normalised_obs_clip, self._normalised_obs_clip)
+    def _clip_batch(self, batch: Transition):
+        if not self._normalised_obs_clip is None:
+            s_0 = torch.clamp(batch.s_0, -self._normalised_obs_clip, self._normalised_obs_clip)
+            s_1 = torch.clamp(batch.s_1, -self._normalised_obs_clip, self._normalised_obs_clip)
             batch = Transition(s_0, batch.a, batch.r, s_1, batch.d)
         return batch
 
@@ -44,7 +48,7 @@ class IntrinsicReward(Loggable, ABC):
         Args:
             batch (Transition): Batch of transition tuples from experience
         """
-        batch = self._normalise_batch(batch)
+        batch = self._clip_batch(batch)
         r_i = self._reward(batch)
         if self._reward_normalisation:
             r_i = r_i / self._reward_normalisation.std.unsqueeze(0)
@@ -66,19 +70,14 @@ class IntrinsicReward(Loggable, ABC):
 
         Args:
             batch (Transition): Batch of transition tuples from experience
-            weights (Tensor): Suggested importance sampling weights of the batch
+            aux (AuxiliaryMemoryData): Auxiliary data for updates, such as weights and labels.
             step (int): Training Step
         """
-        # Update Obs Normalisation
-        if self._obs_normalisation:
-            self._obs_normalisation.add_tensor_batch(batch.s_1, aux.weights)
-        batch = self._normalise_batch(batch)
-
+        batch = self._clip_batch(batch)
         # Update Reward Normalisation
         if self._reward_normalisation:
             rewards = self._reward(batch)
             self._reward_normalisation.add_tensor_batch(rewards, aux.weights)
-
         # Update assistance networks
         self._update(batch, aux, step)
 
@@ -92,12 +91,7 @@ class IntrinsicReward(Loggable, ABC):
         Args:
             batch: Transition
         """
-        if self._obs_normalisation:
-            self._obs_normalisation.add_tensor_batch(batch.s_1, aux.weights)
-        batch = self._normalise_batch(batch)
-        # Fit on the initial observations for a bit
-        # for _ in range(20):
-        #     self._update(batch, aux, 0)
+        batch = self._clip_batch(batch)
         if self._reward_normalisation:
             rewards = self._reward(batch)
             self._reward_normalisation.add_tensor_batch(rewards, aux.weights)

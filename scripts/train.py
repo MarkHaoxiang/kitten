@@ -34,6 +34,7 @@ def train(cfg: DictConfig) -> None:
 
     # Data pipeline
     memory = build_replay_buffer(env, error_fn=lambda x: torch.abs(algorithm.td_error(*x)).detach().cpu().numpy(), device=DEVICE, **cfg.memory)
+    policy.normalise_obs = memory.rmv[0]
     collector = build_collector(policy, env, memory, device=DEVICE)
     evaluator.policy = policy
 
