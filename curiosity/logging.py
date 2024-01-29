@@ -231,7 +231,7 @@ class CuriosityEvaluator:
         self.policy = policy
 
         # Link evaluation environment with train environment statistics
-        for wrapper in self.env.spec.additional_wrappers:
+        for wrapper in env.spec.additional_wrappers:
             if wrapper.name == "NormalizeObservation":
                 self.env.obs_rms = env.obs_rms
             elif wrapper.name == "NormalizeReward":

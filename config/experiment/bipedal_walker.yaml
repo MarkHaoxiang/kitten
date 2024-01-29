@@ -9,7 +9,7 @@ log:
   video:
     frames_per_video: 100000
 train:
-  initial_collection_size: 10000
+  initial_collection_size: 100000
   total_frames: 1000000
   minibatch_size: 256
 algorithm:
