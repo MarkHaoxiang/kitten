@@ -27,7 +27,7 @@ def train(cfg: DictConfig) -> None:
 
     # Define actor-critic policy
     algorithm = build_rl(env, cfg.algorithm, device=DEVICE)
-    policy = ColoredNoisePolicy(algorithm.actor, env.action_space, env.spec.max_episode_steps, rng=rng, device=DEVICE, **cfg.noise)
+    policy = ColoredNoisePolicy(algorithm.policy_fn, env.action_space, env.spec.max_episode_steps, rng=rng, device=DEVICE, **cfg.noise)
 
     # Define intrinsic reward
     intrinsic = build_intrinsic(env, cfg.intrinsic, device=DEVICE)

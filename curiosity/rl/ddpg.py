@@ -6,7 +6,7 @@ from torch import Tensor
 
 from curiosity.experience import AuxiliaryMemoryData, Transition
 from curiosity.nn import AddTargetNetwork
-from curiosity.rl.rl import Algorithm
+from curiosity.rl import Algorithm
 
 class DeepDeterministicPolicyGradient(Algorithm):
     """ Implements DDPG
@@ -128,6 +128,10 @@ class DeepDeterministicPolicyGradient(Algorithm):
             self.loss_critic_value, self.loss_actor_value = loss_critic_value, loss_actor_value
         return self.loss_critic_value, self.loss_actor_value 
 
+    @property
+    def policy_fn(self):
+        return lambda x: self.actor(x)
+    
     def get_log(self):
         return {
             "critic_loss": self.loss_critic_value,
