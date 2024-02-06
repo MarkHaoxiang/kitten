@@ -1,11 +1,11 @@
 import gymnasium as gym
 import torch
-import torch.nn
+import torch.nn as nn
 
 from curiosity.rl import Algorithm
 
 def cross_entropy_method(s_0: torch.Tensor, 
-                         critic_network: torch.nn,
+                         critic_network: nn.Module,
                          action_space: gym.spaces.Box,
                          n: int = 64,
                          m: int = 6,
@@ -54,6 +54,14 @@ def cross_entropy_method(s_0: torch.Tensor,
     
     return mu
 
-class QT_OPT(Algorithm):
-    # TODO
-    pass
+class QT_Opt(Algorithm):
+    """ Q-learning for continuous actions with Cross-Entropy Maximisation
+
+    A custom variant with TD3 critic improvements
+
+    Kalashnikov et al. QT-Opt: Scalable Deep Reinforcement Learning for Vision-Based Robotic Manipulation
+    """
+    def __init__(self,
+                 critic_network: nn.Module,
+                 **kwargs) -> None:
+        super().__init__()

@@ -5,16 +5,18 @@ import torch.nn as nn
 from torch import Tensor
 from curiosity.experience import AuxiliaryMemoryData, Transition
 
-from curiosity.nn import AddTargetNetwork
+from curiosity.nn import Actor, Critic, AddTargetNetwork
 from curiosity.rl.ddpg import DeepDeterministicPolicyGradient
 
 class TwinDelayedDeepDeterministicPolicyGradient(DeepDeterministicPolicyGradient):
     """ TD3
+
+    Twin Delayed Deep Deterministic Policy Gradient (DDPG with improvements)
     """
     def __init__(self,
-                 actor_network: nn.Module,
-                 critic_1_network: nn.Module,
-                 critic_2_network: nn.Module,
+                 actor_network: Actor,
+                 critic_1_network: Critic,
+                 critic_2_network: Critic,
                  env_action_scale,
                  env_action_min,
                  env_action_max,
@@ -78,13 +80,12 @@ class TwinDelayedDeepDeterministicPolicyGradient(DeepDeterministicPolicyGradient
         Returns:
             float: critic loss
         """
-        s_0_a = torch.cat((s_0, a), 1)
         # Improvement 1: Clipped Double-Q Learning
         # ==================== 
-        x_1 = self.critic_1(s_0_a).squeeze()
-        x_2 = self.critic_2(s_0_a).squeeze()
+        x_1 = self.critic_1.q(s_0, a).squeeze()
+        x_2 = self.critic_2.q(s_0, a).squeeze()
         with torch.no_grad():
-            a_1 = self.actor.target(s_1)
+            a_1 = self.actor.target.a(s_1)
             # Improvement 2: Target policy smoothing
             # ==================== 
             a_1 += torch.clamp(
@@ -97,10 +98,9 @@ class TwinDelayedDeepDeterministicPolicyGradient(DeepDeterministicPolicyGradient
                 min=self._env_action_min,
                 max=self._env_action_max
             )
-            s_1_a_1 = torch.cat((s_1, a_1), 1)
             # ==================== 
-            target_max_1 = self.critic_1.target(s_1_a_1).squeeze()
-            target_max_2 = self.critic_2.target(s_1_a_1).squeeze()
+            target_max_1 = self.critic_1.target.q(s_1, a_1).squeeze()
+            target_max_2 = self.critic_2.target.q(s_1, a_1).squeeze()
             y = r + (~d) * torch.minimum(target_max_1, target_max_2) * self._gamma
         loss_critic = torch.mean((weights * (y-x_1)) ** 2) + torch.mean((weights * (y-x_2)) ** 2)
         loss_value = loss_critic.item()

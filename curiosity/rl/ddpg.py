@@ -5,7 +5,7 @@ import torch.nn as nn
 from torch import Tensor
 
 from curiosity.experience import AuxiliaryMemoryData, Transition
-from curiosity.nn import AddTargetNetwork
+from curiosity.nn import AddTargetNetwork, Actor, Critic
 from curiosity.rl import Algorithm
 
 class DeepDeterministicPolicyGradient(Algorithm):
@@ -15,8 +15,8 @@ class DeepDeterministicPolicyGradient(Algorithm):
     """
 
     def __init__(self,
-                 actor_network: nn.Module,
-                 critic_network: nn.Module,
+                 actor_network: Actor,
+                 critic_network: Critic,
                  gamma: float = 0.99,
                  lr: float = 1e-3,
                  tau: float = 0.005,
@@ -72,13 +72,13 @@ class DeepDeterministicPolicyGradient(Algorithm):
         self._optim_critic.step()
 
         return loss_value
-    
+
     def td_error(self, s_0: Tensor, a: Tensor, r: Tensor, s_1: Tensor, d: Tensor):
         """ Returns TD difference for a transition
         """
-        x = self.critic(torch.cat((s_0, a), 1)).squeeze()
+        x = self.critic.q(s_0, a).squeeze()
         with torch.no_grad():
-            target_max = (~d) * self.critic.target(torch.cat((s_1, self.actor.target(s_1)), 1)).squeeze()
+            target_max = (~d) * self.critic.target.q(s_1, self.actor.target.a(s_1)).squeeze()
             y = (r + target_max * self._gamma)
         return y-x
 
@@ -96,8 +96,8 @@ class DeepDeterministicPolicyGradient(Algorithm):
         Returns:
             float: actor loss
         """
-        desired_action = self.actor(s_0)
-        loss = -self.critic(torch.cat((s_0, desired_action), 1))
+        desired_action = self.actor.a(s_0)
+        loss = -self.critic.q(s_0, desired_action)
         loss = torch.mean(torch.mean(loss, dim=list(range(1, len(loss.shape)))) * weights)
         loss_value = loss.item()
         self._optim_actor.zero_grad()
@@ -130,7 +130,7 @@ class DeepDeterministicPolicyGradient(Algorithm):
 
     @property
     def policy_fn(self):
-        return lambda x: self.actor(x)
+        return self.actor.to_policy_fn()
     
     def get_log(self):
         return {

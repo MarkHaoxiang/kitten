@@ -8,7 +8,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from curiosity.nn import ClassicalBoxActor
+from curiosity.nn import Actor, Critic, ClassicalBoxActor, ClassicalBoxCritic
 from curiosity.intrinsic.intrinsic import IntrinsicReward, NoIntrinsicReward
 from curiosity.intrinsic.icm import IntrinsicCuriosityModule
 from curiosity.intrinsic.rnd import RandomNetworkDistillation
@@ -69,7 +69,7 @@ def build_rl(env, algorithm_configuration, device: str) -> Algorithm:
         raise NotImplementedError()
     raise ValueError("Reinforcement learning algorithm type not valid")
 
-def build_actor(env: Env, features: int = 128) -> nn.Module:
+def build_actor(env: Env, features: int = 128) -> Actor:
     """Builds an actor for gym environment
 
     Args:
@@ -98,7 +98,7 @@ def build_actor(env: Env, features: int = 128) -> nn.Module:
 
     return result
 
-def build_critic(env: Env, features: int = 128) -> nn.Module:
+def build_critic(env: Env, features: int = 128) -> Critic:
     """Builds a critic for gym environment
 
     Args:
@@ -119,16 +119,16 @@ def build_critic(env: Env, features: int = 128) -> nn.Module:
     pixels = len(env.observation_space.shape) != 1
 
     if not pixels:
-        result =  nn.Sequential(
-            nn.Linear(in_features=env.observation_space.shape[-1] + (0 if discrete else env.action_space.shape[0]), out_features=features),
-            nn.LeakyReLU(),
-            nn.Linear(in_features=features, out_features=features),
-            nn.LeakyReLU(),
-            nn.Linear(in_features=features, out_features=env.action_space.n if discrete else 1)
-        )
+        if discrete:
+            # TODO
+            raise NotImplementedError
+        else:
+            result =  ClassicalBoxCritic(env,features=features)
     else:
         # Architecture from OpenAI baselines
-        if not discrete:
+        # Deprecated
+        raise NotImplementedError
+        """if not discrete:
             raise NotImplementedError("Pixel space with continuous actions is not yet implemented.")
         class AtariNetwork(nn.Module):
             def __init__(self, atari_grayscale: bool = True):
@@ -154,7 +154,7 @@ def build_critic(env: Env, features: int = 128) -> nn.Module:
                 result = self.linear(result)
                 result = result.squeeze()
                 return result
-        result =  AtariNetwork()
+        result =  AtariNetwork()"""
 
     return result
 
