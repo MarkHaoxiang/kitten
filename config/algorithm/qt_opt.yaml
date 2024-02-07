@@ -1,0 +1,9 @@
+type: qt_opt
+gamma: 0.99
+tau: 0.005
+lr: 0.001
+cem_n: 64
+cem_m: 6
+cem_n_iterations: 2
+update_frequency: 1
+clip_grad_norm: 1

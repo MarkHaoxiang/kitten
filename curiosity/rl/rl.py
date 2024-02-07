@@ -1,5 +1,8 @@
 from abc import ABC, abstractmethod
-from typing import Callable
+from typing import Union, Tuple
+
+import numpy as np
+from torch import Tensor
 
 from curiosity.experience import AuxiliaryMemoryData, Transition
 from curiosity.logging import Loggable
@@ -8,7 +11,7 @@ class Algorithm(Loggable, ABC):
     """ Interface for RL Policy Improvement Algorithms
     """
     @abstractmethod
-    def update(self, batch: Transition, aux: AuxiliaryMemoryData, step: int):
+    def update(self, batch: Transition, aux: AuxiliaryMemoryData, step: int) -> None:
         """ Policy improvement update
 
         Args:
@@ -18,8 +21,14 @@ class Algorithm(Loggable, ABC):
         """
         raise NotImplementedError
 
-    @property
-    def policy_fn(self) -> Callable:
-        """ A function which takes in an observation and returns an action
+    def policy_fn(self, s: Union[Tensor, np.ndarray]) -> Tensor:
+        """ A function that takes an observation and returns an action
+
+        Args:
+            s (Union[Tensor, np.ndarray]): Observation.
+            batch_size (Tuple[int, ...]): Batch size of the observations.
+
+        Returns:
+            Tensor: Action. 
         """
         raise NotImplementedError

@@ -1,16 +1,18 @@
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Optional, Union, Tuple
 import random
 
 import gymnasium as gym
 from gymnasium.spaces import Space
 import pink
+import numpy as np
 import torch
+from torch import Tensor
 
 from curiosity.util.stat import RunningMeanVariance
 
 class Policy:
     def __init__(self,
-                 fn: Callable,
+                 fn: Callable[[Union[Tensor, np.ndarray]], Tensor],
                  transform_obs: bool = True,
                  normalise_obs: Optional[RunningMeanVariance] = None,
                  device="cpu"):
@@ -27,7 +29,7 @@ class Policy:
         self.normalise_obs = normalise_obs
         self.device = device
 
-    def __call__(self, obs: Any, *args, **kwargs) -> Any:
+    def __call__(self, obs: Union[Tensor, np.ndarray], *args, **kwargs) -> Any:
         """ Actions from observations
 
         Args:
@@ -71,7 +73,10 @@ class Policy:
         return not self._evaluate
 
 class EpsilonGreedyPolicy(Policy):
-    def __init__(self, fn: Callable[..., Any], action_space: Space, device: str = "cpu"):
+    def __init__(self,
+                 fn: Callable[[Union[Tensor, np.ndarray]], Tensor],
+                 action_space: Space,
+                 device: str = "cpu"):
         """ Epsilon Greedy Exploration
 
         Randomly sample from action_space randomly.
@@ -83,7 +88,7 @@ class EpsilonGreedyPolicy(Policy):
         super().__init__(fn, device=device)
         self._action_space = action_space
 
-    def __call__(self, obs: Any, epsilon: float = 0.1):
+    def __call__(self, obs: Union[Tensor, np.ndarray], epsilon: float = 0.1):
         x = super().__call__(obs)
         if self.train:
             if random.random() <= epsilon:
@@ -92,7 +97,7 @@ class EpsilonGreedyPolicy(Policy):
 
 class ColoredNoisePolicy(Policy):
     def __init__(self,
-                 fn: Callable[..., Any],
+                 fn: Callable[[Union[Tensor, np.ndarray]], Tensor],
                  action_space: Space,
                  episode_length: Optional[int],
                  scale: float = 1,
@@ -130,12 +135,12 @@ class ColoredNoisePolicy(Policy):
         )
         self._device = device
 
-    def __call__(self, obs: Any) -> Any:
+    def __call__(self, obs: Union[Tensor, np.ndarray]) -> Any:
         action =  super().__call__(obs)
         if self.train:
             noise = self._noise.sample(1)
             if isinstance(action, torch.Tensor):
-                noise = torch.tensor(noise, device=self._device)
+                noise = torch.tensor(noise, device=self._device).reshape(action.shape)
             action += noise
         return action
 

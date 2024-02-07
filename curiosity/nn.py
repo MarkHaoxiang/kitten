@@ -1,6 +1,6 @@
 from abc import ABC
 import copy
-from typing import Optional
+from typing import Callable, Optional
 
 from gymnasium import Env
 import torch
@@ -36,7 +36,7 @@ class Actor(ABC, nn.Module):
         """
         raise NotImplementedError
 
-    def to_policy_fn(self):
+    def to_policy_fn(self) -> Callable:
         return lambda s: self(s)
 
 class AddTargetNetwork(nn.Module):

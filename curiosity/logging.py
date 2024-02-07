@@ -2,7 +2,6 @@ from abc import ABC
 import copy
 from datetime import datetime
 import math
-import warnings
 import os
 from os.path import join
 import shutil
@@ -30,6 +29,14 @@ class Loggable(ABC):
             Dict: Dictionary of key-value logging pairs
         """
         return {}
+    
+    def get_models(self) -> List[Tuple[nn.Module, str]]:
+        """ List of publishable networks with names
+
+        Returns:
+            List[Tuple[nn.Module, str]]: list.
+        """
+        return []
 
 class CuriosityLogger:
     """ Logging tool for reinforcement learning experiments
@@ -308,6 +315,8 @@ def evaluate(env: Env, policy: Callable, repeat: int = 1):
                 action = policy(obs)
                 if isinstance(action, torch.Tensor):
                     action = action.cpu().numpy()
+                if action.shape == ():
+                    action = np.expand_dims(action, 0)
                 obs, reward, terminated, truncated, _ = env.step(action)
                 total_reward += reward
                 episode_reward += reward

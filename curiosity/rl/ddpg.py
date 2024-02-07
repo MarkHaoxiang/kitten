@@ -1,8 +1,10 @@
-from typing import Optional, Tuple
+from typing import List, Optional, Tuple, Union
+from numpy import ndarray
 
 import torch
 import torch.nn as nn
 from torch import Tensor
+from torch.nn.modules import Module
 
 from curiosity.experience import AuxiliaryMemoryData, Transition
 from curiosity.nn import AddTargetNetwork, Actor, Critic
@@ -128,12 +130,19 @@ class DeepDeterministicPolicyGradient(Algorithm):
             self.loss_critic_value, self.loss_actor_value = loss_critic_value, loss_actor_value
         return self.loss_critic_value, self.loss_actor_value 
 
-    @property
-    def policy_fn(self):
-        return self.actor.to_policy_fn()
-    
+    def policy_fn(self, s: Union[Tensor, ndarray]) -> Tensor:
+        if isinstance(s, ndarray):
+            s = torch.tensor(s, device=self.device)
+        return self.actor.a(s)
+
     def get_log(self):
         return {
             "critic_loss": self.loss_critic_value,
             "actor_loss": self.loss_actor_value
         }
+
+    def get_models(self) -> List[Tuple[Module, str]]:
+        return [
+            (self.actor.net, "actor"),
+            (self.critic.net, "critic")
+        ]

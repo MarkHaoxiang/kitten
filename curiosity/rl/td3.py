@@ -1,4 +1,4 @@
-from typing import Optional, Tuple
+from typing import Optional, Tuple, List
 
 import torch
 import torch.nn as nn
@@ -17,17 +17,17 @@ class TwinDelayedDeepDeterministicPolicyGradient(DeepDeterministicPolicyGradient
                  actor_network: Actor,
                  critic_1_network: Critic,
                  critic_2_network: Critic,
-                 env_action_scale,
-                 env_action_min,
-                 env_action_max,
+                 env_action_scale: Tensor,
+                 env_action_min: Tensor,
+                 env_action_max: Tensor,
                  gamma: float = 0.99,
                  lr: float=1e-3,
                  tau: float = 0.005,
                  clip_grad_norm: Optional[float] = 1,
                  target_noise: float = 0.1,
                  target_noise_clip: float = 0.2,
-                 critic_update_frequency = 1,
-                 policy_update_frequency = 2,
+                 critic_update_frequency: int = 1,
+                 policy_update_frequency: int = 2,
                  device: str = "cpu",
                  **kwargs):
         """TD3
@@ -134,3 +134,10 @@ class TwinDelayedDeepDeterministicPolicyGradient(DeepDeterministicPolicyGradient
             self.actor.update_target_network(tau=self._tau)
 
         return self.loss_critic_value, self.loss_actor_value
+
+    def get_models(self) -> List[Tuple[nn.Module, str]]:
+        return [
+            (self.actor.net, "actor"),
+            (self.critic.net, "critic"),
+            (self.critic_2.net, "critic_2")
+        ]

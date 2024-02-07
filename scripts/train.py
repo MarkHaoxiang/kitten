@@ -39,7 +39,7 @@ def train(cfg: DictConfig) -> None:
     evaluator.policy = policy
 
     # Register logging and checkpoints
-    logger.register_models([(algorithm.actor.net, "actor"), (algorithm.critic.net, "critic")])
+    logger.register_models(algorithm.get_models())
     logger.register_providers([(algorithm, "train"), (intrinsic, "intrinsic"), (collector, "collector"), (evaluator, "evaluation"), (memory, "memory")])
 
     # Training Loop
@@ -63,7 +63,7 @@ def train(cfg: DictConfig) -> None:
 
         # Epoch Logging
         if  step % cfg.log.frames_per_epoch == 0:
-            critic_value =  algorithm.critic(torch.cat((evaluator.saved_reset_states, algorithm.actor(evaluator.saved_reset_states)), 1)).mean().item()
+            critic_value =  algorithm.critic.q(evaluator.saved_reset_states, algorithm.policy_fn(evaluator.saved_reset_states)).mean().item()
             logger.log({"train/critic_value": critic_value})
             reward, epoch = evaluator.evaluate(policy), logger.epoch()
             pbar.set_description(f"epoch {epoch} reward {reward}"), pbar.update(1)

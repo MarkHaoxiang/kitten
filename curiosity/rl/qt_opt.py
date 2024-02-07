@@ -1,11 +1,18 @@
+from typing import Dict, List, Optional, Tuple, Union
+
 import gymnasium as gym
+from numpy import ndarray
 import torch
+from torch import Tensor
 import torch.nn as nn
+from torch.nn.modules import Module
+from curiosity.experience import AuxiliaryMemoryData, Transition
 
 from curiosity.rl import Algorithm
+from curiosity.nn import Critic, AddTargetNetwork
 
 def cross_entropy_method(s_0: torch.Tensor, 
-                         critic_network: nn.Module,
+                         critic_network: Critic,
                          action_space: gym.spaces.Box,
                          n: int = 64,
                          m: int = 6,
@@ -41,7 +48,7 @@ def cross_entropy_method(s_0: torch.Tensor,
     batch_indices = torch.arange(sampled_actions.shape[0]).view(-1, 1).expand(-1, m)
 
     for _ in range(n_iterations):
-        q = critic_network(torch.cat((s_0, sampled_actions), -1))
+        q = critic_network.q(s_0, sampled_actions)
         indices = torch.topk(q, m, dim=1).indices.squeeze()
         best_actions = sampled_actions[batch_indices, indices, :]
         mu, std = best_actions.mean(dim=1), best_actions.std(dim=1)
@@ -54,14 +61,121 @@ def cross_entropy_method(s_0: torch.Tensor,
     
     return mu
 
-class QT_Opt(Algorithm):
+class QTOpt(Algorithm):
     """ Q-learning for continuous actions with Cross-Entropy Maximisation
 
-    A custom variant with TD3 critic improvements
+    With clipped Double DQN
 
     Kalashnikov et al. QT-Opt: Scalable Deep Reinforcement Learning for Vision-Based Robotic Manipulation
     """
     def __init__(self,
-                 critic_network: nn.Module,
+                 critic_1_network: Critic,
+                 critic_2_network: Critic,
+                 obs_space: gym.spaces.Box, # This is a hack #TODO: How do we pass batch sizes around?
+                 action_space: gym.spaces.Box,
+                 gamma: float = 0.99,
+                 lr: float = 1e-3,
+                 tau: float = 0.005,
+                 cem_n: int = 64,
+                 cem_m: int = 6,
+                 cem_n_iterations: int = 2,
+                 clip_grad_norm: Optional[float] = 1,
+                 update_frequency: int = 1,
+                 device: str = "cpu",
                  **kwargs) -> None:
         super().__init__()
+
+        self.critic_1 = AddTargetNetwork(critic_1_network, device=device)
+        self.critic_2 = AddTargetNetwork(critic_2_network, device=device)
+        self.critic = self.critic_1 # Also a hack for logging # TODO: How to get include critic value within loggable?
+        self.device=device
+
+        self._gamma = gamma
+        self._tau = tau
+        self._env_action_scale = torch.tensor(action_space.high-action_space.low, device=device) / 2.0
+        self._env_action_min = torch.tensor(action_space.low, dtype=torch.float32, device=device)
+        self._env_action_max = torch.tensor(action_space.low, dtype=torch.float32, device=device)
+        self._obs_space = obs_space
+        self._action_space = action_space
+        self._clip_grad_norm = clip_grad_norm
+        self._update_frequency = update_frequency
+        self._n = cem_n
+        self._m = cem_m
+        self._n_iterations = cem_n_iterations
+
+        self._optim_critic = torch.optim.Adam(
+            params=list(self.critic_1.net.parameters()) + list(self.critic_2.net.parameters()),
+            lr=lr
+        )
+
+        self.loss_critic_value = 0
+
+    def policy_fn(self, s: Union[Tensor, ndarray], critic: Optional[Critic] = None) -> Tensor:
+        if isinstance(s, ndarray):
+            s = torch.tensor(s, device=self.device)
+        if critic is None:
+            critic = self.critic_1
+        squeeze = False
+        if self._obs_space.shape == s.shape:
+            squeeze = True
+            s = s.unsqueeze(0)
+        result = cross_entropy_method(
+            s_0=s,
+            critic_network=critic,
+            action_space=self._action_space,
+            n=self._n,
+            m=self._m,
+            n_iterations=self._n_iterations,
+            device=self.device
+        )
+        if squeeze:
+            result = result.squeeze()
+        return result
+
+    def td_error(self, s_0: Tensor, a: Tensor, r :Tensor, s_1: Tensor, d: Tensor):
+        """Returns TD difference for a transition
+        """
+        x = self.critic_1.q(s_0, a).squeeze()
+        with torch.no_grad():
+            a_1 = self.policy_fn(s_1)
+            target_max = (~d) * self.critic.target.q(s_1, a_1).squeeze()
+            y = (r + target_max * self._gamma)
+        return y - x
+
+    def _critic_update(self, batch: Transition, aux: AuxiliaryMemoryData):
+        x_1 = self.critic_1.q(batch.s_0, batch.a).squeeze()
+        x_2 = self.critic_2.q(batch.s_0, batch.a).squeeze()
+        with torch.no_grad():
+            a_1 = self.policy_fn(batch.s_1, critic=self.critic_1)
+            a_2 = self.policy_fn(batch.s_1, critic=self.critic_2)
+            target_max_1 = self.critic_1.target.q(batch.s_1, a_1).squeeze()
+            target_max_2 = self.critic_2.target.q(batch.s_1, a_2).squeeze()
+            y = batch.r + (~batch.d) * torch.minimum(target_max_1, target_max_2) * self._gamma
+        loss_critic = torch.mean((aux.weights * (y-x_1)) ** 2) + torch.mean((aux.weights * (y-x_2)) ** 2)
+        loss_value = loss_critic.item()
+        self._optim_critic.zero_grad()
+        loss_critic.backward()
+        if not self._clip_grad_norm is None:
+            nn.utils.clip_grad_norm_(self.critic_1.net.parameters(), self._clip_grad_norm)
+            nn.utils.clip_grad_norm_(self.critic_2.net.parameters(), self._clip_grad_norm)
+        self._optim_critic.step()
+
+        return loss_value
+
+    def update(self, batch: Transition, aux: AuxiliaryMemoryData, step: int):
+        if step % self._update_frequency == 0:
+            self.loss_critic_value =  self._critic_update(batch, aux)
+            self.critic_1.update_target_network(tau=self._tau)
+            self.critic_2.update_target_network(tau=self._tau)
+        return self.loss_critic_value
+
+    def get_log(self):
+        return {
+            "critic_loss": self.loss_critic_value,
+        }
+
+    def get_models(self) -> List[Tuple[Module, str]]:
+        return [
+            (self.critic_1.net, "critic"),
+            (self.critic_2.net, "critic_2")
+        ]

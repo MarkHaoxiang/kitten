@@ -16,6 +16,7 @@ from curiosity.intrinsic.disagreement import Disagreement
 from curiosity.rl import Algorithm
 from curiosity.rl.ddpg import DeepDeterministicPolicyGradient
 from curiosity.rl.td3 import TwinDelayedDeepDeterministicPolicyGradient
+from curiosity.rl.qt_opt import QTOpt
 
 def build_env(name: str,
               normalise_observation: bool = False,
@@ -41,7 +42,7 @@ def build_env(name: str,
     env.reset()
     return env
 
-def build_rl(env, algorithm_configuration, device: str) -> Algorithm:
+def build_rl(env: gym.Env, algorithm_configuration, device: str) -> Algorithm:
     """ Utility to construct a RL algorithm
     """
     if algorithm_configuration.type == "ddpg":
@@ -65,6 +66,16 @@ def build_rl(env, algorithm_configuration, device: str) -> Algorithm:
             env_action_max=env_action_max,
             **algorithm_configuration
         )
+    elif algorithm_configuration.type =="qt_opt":
+        return QTOpt(
+            build_critic(env, **algorithm_configuration.critic),
+            build_critic(env, **algorithm_configuration.critic),
+            action_space=env.action_space,
+            obs_space=env.observation_space,
+            device=device,
+            **algorithm_configuration
+        )
+
     elif algorithm_configuration.type == "dqn":
         raise NotImplementedError()
     raise ValueError("Reinforcement learning algorithm type not valid")
