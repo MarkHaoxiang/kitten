@@ -146,8 +146,8 @@ class QTOpt(Algorithm):
         x_1 = self.critic_1.q(batch.s_0, batch.a).squeeze()
         x_2 = self.critic_2.q(batch.s_0, batch.a).squeeze()
         with torch.no_grad():
-            a_1 = self.policy_fn(batch.s_1, critic=self.critic_1)
-            a_2 = self.policy_fn(batch.s_1, critic=self.critic_2)
+            a_1 = self.policy_fn(batch.s_1, critic=self.critic_1.target)
+            a_2 = self.policy_fn(batch.s_1, critic=self.critic_2.target)
             target_max_1 = self.critic_1.target.q(batch.s_1, a_1).squeeze()
             target_max_2 = self.critic_2.target.q(batch.s_1, a_2).squeeze()
             y = batch.r + (~batch.d) * torch.minimum(target_max_1, target_max_2) * self._gamma
