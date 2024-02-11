@@ -1,0 +1,250 @@
+# Std
+import copy
+from typing import Any, Optional, Tuple
+
+# Training
+import numpy as np
+import torch
+from tqdm import tqdm
+from omegaconf import DictConfig
+import gymnasium as gym
+
+# Curiosity
+from curiosity.experience.util import Transition, build_transition_from_update
+from curiosity.experience.collector import GymCollector
+from curiosity.policy import ColoredNoisePolicy, Policy
+from curiosity.experience.util import build_replay_buffer
+from curiosity.util.util import *
+
+# Cats
+from rl import QTOptCats 
+
+class CatsExperiment:
+    """ Experiment baseline
+    """
+    def __init__(self,
+                 cfg: DictConfig,
+                 collection_steps: int, 
+                 max_episode_steps: Optional[int] = None,
+                 death_is_not_the_end: bool = True,
+                 fixed_reset: bool = True,
+                 enable_policy_sampling: bool = True,
+                 teleport_strategy: Optional[Tuple[str, Any]] = None,
+                 seed: int = 0,
+                 device: str = "cpu"):
+        # Parameters
+        self.cfg = copy.deepcopy(cfg)
+        self.cfg.total_frames = collection_steps
+        self.cfg.seed = seed
+        self.device = device
+
+        self.fixed_reset = fixed_reset
+        self.enable_policy_sampling = enable_policy_sampling
+        self.death_is_not_the_end = death_is_not_the_end
+        if teleport_strategy is None:
+            self.teleport_strategy = None
+        else:
+            self.teleport_strategy = teleport_strategy[0]
+            self.teleport_strategy_parameters = teleport_strategy[1]
+        
+        # Init
+        self._build_env(max_episode_steps)
+        self._build_policy()
+        self._build_data()
+        self._build_intrinsic()
+        self._teleport_initialisation()
+        self.np_rng = np.random.default_rng(self.cfg.seed)
+
+        # Logging
+        self.log = {
+            "total_intrinsic_reward": 0,
+            "newly_collected_intrinsic_reward": 0
+        }
+        if not self.teleport_strategy is None:
+            self.log["teleport_targets_index"] = []
+            self.log["teleport_targets_observations"] = []
+    
+    def _teleport_initialisation(self):
+        self.teleport_targets_observations = []
+        self.teleport_targets_saves = []
+        self.current_index = 0
+        self.teleport_index = 0
+
+    def _build_intrinsic(self):
+        self.intrinsic = build_intrinsic(self.env, self.cfg.intrinsic, device=self.device)
+
+    def _build_env(self, max_episode_steps=None):
+        self.env = gym.make(
+            self.cfg.env.name,
+            render_mode="rgb_array",
+            max_episode_steps=max_episode_steps
+        )
+        self.env.reset()
+        self.rng = global_seed(self.cfg.seed, self.env)
+
+    def _build_policy(self):
+        self.algorithm = QTOptCats(
+            build_critic=lambda : build_critic(self.env, **self.cfg.algorithm.critic).to(device=self.device),
+            action_space=self.env.action_space,
+            obs_space=self.env.observation_space,
+            device=self.device,
+            **self.cfg.algorithm
+        )
+        self.policy = ColoredNoisePolicy(
+            self.algorithm.policy_fn,
+            self.env.action_space,
+            self.env.spec.max_episode_steps,
+            rng=self.rng,
+            device=self.device,
+            **self.cfg.noise
+        )
+
+    def _build_data(self):
+        self.memory = build_replay_buffer(
+            self.env,
+            capacity=self.cfg.total_frames,
+            device=self.device,
+            normalise_observation=True
+        )
+            # Remove automatic memory addition for more control
+        self.collector = GymCollector(self.policy, self.env, device=self.device)
+        self.policy.normalise_obs = self.memory.rmv[0]
+
+    def _update_memory(self, obs, action, reward, n_obs, terminated, truncated):
+        self.memory.append((obs, action, reward, n_obs, terminated))
+
+    def V(self, s) -> torch.Tensor:
+        """ Calculates the value function for states s
+        """
+        target_action = self.algorithm.policy_fn(s)
+        V = self.algorithm.critic.target.q(s, target_action)
+        return V
+    
+    def reset_env(self):
+        """ Manual reset of the environment
+        """
+        if self.enable_policy_sampling:
+            self.algorithm.reset_critic()
+        if self.fixed_reset:
+            o, i = self.collector.env.reset(seed=self.cfg.seed)
+        else:
+            o, i = self.collector.env.reset()
+        self.collector.obs = o
+
+    def early_start(self, n: int):
+        """ Overrides early start for tighter control
+
+        Args:
+            n (int): number of steps
+        """
+        self.reset_env()    
+        policy = self.collector.policy
+        self.collector.set_policy(Policy(lambda _: self.env.action_space.sample(), transform_obs=False))
+        for i in range(n):
+            obs, action, reward, n_obs, terminated, truncated = self.collector.collect(n=1, early_start=True)[-1]
+            if terminated or truncated:
+                self.reset_env()
+            self._update_memory(obs, action, reward, n_obs, terminated, truncated)
+        self.collector.policy = policy
+
+
+    # ==============================
+    # Key Algorithm: Teleportation
+    # ==============================
+    def _teleport_update(self, obs):
+        self.state = copy.deepcopy(self.collector.env)
+        self.teleport_targets_observations.append(obs)
+        self.teleport_targets_saves.append(self.state)
+        self.current_index += 1
+
+    def _teleport_selection(self, V: torch.Tensor):
+        """ Given the values of teleport targets, select a goal
+        """
+        if self.teleport_strategy == "e_greedy":
+            teleport_index = torch.argmax(V).item()
+            if self.np_rng.random() <= self.teleport_strategy_parameters:
+                teleport_index = 0
+        elif self.teleport_strategy == "thompson":
+            V = V**self.teleport_strategy_parameters
+            p = V / V.sum()
+            pt = self.np_rng.random()
+            pc = 0
+            for i, pi in enumerate(p):
+                pc += pi
+                if pc >= pt or i == len(p) - 1:
+                    teleport_index = i
+                    break
+        else:
+            raise ValueError(f"Unknown teleport strategy {self.teleport_strategy}")
+
+        return teleport_index 
+    
+    def _reset(self):
+        if self.teleport_strategy is None:
+            self.reset_env()
+        else:
+            # Call Teleportation
+            V = self.V(torch.tensor(self.teleport_targets_observations[:self.current_index], device=self.device))
+            with torch.no_grad():
+                self.teleport_index = self._teleport_selection(V)
+            # TODO: Selecting Resets
+            
+            self.current_index = self.teleport_index
+            self.collector.env = self.teleport_targets_saves[self.teleport_index]
+            self.collector.obs = self.teleport_targets_observations[self.teleport_index]
+            self.collector.env.np_random = np.random.default_rng(self.np_rng.integers(65536))
+            self.teleport_targets_observations = self.teleport_targets_observations[:self.teleport_index+1]
+            self.teleport_targets_saves = self.teleport_targets_saves[:self.teleport_index+1]
+            self.state = copy.deepcopy(self.collector.env)
+
+            # Logging
+            self.log["teleport_targets_index"].append(self.teleport_index)
+            self.log["teleport_targets_observations"].append(self.collector.obs)
+
+    # ==============================
+
+
+    def run(self):
+        """ Default Experiment run
+        """
+        # Initialisation
+        self.early_start(self.cfg.train.initial_collection_size)
+        self.reset_env()
+        batch, aux = self.memory.sample(self.cfg.train.initial_collection_size)
+        self.intrinsic.initialise(Transition(*batch), aux)
+
+        # Main Loop
+        for step in tqdm(range(1, self.cfg.train.total_frames+1)):
+            # Collect Data
+            obs, action, reward, n_obs, terminated, truncated = self.collector.collect(n=1)[-1]
+            self._update_memory(obs, action, reward, n_obs, terminated, truncated)                
+            
+            # Teleport
+            if not self.teleport_strategy is None:
+                self._teleport_update(obs)
+
+            if terminated or truncated:
+                self._reset()
+
+            # Updates
+            batch, aux = self.memory.sample(self.cfg.train.minibatch_size)
+            batch = Transition(*batch)
+                # Death is not the end - disabled termination
+            if self.death_is_not_the_end:
+                batch = Transition(batch.s_0, batch.a, batch.r, batch.s_1, torch.zeros(batch.d.shape, device=self.device).bool())
+
+            # Intrinsic Reward Calculation
+            _, _, r_i = self.intrinsic.reward(batch)
+            self.intrinsic.update(batch, aux, step=step)
+
+            # RL Update            
+            batch = Transition(batch.s_0, batch.a, r_i, batch.s_1, batch.d)
+            self.algorithm.update(batch, aux, step=step)
+
+            # Log
+            self.log["total_intrinsic_reward"] += r_i.mean().item()
+            self.log['newly_collected_intrinsic_reward'] += self.intrinsic.reward(
+                build_transition_from_update(
+                    obs, action, reward, n_obs, terminated, device=self.device
+                )
+            )[2].item()

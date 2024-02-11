@@ -1,4 +1,4 @@
-from typing import Optional, Callable
+from typing import Any, Optional, Callable
 from collections import namedtuple
 
 import torch
@@ -10,6 +10,22 @@ from .collector import DataCollector, GymCollector
 
 # A class representing a standard Markov Decision Process Transition
 Transition = namedtuple('Transition', ["s_0", "a", "r", "s_1", "d"])
+
+def build_transition_from_update(obs,
+                                        action,
+                                        reward,
+                                        n_obs,
+                                        terminated,
+                                        device: str = "cpu"):
+    """ Utility to wrap a single gym update into a transition
+    """
+    return Transition(
+        torch.tensor(obs, device=device).unsqueeze(0),
+        torch.tensor(action, device=device).unsqueeze(0),
+        torch.tensor(reward, device=device).unsqueeze(0),
+        torch.tensor(n_obs, device=device).unsqueeze(0),
+        torch.tensor(terminated, device=device).unsqueeze(0)
+    )
 
 def build_replay_buffer(env: Env,
                         capacity: int = 10000,
