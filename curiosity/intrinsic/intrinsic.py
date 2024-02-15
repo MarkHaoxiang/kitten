@@ -6,7 +6,7 @@ from torch import Tensor
 
 from curiosity.experience import AuxiliaryMemoryData, Transition
 from curiosity.logging import Loggable
-from curiosity.util.stat import RunningMeanVariance
+from curiosity.dataflow.normalisation import RunningMeanVariance
 
 class IntrinsicReward(Loggable, ABC):
     """ Interface for intrinsic exploration rewards

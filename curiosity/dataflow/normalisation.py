@@ -1,7 +1,6 @@
 from typing import Any, Optional
 
 import torch
-
 from curiosity.dataflow.interface import Transform
 
 class RunningMeanVariance(Transform):
@@ -13,7 +12,7 @@ class RunningMeanVariance(Transform):
         self._mean = 0
         self._sum_squared_difference = 0
         self._var = 0
-    
+
     def add_batch(self, batch_size, batch_mean, batch_squared_difference):
         """ Adds batch statistics to track
 

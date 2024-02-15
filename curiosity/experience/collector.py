@@ -26,7 +26,7 @@ class DataCollector(Loggable, ABC):
         self.memory = memory
 
     @abstractmethod
-    def collect(self, append_memory: bool = True, *args, **kwargs):
+    def collect(self, append_memory: bool = True, *args, **kwargs) -> Tuple[Transition, torch.Tensor]:
         """ Collect data on the environment
 
         Args:
@@ -38,7 +38,7 @@ class DataCollector(Loggable, ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def early_start(self, n: int):
+    def early_start(self, n: int) -> Tuple[Transition, torch.Tensor]:
         """ Runs the environment for a certain number of steps using a random policy.
 
         For example, to fill the replay buffer or initialise normalisations.

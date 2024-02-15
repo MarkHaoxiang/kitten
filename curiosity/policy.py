@@ -8,13 +8,10 @@ import numpy as np
 import torch
 from torch import Tensor
 
-from curiosity.util.stat import RunningMeanVariance
-
 class Policy:
     def __init__(self,
                  fn: Callable[[Union[Tensor, np.ndarray]], Tensor],
                  transform_obs: bool = True,
-                 normalise_obs: Optional[RunningMeanVariance] = None,
                  device="cpu"):
         """ Policy API to pass into data collection pipeline
 
@@ -26,7 +23,6 @@ class Policy:
         self.fn = fn
         self._evaluate = False
         self._transform_obs = transform_obs
-        self.normalise_obs = normalise_obs
         self.device = device
 
     def __call__(self, obs: Union[Tensor, np.ndarray], *args, **kwargs) -> Any:
@@ -45,9 +41,6 @@ class Policy:
                 dtype=torch.float32
             )
         
-        if not self.normalise_obs is None:
-            obs = (obs - self.normalise_obs.mean) / self.normalise_obs.std
-
         return self.fn(obs)
 
     def reset(self) -> None:

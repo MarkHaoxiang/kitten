@@ -2,6 +2,8 @@ from abc import ABC, abstractmethod
 from typing import Any, Callable, Union
 import types
 
+from curiosity.experience import AuxiliaryMemoryData, Transition
+
 class Transform(Callable, ABC):
     """ General data transformations
 
@@ -62,7 +64,7 @@ class Transform(Callable, ABC):
             def g(_, *args, **kwargs):
                 return self(f(*args, **kwargs))
             f.__self__.__setattr__(f.__name__, types.MethodType(g, f.__self__))
-        elif isinstance(f, types.FunctionType):
+        elif isinstance(f, types.FunctionType) or isinstance(f, types.MethodType):
             def g(*args, **kwargs):
                 return self(f(*args, **kwargs))
             return g
@@ -78,9 +80,13 @@ class Transform(Callable, ABC):
             def g(_, *args, **kwargs):
                 return f(self(*args, **kwargs))
             f.__self__.__setattr__(f.__name__, types.MethodType(g, f.__self__))
-        elif isinstance(f, types.FunctionType):
+        elif isinstance(f, types.FunctionType) or isinstance(f, types.MethodType):
             def g(*args, **kwargs):
                 return f(self(*args, **kwargs))
             return g
         else:
             raise ValueError(f"{f} is not a valid function target")
+
+class Identity(Transform):
+    def transform(self, data: Any, *args, **kwargs) -> Any:
+        return data
