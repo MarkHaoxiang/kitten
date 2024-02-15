@@ -6,7 +6,7 @@ defaults:
   - noise: white
 
 memory:
-  normalise_observation: True
+  normalise_observation: True 
 
 seed: 0 
 log:

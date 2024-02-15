@@ -1,5 +1,4 @@
 from typing import Any, Optional, Callable
-from collections import namedtuple
 
 import torch
 from gymnasium import Env
@@ -8,15 +7,15 @@ from gymnasium.spaces.discrete import Discrete
 from .memory import ReplayBuffer, PrioritizedReplayBuffer
 from .collector import DataCollector, GymCollector
 
-# A class representing a standard Markov Decision Process Transition
-Transition = namedtuple('Transition', ["s_0", "a", "r", "s_1", "d"])
+from curiosity.dataflow.normalisation import RunningMeanVariance
+from curiosity.experience import Transition
 
 def build_transition_from_update(obs,
-                                        action,
-                                        reward,
-                                        n_obs,
-                                        terminated,
-                                        device: str = "cpu"):
+                                 action,
+                                 reward,
+                                 n_obs,
+                                 terminated,
+                                 device: str = "cpu"):
     """ Utility to wrap a single gym update into a transition
     """
     return Transition(
@@ -46,14 +45,17 @@ def build_replay_buffer(env: Env,
     """
     discrete = isinstance(env.action_space, Discrete)
     if normalise_observation:
-        normalise_observation = [True, False, False, True, False]
+        rmv = RunningMeanVariance()
+        normalise_observation = [rmv, None, None, rmv, None]
+    else:
+        normalise_observation = [None, None, None, None, None]
 
     if type == "experience_replay":
         return ReplayBuffer(
             capacity=capacity,
             shape=(env.observation_space.shape, env.action_space.shape, (), env.observation_space.shape, ()),
             dtype=(torch.float32, torch.int if discrete else torch.float32, torch.float32, torch.float32, torch.bool),
-            normalise=normalise_observation,
+            transforms=normalise_observation,
             device=device,
             **kwargs
         )
@@ -65,7 +67,7 @@ def build_replay_buffer(env: Env,
             capacity=capacity,
             shape=(env.observation_space.shape, env.action_space.shape, (), env.observation_space.shape, ()),
             dtype=(torch.float32, torch.int if discrete else torch.float32, torch.float32, torch.float32, torch.bool),
-            normalise=normalise_observation,
+            transforms=normalise_observation,
             device=device,
             **kwargs
         )

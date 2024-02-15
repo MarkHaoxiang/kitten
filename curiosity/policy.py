@@ -44,6 +44,7 @@ class Policy:
                 device=self.device,
                 dtype=torch.float32
             )
+        
         if not self.normalise_obs is None:
             obs = (obs - self.normalise_obs.mean) / self.normalise_obs.std
 

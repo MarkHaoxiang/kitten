@@ -1,19 +1,12 @@
 from typing import Optional, Sequence, Union, Callable, Tuple
-from collections import namedtuple
 
 import numpy as np
 import torch
 from torch import Tensor
 
 from curiosity.logging import Loggable
-from curiosity.dataflow.normalisation import RunningMeanVariance
-
-# Auxiliary information contained on retrieval from memory
-AuxiliaryMemoryData = namedtuple('AuxiliaryMemoryData', [
-    "weights", # Recommended importance weighting to match memory data distribution
-    "random",  # Random number associated with sample - eg. for bootstrapping split
-    "indices", # Index of sample within memory 
-])
+from curiosity.dataflow import Transform
+from curiosity.experience import AuxiliaryMemoryData
 
 class ReplayBuffer(Loggable):
     """ Store history of episode transitions
@@ -22,7 +15,7 @@ class ReplayBuffer(Loggable):
                  capacity: int,
                  shape: Sequence[int],
                  dtype: Optional[Union[torch.dtype, Sequence[torch.dtype]]] = None,
-                 normalise: Union[bool, Sequence[bool]] = False,
+                 transforms: Optional[Union[Transform, Sequence[Transform]]] = None,
                  device: str = "cpu",
                  **kwargs) -> None:
         """ Replay buffer to store past observations
@@ -49,10 +42,10 @@ class ReplayBuffer(Loggable):
         else:
             self.storage = [torch.zeros((capacity, *s), device=self.device, dtype=dtype) for s in shape]
 
-        # Normalise
-        if isinstance(normalise, bool):
-            normalise = [normalise for _ in shape]
-        self.rmv = [RunningMeanVariance() if toggle else None for toggle in normalise]
+        # Transforms
+        if isinstance(transforms, Transform):
+            transforms = [transforms for _ in shape]
+        self.transforms = transforms
 
         self._random = torch.zeros(capacity, device=self.device)
         self._append_index = 0 # Position of next tensor to be inserted
@@ -77,11 +70,6 @@ class ReplayBuffer(Loggable):
         else:
             self._random[self._append_index:self.capacity+1] = random_ids[:self.capacity-self._append_index]
             self._random[:n_insert+self._append_index-self.capacity] = random_ids[self.capacity-self._append_index:]
-        # Update Normalisation
-        for i, rmv in enumerate(self.rmv):
-            if rmv is None:
-                continue
-            rmv.add_tensor_batch(inputs[i])
         # Update Data
         for i in range(self.N):
             x = inputs[i]
@@ -151,16 +139,16 @@ class ReplayBuffer(Loggable):
     def __len__(self):
         return self.capacity if self._full else self._append_index
  
-    def _fetch_storage(self, indices, normalise: bool=True):
+    def _fetch_storage(self, indices, transforms: bool=True):
         if not (isinstance(indices, torch.Tensor) or isinstance(indices, int)):
             indices = torch.tensor(indices, device=self.device)
         results = [self.storage[i][indices] for i in range(self.N)]
-        # Normalisation
-        if normalise:
+        # Transforms 
+        if transforms and not self.transforms is None:
             for i, result in enumerate(results):
-                if self.rmv[i] is None:
+                if self.transforms[i] is None:
                     continue
-                results[i] = (result - self.rmv[i].mean) / self.rmv[i].std
+                results[i] = self.transforms[i](result)
         return tuple(results)
 
 class PrioritizedReplayBuffer(ReplayBuffer):

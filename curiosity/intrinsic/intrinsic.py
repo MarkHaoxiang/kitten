@@ -85,7 +85,7 @@ class IntrinsicReward(Loggable, ABC):
     def _update(self, batch: Transition, aux: AuxiliaryMemoryData, step: int):
         raise NotImplementedError
 
-    def initialise(self, batch: Transition, aux: AuxiliaryMemoryData):
+    def initialise(self, batch: Transition):
         """ Initialise internal state (eg. for normalisation)
 
         Args:
@@ -94,7 +94,7 @@ class IntrinsicReward(Loggable, ABC):
         batch = self._clip_batch(batch)
         if self._reward_normalisation:
             rewards = self._reward(batch)
-            self._reward_normalisation.add_tensor_batch(rewards, aux.weights)
+            self._reward_normalisation.add_tensor_batch(rewards)
 
     def get_log(self):
         return self.info

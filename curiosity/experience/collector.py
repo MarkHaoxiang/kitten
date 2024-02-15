@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 import gymnasium as gym
 import numpy as np
 import torch
 
+from curiosity.experience import Transition
 from curiosity.experience.memory import ReplayBuffer
 from curiosity.logging import Loggable
 from curiosity.policy import Policy
@@ -25,7 +26,7 @@ class DataCollector(Loggable, ABC):
         self.memory = memory
 
     @abstractmethod
-    def collect(self, append_memory: bool = True, *args, **kwargs) -> List:
+    def collect(self, append_memory: bool = True, *args, **kwargs):
         """ Collect data on the environment
 
         Args:
@@ -37,7 +38,7 @@ class DataCollector(Loggable, ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def early_start(self, n: int) -> List:
+    def early_start(self, n: int):
         """ Runs the environment for a certain number of steps using a random policy.
 
         For example, to fill the replay buffer or initialise normalisations.
@@ -89,11 +90,15 @@ class GymCollector(DataCollector):
                 n: int,
                 append_memory: bool = True,
                 early_start: bool = False,
-                *args, **kwargs) -> List:
+                *args, **kwargs) -> Tuple[Transition, torch.Tensor]:
         if not early_start:
             self.frame += n
         with torch.no_grad():
-            result = []
+            # Result
+            batch = ([], [], [], [], [])
+            batch_truncated = []
+
+            # Execution Loop
             obs = self.obs
             for _ in range(n):
                 # Calculate actions 
@@ -104,20 +109,24 @@ class GymCollector(DataCollector):
                 # Store buffer
                 if not self.memory is None and append_memory:
                     self.memory.append(transition_tuple, update=not early_start)
-                # Add Truncation info back in
-                transition_tuple = (obs, action, reward, n_obs, terminated, truncated)
-                result.append(transition_tuple)
+                # Store in results
+                for i, v in enumerate(transition_tuple):
+                    batch[i].append(v)
+                batch_truncated.append(truncated)
                 # Reset
                 if terminated or truncated:
                     n_obs, _ = self.env.reset()
                     self.policy.reset()
                 # Crucial Step
                 obs = n_obs
-
             self.obs = obs
-            return result
 
-    def early_start(self, n: int, dry_run: bool = False) -> List:
+        # Wrap
+        batch = Transition(*[torch.tensor(np.array(x), device=self.device) for x in batch])
+        batch_truncated = torch.tensor(np.array(batch_truncated), device=self.device)
+        return batch, batch_truncated
+
+    def early_start(self, n: int, dry_run: bool = False) -> Tuple[Transition, torch.Tensor]:
         """ Runs the environment for a certain number of steps using a random policy.
 
         For example, to fill the replay buffer or initialise normalisations.

@@ -1,2 +1,1 @@
-from .util import Transition
-from .memory import AuxiliaryMemoryData
+from .interface import AuxiliaryMemoryData, Transition

@@ -8,6 +8,7 @@ class RunningMeanVariance(Transform):
     """ https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance
     """
     def __init__(self) -> None:
+        super().__init__()
         self._n = 0
         self._mean = 0
         self._sum_squared_difference = 0
