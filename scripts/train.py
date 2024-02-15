@@ -33,7 +33,7 @@ def train(cfg: DictConfig) -> None:
     intrinsic = build_intrinsic(env, cfg.intrinsic, device=DEVICE)
 
     # Data pipeline
-    memory = build_replay_buffer(env, error_fn=lambda x: torch.abs(algorithm.td_error(*x)).detach().cpu().numpy(), device=DEVICE, **cfg.memory)
+    memory = build_replay_buffer(env, error_fn=lambda x: algorithm.td_error(*x).abs().detach().cpu().numpy(), device=DEVICE, **cfg.memory)
     policy.normalise_obs = memory.rmv[0]
     collector = build_collector(policy, env, memory, device=DEVICE)
     evaluator.policy = policy
@@ -47,10 +47,8 @@ def train(cfg: DictConfig) -> None:
     collector.early_start(cfg.train.initial_collection_size)
     batch, aux = memory.sample(cfg.train.initial_collection_size)
     intrinsic.initialise(Transition(*batch), aux)
-
     for step in range(1, cfg.train.total_frames+1):
         collector.collect(n=1)
-
         # RL Update
         batch, aux = memory.sample(cfg.train.minibatch_size)
         batch = Transition(*batch)
@@ -63,10 +61,10 @@ def train(cfg: DictConfig) -> None:
 
         # Epoch Logging
         if  step % cfg.log.frames_per_epoch == 0:
-            critic_value =  algorithm.critic.q(evaluator.saved_reset_states, algorithm.policy_fn(evaluator.saved_reset_states)).mean().item()
-            logger.log({"train/critic_value": critic_value})
-            reward, epoch = evaluator.evaluate(policy), logger.epoch()
-            pbar.set_description(f"epoch {epoch} reward {reward}"), pbar.update(1)
+            logger.log({
+                "train/critic_value": algorithm.critic.q(evaluator.saved_reset_states, algorithm.actor.a(evaluator.saved_reset_states)).mean().item()
+            })
+            pbar.set_description(f"epoch {logger.epoch()} reward {evaluator.evaluate(policy)}"), pbar.update(1)
         # Update checkpoints
         if step % cfg.log.checkpoint.frames_per_checkpoint == 0:
             logger.checkpoint_registered(step)

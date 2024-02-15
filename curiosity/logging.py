@@ -144,8 +144,13 @@ class CuriosityLogger:
         """
         for (model, name) in self.models:
             self.checkpoint(model, name, frame)
+    
+    def epoch(self) -> int:
+        """ Logging epoch
 
-    def epoch(self):
+        Returns:
+            The epoch count after logging
+        """
         self._epoch += 1
         log = {
             "train/wall_time": self.get_wall_time()
@@ -227,7 +232,7 @@ class CuriosityEvaluator:
             env (Env): Training environment.
             policy (Policy): Evaluation policy.
             video (_type_): Log evaluation videos.
-            saved_reset_states (int, optional): Set of stored observations. Defaults to 10.
+            saved_reset_states (int, optional): Set of stored observations from the reset distribution. Defaults to 10.
             device (str, optional): Device. Defaults to "cpu".
         """
         self.env = copy.deepcopy(env)
