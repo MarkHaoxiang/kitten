@@ -10,7 +10,7 @@ from omegaconf import DictConfig
 import gymnasium as gym
 
 # Curiosity
-from curiosity.experience.util import Transition, build_transition_from_update
+from curiosity.experience.util import Transition, build_transition_from_update, build_transition_from_list
 from curiosity.experience.collector import GymCollector
 from curiosity.policy import ColoredNoisePolicy, Policy
 from curiosity.experience.util import build_replay_buffer
@@ -108,7 +108,6 @@ class CatsExperiment:
         self.policy.fn = self.normalise_observation.append(
             self.policy.fn, bind_method_type=False
         )
-        self.policy.normalise_obs = self.memory.rmv[0]
 
     def _update_memory(self, obs, action, reward, n_obs, terminated, truncated):
         self.memory.append((obs, action, reward, n_obs, terminated))
@@ -119,7 +118,7 @@ class CatsExperiment:
         target_action = self.algorithm.policy_fn(s)
         V = self.algorithm.critic.target.q(s, target_action)
         return V
-    
+
     def reset_env(self):
         """ Manual reset of the environment
         """
@@ -140,12 +139,19 @@ class CatsExperiment:
         self.reset_env()    
         policy = self.collector.policy
         self.collector.set_policy(Policy(lambda _: self.env.action_space.sample(), transform_obs=False))
+        results = []
         for i in range(n):
             obs, action, reward, n_obs, terminated, truncated = self.collector.collect(n=1, early_start=True)[-1]
             if terminated or truncated:
                 self.reset_env()
             self._update_memory(obs, action, reward, n_obs, terminated, truncated)
+            results.append((obs, action, reward, n_obs, terminated, truncated))
         self.collector.policy = policy
+        batch = build_transition_from_list(results)
+        self.intrinsic.initialise(batch)
+        self.normalise_observation.add_tensor_batch(batch.s_1)
+
+
 
 
     # ==============================
@@ -210,14 +216,15 @@ class CatsExperiment:
         # Initialisation
         self.early_start(self.cfg.train.initial_collection_size)
         self.reset_env()
-        batch, aux = self.memory.sample(self.cfg.train.initial_collection_size)
-        self.intrinsic.initialise(Transition(*batch), aux)
 
         # Main Loop
         for step in tqdm(range(1, self.cfg.train.total_frames+1)):
             # Collect Data
             obs, action, reward, n_obs, terminated, truncated = self.collector.collect(n=1)[-1]
             self._update_memory(obs, action, reward, n_obs, terminated, truncated)                
+            self.normalise_observation.add_tensor_batch(
+                torch.tensor(n_obs, device=self.device).unsqueeze(0)
+            )
             
             # Teleport
             if not self.teleport_strategy is None:
