@@ -5,11 +5,12 @@ import hydra
 import torch
 from tqdm import tqdm
 
+from curiosity.rl import HasCritic
 from curiosity.experience import Transition
 from curiosity.experience.util import build_collector, build_replay_buffer
 from curiosity.policy import ColoredNoisePolicy
 from curiosity.util.util import build_env, build_rl, build_intrinsic, global_seed
-from curiosity.logging import CuriosityEvaluator, CuriosityLogger
+from curiosity.logging import CuriosityEvaluator, CuriosityLogger, CriticValue
 
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -41,6 +42,8 @@ def train(cfg: DictConfig) -> None:
     # Register logging and checkpoints
     logger.register_models(algorithm.get_models())
     logger.register_providers([(algorithm, "train"), (intrinsic, "intrinsic"), (collector, "collector"), (evaluator, "evaluation"), (memory, "memory")])
+    if isinstance(algorithm, HasCritic):
+        logger.register_provider(CriticValue(algorithm, evaluator), "train")
 
     # Training Loop
     pbar = tqdm(total=cfg.train.total_frames // cfg.log.frames_per_epoch, file=sys.stdout)
@@ -61,9 +64,6 @@ def train(cfg: DictConfig) -> None:
 
         # Epoch Logging
         if  step % cfg.log.frames_per_epoch == 0:
-            logger.log({
-                "train/critic_value": algorithm.critic.q(evaluator.saved_reset_states, algorithm.actor.a(evaluator.saved_reset_states)).mean().item()
-            })
             pbar.set_description(f"epoch {logger.epoch()} reward {evaluator.evaluate(policy)}"), pbar.update(1)
         # Update checkpoints
         if step % cfg.log.checkpoint.frames_per_checkpoint == 0:

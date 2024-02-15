@@ -1,1 +1,1 @@
-from .rl import Algorithm
+from .interface import Algorithm, HasCritic

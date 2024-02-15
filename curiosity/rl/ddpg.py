@@ -8,9 +8,9 @@ from torch.nn.modules import Module
 
 from curiosity.experience import AuxiliaryMemoryData, Transition
 from curiosity.nn import AddTargetNetwork, Actor, Critic
-from curiosity.rl import Algorithm
+from curiosity.rl import Algorithm, HasCritic
 
-class DeepDeterministicPolicyGradient(Algorithm):
+class DeepDeterministicPolicyGradient(Algorithm, HasCritic):
     """ Implements DDPG
 
     Lillicrap et al. Continuous Control with Deep Reinforcement Learning. 2015.
@@ -38,7 +38,7 @@ class DeepDeterministicPolicyGradient(Algorithm):
             device (str, optional): Training hardware. Defaults to "cpu".
         """
         self.actor = AddTargetNetwork(actor_network, device=device)
-        self.critic = AddTargetNetwork(critic_network, device=device)
+        self._critic = AddTargetNetwork(critic_network, device=device)
         self.device = device
 
         self._gamma = gamma
@@ -50,6 +50,10 @@ class DeepDeterministicPolicyGradient(Algorithm):
 
         self.loss_critic_value, self.loss_actor_value = 0, 0
 
+    @property
+    def critic(self):
+        return self._critic
+    
     def _critic_update(self, s_0: Tensor, a: Tensor, r: Tensor, s_1: Tensor, d: Tensor, weights: Tensor) -> float:
         """ Runs a critic update
 

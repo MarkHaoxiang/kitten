@@ -1,12 +1,14 @@
 from abc import ABC, abstractmethod
-from typing import Union, Tuple
+from typing import Union
 
 import numpy as np
 from torch import Tensor
 
 from curiosity.experience import AuxiliaryMemoryData, Transition
+from curiosity.nn import Critic
 from curiosity.logging import Loggable
 
+# This file contains a set of interfaces commonly used in RL
 class Algorithm(Loggable, ABC):
     """ Interface for RL Policy Improvement Algorithms
     """
@@ -31,4 +33,11 @@ class Algorithm(Loggable, ABC):
         Returns:
             Tensor: Action. 
         """
+        raise NotImplementedError
+
+class HasCritic(ABC):
+
+    @property
+    @abstractmethod
+    def critic(self) -> Critic:
         raise NotImplementedError

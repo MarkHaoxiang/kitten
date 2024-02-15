@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from abc import ABC
 import copy
 from datetime import datetime
@@ -5,7 +7,7 @@ import math
 import os
 from os.path import join
 import shutil
-from typing import Callable, Dict, Optional, Tuple, List
+from typing import Callable, Dict, Optional, Tuple, List, TYPE_CHECKING
 import time
 
 import torch
@@ -17,6 +19,8 @@ from gymnasium.wrappers.record_video import RecordVideo
 import wandb
 
 from curiosity.policy import Policy
+if TYPE_CHECKING:
+    from curiosity.rl import HasCritic
 
 class Loggable(ABC):
     """ Interface signalling a module which can be logged
@@ -38,16 +42,36 @@ class Loggable(ABC):
         """
         return []
 
+class CriticValue(Loggable):
+    """ The estimated critic value of the reset distribution
+
+    #TODO: Expand to accept general value functions
+    """
+    def __init__(self, target: HasCritic, evaluator: CuriosityEvaluator) -> None:
+        super().__init__()
+        self._target = target
+        self._evaluator = evaluator
+
+    def get_log(self) -> Dict:
+        return {
+            "critic_value": self._target.critic.q(
+                self._evaluator.saved_reset_states,
+                self._target.policy_fn(self._evaluator.saved_reset_states)
+            ).mean().item()
+        }    
+
 class CuriosityLogger:
     """ Logging tool for reinforcement learning experiments
     """
     def __init__(self, cfg: DictConfig, algorithm: str, path: str = "log") -> None:
-        """_summary_
+        """ Logging tool for reinforcement learning experiments.
+
+        Wandb centric.
 
         Args:
-            cfg (DictConfig): _description_
-            algorithm (str): _description_
-            path (str, optional): _description_. Defaults to "log".
+            cfg (DictConfig): Experiment Configuration
+            algorithm (str): Base RL algorithm
+            path (str, optional): Path for saved logs. Defaults to "log".
         """
         self.cfg = cfg
         self.name = self.generate_project_name(cfg.env.name, algorithm)
@@ -56,7 +80,7 @@ class CuriosityLogger:
         self._start_time = time.time()
         self._epoch = 0
         self.models = []
-        self.providers = []
+        self.providers: List[Loggable] = []
 
         # Log
         self.path = join(path, self.name)
