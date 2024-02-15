@@ -1,9 +1,10 @@
-from typing import Optional
+from typing import Any, Optional
 
 import torch
 
-# Deprecated
-class RunningMeanVariance:
+from curiosity.dataflow.interface import Transform
+
+class RunningMeanVariance(Transform):
     """ https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance
     """
     def __init__(self) -> None:
@@ -61,3 +62,15 @@ class RunningMeanVariance:
     @property
     def std(self):
         return self.var ** 0.5
+    
+    def transform(self,
+                  data: Any,
+                  normalise_mean: bool = True,
+                  normalise_std: bool = True) -> Any:
+        """ Normalisation by statistics recorded in this instance
+        """
+        if normalise_mean:
+            data = data - self.mean
+        if normalise_std:
+            data = data / self.std
+        return data

@@ -34,7 +34,7 @@ def train(cfg: DictConfig) -> None:
     intrinsic = build_intrinsic(env, cfg.intrinsic, device=DEVICE)
 
     # Data pipeline
-    memory = build_replay_buffer(env, error_fn=lambda x: algorithm.td_error(*x).abs().detach().cpu().numpy(), device=DEVICE, **cfg.memory)
+    memory = build_replay_buffer(env, device=DEVICE, **cfg.memory)
     policy.normalise_obs = memory.rmv[0]
     collector = build_collector(policy, env, memory, device=DEVICE)
     evaluator.policy = policy

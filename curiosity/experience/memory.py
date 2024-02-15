@@ -6,7 +6,7 @@ import torch
 from torch import Tensor
 
 from curiosity.logging import Loggable
-from curiosity.util.stat import RunningMeanVariance
+from curiosity.dataflow.normalisation import RunningMeanVariance
 
 # Auxiliary information contained on retrieval from memory
 AuxiliaryMemoryData = namedtuple('AuxiliaryMemoryData', [
