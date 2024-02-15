@@ -36,6 +36,7 @@ class CatsExperiment:
         self.cfg = copy.deepcopy(cfg)
         self.cfg.total_frames = collection_steps
         self.cfg.seed = seed
+        self.cfg.max_episode_steps = max_episode_steps
         self.device = device
 
         self.fixed_reset = fixed_reset
@@ -48,7 +49,7 @@ class CatsExperiment:
             self.teleport_strategy_parameters = teleport_strategy[1]
         
         # Init
-        self._build_env(max_episode_steps)
+        self._build_env()
         self._build_policy()
         self._build_data()
         self._build_intrinsic()
@@ -73,13 +74,8 @@ class CatsExperiment:
     def _build_intrinsic(self):
         self.intrinsic = build_intrinsic(self.env, self.cfg.intrinsic, device=self.device)
 
-    def _build_env(self, max_episode_steps=None):
-        self.env = gym.make(
-            self.cfg.env.name,
-            render_mode="rgb_array",
-            max_episode_steps=max_episode_steps
-        )
-        self.env.reset()
+    def _build_env(self):
+        self.env = build_env(**self.cfg.env)
         self.rng = global_seed(self.cfg.seed, self.env)
 
     def _build_policy(self):
@@ -108,6 +104,10 @@ class CatsExperiment:
         )
             # Remove automatic memory addition for more control
         self.collector = GymCollector(self.policy, self.env, device=self.device)
+        self.normalise_observation = self.memory.transforms[0]
+        self.policy.fn = self.normalise_observation.append(
+            self.policy.fn, bind_method_type=False
+        )
         self.policy.normalise_obs = self.memory.rmv[0]
 
     def _update_memory(self, obs, action, reward, n_obs, terminated, truncated):

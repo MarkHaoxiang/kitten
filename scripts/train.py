@@ -7,7 +7,7 @@ from tqdm import tqdm
 
 from curiosity.rl import HasCritic
 from curiosity.experience import Transition
-from curiosity.experience.util import build_collector, build_replay_buffer
+from curiosity.experience.util import build_collector, build_replay_buffer, build_transition_from_list
 from curiosity.policy import ColoredNoisePolicy
 from curiosity.util.util import build_env, build_rl, build_intrinsic, global_seed
 from curiosity.logging import CuriosityEvaluator, CuriosityLogger, CriticValue
@@ -50,13 +50,13 @@ def train(cfg: DictConfig) -> None:
 
     # Training Loop
         # Early start intialisation
-    collected, _ = collector.early_start(cfg.train.initial_collection_size)
-    intrinsic.initialise(collected)
-    normalise_observation.add_tensor_batch(collected.s_1) if cfg.memory.normalise_observation else None
+    batch = build_transition_from_list(collector.early_start(cfg.train.initial_collection_size), device=DEVICE)
+    intrinsic.initialise(batch)
+    normalise_observation.add_tensor_batch(batch.s_1) if cfg.memory.normalise_observation else None
         # Main Loop
     pbar = tqdm(total=cfg.train.total_frames // cfg.log.frames_per_epoch, file=sys.stdout)
     for step in range(1, cfg.train.total_frames+1):
-        collected, _ = collector.collect(n=1)
+        collected = build_transition_from_list(collector.collect(n=1), device=DEVICE)
         normalise_observation.add_tensor_batch(collected.s_1) if cfg.memory.normalise_observation else None
         # RL Update
         batch, aux = memory.sample(cfg.train.minibatch_size)

@@ -1,4 +1,4 @@
-from typing import Any, Optional, Callable
+from typing import Any, Optional, Callable, List
 
 import torch
 from gymnasium import Env
@@ -10,21 +10,40 @@ from .collector import DataCollector, GymCollector
 from curiosity.dataflow.normalisation import RunningMeanVariance
 from curiosity.experience import Transition
 
+def build_transition_from_list(updates: List, device: str = "cpu") -> Transition:
+    """ Utility to wrap collector results into a transition
+    """
+    return build_transition_from_update(
+        obs=[x[0] for x in updates],
+        action=[x[1] for x in updates],
+        reward=[x[2] for x in updates],
+        n_obs=[x[3] for x in updates],
+        terminated=[x[4] for x in updates],
+        add_batch=False,
+        device=device
+    )
+
+
 def build_transition_from_update(obs,
                                  action,
                                  reward,
                                  n_obs,
                                  terminated,
-                                 device: str = "cpu"):
+                                 add_batch: bool = True,
+                                 device: str = "cpu") -> Transition:
     """ Utility to wrap a single gym update into a transition
     """
-    return Transition(
-        torch.tensor(obs, device=device).unsqueeze(0),
-        torch.tensor(action, device=device).unsqueeze(0),
-        torch.tensor(reward, device=device).unsqueeze(0),
-        torch.tensor(n_obs, device=device).unsqueeze(0),
-        torch.tensor(terminated, device=device).unsqueeze(0)
-    )
+    obs = torch.tensor(obs, device=device)
+    action = torch.tensor(action, device=device)
+    reward = torch.tensor(reward, device=device)
+    n_obs = torch.tensor(n_obs, device=device)
+    terminated = torch.tensor(terminated, device=device)
+    if add_batch:
+        obs = obs.unsqueeze(0)
+        action = action.unsqueeze(0)
+        n_obs = n_obs.unsqueeze(0)
+        terminated = terminated.unsqueeze(0)
+    return Transition(obs, action, reward, n_obs, terminated)
 
 def build_replay_buffer(env: Env,
                         capacity: int = 10000,
