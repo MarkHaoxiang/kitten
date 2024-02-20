@@ -30,6 +30,7 @@ class CatsExperiment:
                  fixed_reset: bool = True,
                  enable_policy_sampling: bool = True,
                  teleport_strategy: Optional[Tuple[str, Any]] = None,
+                 environment_action_noise: float = 0,
                  seed: int = 0,
                  device: str = "cpu"):
         # Parameters
@@ -42,6 +43,7 @@ class CatsExperiment:
         self.fixed_reset = fixed_reset
         self.enable_policy_sampling = enable_policy_sampling
         self.death_is_not_the_end = death_is_not_the_end
+        self.environment_action_noise = environment_action_noise
         if teleport_strategy is None:
             self.teleport_strategy = None
         else:
@@ -59,7 +61,8 @@ class CatsExperiment:
         # Logging
         self.log = {
             "total_intrinsic_reward": 0,
-            "newly_collected_intrinsic_reward": 0
+            "newly_collected_intrinsic_reward": 0,
+            "total_collected_extrinsic_reward": 0
         }
         if not self.teleport_strategy is None:
             self.log["teleport_targets_index"] = []
@@ -76,6 +79,8 @@ class CatsExperiment:
 
     def _build_env(self):
         self.env = build_env(**self.cfg.env)
+        if self.environment_action_noise > 0:
+            self.env = StochasticActionWrapper(self.env, noise=self.environment_action_noise)
         self.rng = global_seed(self.cfg.seed, self.env)
 
     def _build_policy(self):
@@ -147,7 +152,7 @@ class CatsExperiment:
             self._update_memory(obs, action, reward, n_obs, terminated, truncated)
             results.append((obs, action, reward, n_obs, terminated, truncated))
         self.collector.policy = policy
-        batch = build_transition_from_list(results)
+        batch = build_transition_from_list(results, device=self.device)
         self.intrinsic.initialise(batch)
         self.normalise_observation.add_tensor_batch(batch.s_1)
 
@@ -241,7 +246,7 @@ class CatsExperiment:
                 batch = Transition(batch.s_0, batch.a, batch.r, batch.s_1, torch.zeros(batch.d.shape, device=self.device).bool())
 
             # Intrinsic Reward Calculation
-            _, _, r_i = self.intrinsic.reward(batch)
+            r_t, r_e, r_i = self.intrinsic.reward(batch)
             self.intrinsic.update(batch, aux, step=step)
 
             # RL Update            
@@ -250,8 +255,38 @@ class CatsExperiment:
 
             # Log
             self.log["total_intrinsic_reward"] += r_i.mean().item()
+            self.log["total_collected_extrinsic_reward"] += reward
             self.log['newly_collected_intrinsic_reward'] += self.intrinsic.reward(
                 build_transition_from_update(
                     obs, action, reward, n_obs, terminated, device=self.device
                 )
             )[2].item()
+
+class StochasticActionWrapper(gym.ActionWrapper, gym.utils.RecordConstructorArgs):
+    """ Adds unobservable random noise to incoming actions as a source of aleatoric uncertainty
+    """
+    def __init__(self, env: gym.Env, noise: float = 0.1):
+        """ A wrapper to add random noise (aleatoric uncertainty) to actions
+
+        Args:
+            env (gym.Env): The environment to apply the wrapper
+            noise (float, optional): Amount of noise (Scaled Gaussian with action_scale for Box spaces). Defaults to 0.1.
+        """
+        if not (0 < noise < 1):
+            raise ValueError(f"Noise {noise} must be within [0,1]")
+
+        gym.ActionWrapper.__init__(self, env)
+        gym.utils.RecordConstructorArgs.__init__(self, noise=noise)
+        self._noise = noise
+
+    def action(self, action: Any) -> Any:
+        """ Adds random noise to the action and clips within valid bounds 
+        """
+        if isinstance(self.action_space, gym.spaces.Box):
+            noise = self.np_random.normal(loc=0, scale=self._noise, size=action.shape)
+            noise = noise * (self.action_space.high-self.action_space.low)
+            action = action + noise
+            return np.clip(action, self.action_space.low, self.action_space.high)
+        else:
+            # TODO: Support discrete space as well
+            raise NotImplementedError()
