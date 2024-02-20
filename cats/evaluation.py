@@ -22,10 +22,13 @@ def entropy_memory(memory: ReplayBuffer):
     return -log_likelihoods.mean()
 
 
-def visualise_memory(env: gym.Env, *memories: Tuple[ReplayBuffer, str]):
+def visualise_memory(experiment: CatsExperiment):
     """ Visualise state space for given environmentss
     """
     
+    env = experiment.env
+    memory = experiment.memory
+
     fig, ax = plt.subplots()
     ax.set_title("State Space Coverage")
 
@@ -39,26 +42,20 @@ def visualise_memory(env: gym.Env, *memories: Tuple[ReplayBuffer, str]):
         ax.set_xlabel("Theta")
         ax.set_ylim(env.observation_space.low[2], env.observation_space.high[2])
         ax.set_ylabel("Angular Velocity")
-
-    for memory, name in memories:
-        batch = Transition(*memory.storage)
-        s = batch.s_0.cpu().numpy()
-
-        # Colors based on time
-        norm = mpl.colors.Normalize(vmin=0, vmax=len(s)-1)
-        cmap = cm.viridis
-        m = cm.ScalarMappable(norm=norm, cmap=cmap)
-
-        colors = m.to_rgba(np.linspace(0, len(s)-1, len(s)))
-
-        if env.spec.id == "MountainCarContinuous-v0":
-            ax.scatter(s[:, 0], s[:, 1], s=1, label=name, c=colors)
-        elif env.spec.id == "Pendulum-v1":
-            ax.scatter(np.arctan2(s[:, 1], s[:, 0]), s[:, 2], s=1, label=name, c=colors)
-
+        
+    batch = Transition(*memory.storage)
+    s = batch.s_0.cpu().numpy()
+    # Colors based on time
+    norm = mpl.colors.Normalize(vmin=0, vmax=len(s)-1)
+    cmap = cm.viridis
+    m = cm.ScalarMappable(norm=norm, cmap=cmap)
+    colors = m.to_rgba(np.linspace(0, len(s)-1, len(s)))
+    if env.spec.id == "MountainCarContinuous-v0":
+        ax.scatter(s[:, 0], s[:, 1], s=1, c=colors)
+    elif env.spec.id == "Pendulum-v1":
+        ax.scatter(np.arctan2(s[:, 1], s[:, 0]), s[:, 2], s=1, c=colors)
     
     fig.colorbar(m, ax=ax)
-    ax.legend()
 
 
 def visualise_experiment_value_estimate(experiment: CatsExperiment, device: str = "cpu"):

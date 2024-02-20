@@ -47,6 +47,7 @@ class ReplayBuffer(Loggable):
             transforms = [transforms for _ in shape]
         self.transforms = transforms
 
+        self._dtype = dtype
         self._random = torch.zeros(capacity, device=self.device)
         self._append_index = 0 # Position of next tensor to be inserted
         self._full = False # Bookmark to check if storage has looped around

@@ -37,7 +37,7 @@ class CatsExperiment:
         self.cfg = copy.deepcopy(cfg)
         self.cfg.total_frames = collection_steps
         self.cfg.seed = seed
-        self.cfg.max_episode_steps = max_episode_steps
+        self.cfg.env.max_episode_steps = max_episode_steps
         self.device = device
 
         self.fixed_reset = fixed_reset
@@ -195,7 +195,7 @@ class CatsExperiment:
             self.reset_env()
         else:
             # Call Teleportation
-            V = self.V(torch.tensor(self.teleport_targets_observations[:self.current_index], device=self.device))
+            V = self.V(torch.tensor(self.teleport_targets_observations[:self.current_index], dtype=torch.float32, device=self.device))
             with torch.no_grad():
                 self.teleport_index = self._teleport_selection(V)
             # TODO: Selecting Resets
@@ -272,8 +272,8 @@ class StochasticActionWrapper(gym.ActionWrapper, gym.utils.RecordConstructorArgs
             env (gym.Env): The environment to apply the wrapper
             noise (float, optional): Amount of noise (Scaled Gaussian with action_scale for Box spaces). Defaults to 0.1.
         """
-        if not (0 < noise < 1):
-            raise ValueError(f"Noise {noise} must be within [0,1]")
+        if 0 > noise:
+            raise ValueError(f"Noise {noise} must be above 0")
 
         gym.ActionWrapper.__init__(self, env)
         gym.utils.RecordConstructorArgs.__init__(self, noise=noise)

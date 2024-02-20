@@ -43,8 +43,9 @@ def cross_entropy_method(s_0: torch.Tensor,
 
     # Run cem
     sampled_actions = torch.rand((s_0.shape[0], n, *action_space.shape),device=device)
-    sampled_actions = sampled_actions * (env_action_max-env_action_min)[None, :, None] \
-        + env_action_min[None, :, None]
+    sampled_actions = sampled_actions \
+        * (env_action_max-env_action_min)[None, None, :] \
+        + env_action_min[None, None, :]
     batch_indices = torch.arange(sampled_actions.shape[0]).view(-1, 1).expand(-1, m)
 
     for _ in range(n_iterations):

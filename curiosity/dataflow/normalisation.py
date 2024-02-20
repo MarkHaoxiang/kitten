@@ -34,6 +34,7 @@ class RunningMeanVariance(Transform):
         Args:
             batch (torch.Tensor): Tensor of shape (batch, *data)
         """
+        batch = batch.to(dtype=torch.float32)
         if weights is None:
             weights = torch.ones(batch.shape[0], device=batch.device)
         weights = weights.view(weights.shape[0], *[1 for _ in range(len(batch.shape)-1)])

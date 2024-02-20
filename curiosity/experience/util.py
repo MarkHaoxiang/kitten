@@ -33,10 +33,10 @@ def build_transition_from_update(obs,
                                  device: str = "cpu") -> Transition:
     """ Utility to wrap a single gym update into a transition
     """
-    obs = torch.tensor(obs, device=device)
-    action = torch.tensor(action, device=device)
-    reward = torch.tensor(reward, device=device)
-    n_obs = torch.tensor(n_obs, device=device)
+    obs = torch.tensor(obs, device=device, dtype=torch.float32)
+    action = torch.tensor(action, device=device, dtype=torch.float32)
+    reward = torch.tensor(reward, device=device, dtype=torch.float32)
+    n_obs = torch.tensor(n_obs, device=device, dtype=torch.float32)
     terminated = torch.tensor(terminated, device=device)
     if add_batch:
         obs = obs.unsqueeze(0)
