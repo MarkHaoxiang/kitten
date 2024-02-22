@@ -1,7 +1,8 @@
-from abc import ABC
+from abc import ABC, abstractmethod
 import copy
 from typing import Callable, Optional
 
+import gymnasium as gym
 from gymnasium import Env
 import torch
 from torch import Tensor
@@ -10,6 +11,7 @@ import torch.nn as nn
 class Critic(ABC, nn.Module):
     """ Analogous to the Q Network
     """
+    @abstractmethod
     def q(self, s: Tensor, a: Tensor) -> Tensor:
         """ Calculates the value of taking an action under a state
 
@@ -22,9 +24,18 @@ class Critic(ABC, nn.Module):
         """
         raise NotImplementedError
 
+class Value(ABC, nn.Module):
+    """ Analogous to V networks
+    """
+    @abstractmethod
+    def v(self, s: Tensor) -> Tensor:
+        raise NotImplementedError
+
+#TODO: Generator for Value from Critic and Actor
 class Actor(ABC, nn.Module):
     """ Analogous to Pi Network
     """
+    @abstractmethod
     def a(self, s: Tensor) -> Tensor:
         """ Calculates the desired action
 
@@ -76,6 +87,8 @@ class ClassicalBoxCritic(Critic):
                  net: Optional[nn.Module] = None,
                  features: int = 128):
         super().__init__()
+        if not isinstance(env.action_space, gym.spaces.Box):
+            raise ValueError("Unsupported Environment")
         if net is None:
             self.net = nn.Sequential(
                 nn.Linear(
@@ -92,6 +105,38 @@ class ClassicalBoxCritic(Critic):
     def q(self, s: Tensor, a: Tensor) -> Tensor:
         combined = torch.cat((s, a), dim=-1)
         return self(combined)
+
+    def forward(self, x: Tensor):
+        return self.net(x)
+
+class ClassicalDiscreteValue(Critic, Value):
+    """ Critic for discrete low-dimensionality gym environments
+    """
+    def __init__(self,
+                 env: Env,
+                 net: Optional[nn.Module] = None,
+                 features: int = 128):
+        super().__init__()
+        if not isinstance(env.action_space, gym.spaces.Discrete):
+            raise ValueError("Unsupported Environment")
+        if net is None:
+            self.net = nn.Sequential(
+                nn.Linear(
+                    in_features=env.observation_space.shape[-1], out_features=features
+                ),
+                nn.LeakyReLU(),
+                nn.Linear(in_features=features, out_features=features),
+                nn.LeakyReLU(),
+                nn.Linear(in_features=features, out_features=env.action_space.n)
+            )
+        else:
+            self.net = net
+
+    def q(self, s: Tensor, a: Tensor) -> Tensor:
+        return self.v(s)[a]
+
+    def v(self, s: Tensor) -> Tensor:
+        return self(s)
 
     def forward(self, x: Tensor):
         return self.net(x)
