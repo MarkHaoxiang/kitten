@@ -43,7 +43,7 @@ class DeepDeterministicPolicyGradient(Algorithm, HasCritic):
 
         self._gamma = gamma
         self._optim_actor = torch.optim.Adam(params=self.actor.net.parameters(), lr=lr)
-        self._optim_critic = torch.optim.Adam(params=self.critic.net.parameters(), lr=lr)
+        self._optim_critic = torch.optim.Adam(params=self._critic.net.parameters(), lr=lr)
         self._tau = tau
         self._clip_grad_norm = clip_grad_norm
         self._update_frequency = update_frequency
@@ -74,7 +74,7 @@ class DeepDeterministicPolicyGradient(Algorithm, HasCritic):
         self._optim_critic.zero_grad()
         loss.backward()
         if not self._clip_grad_norm is None:
-            nn.utils.clip_grad_norm_(self.critic.net.parameters(), self._clip_grad_norm)
+            nn.utils.clip_grad_norm_(self._critic.net.parameters(), self._clip_grad_norm)
         self._optim_critic.step()
 
         return loss_value
@@ -82,9 +82,9 @@ class DeepDeterministicPolicyGradient(Algorithm, HasCritic):
     def td_error(self, s_0: Tensor, a: Tensor, r: Tensor, s_1: Tensor, d: Tensor):
         """ Returns TD difference for a transition
         """
-        x = self.critic.q(s_0, a).squeeze()
+        x = self._critic.q(s_0, a).squeeze()
         with torch.no_grad():
-            target_max = (~d) * self.critic.target.q(s_1, self.actor.target.a(s_1)).squeeze()
+            target_max = (~d) * self._critic.target.q(s_1, self.actor.target.a(s_1)).squeeze()
             y = (r + target_max * self._gamma)
         return y-x
 
@@ -103,7 +103,7 @@ class DeepDeterministicPolicyGradient(Algorithm, HasCritic):
             float: actor loss
         """
         desired_action = self.actor.a(s_0)
-        loss = -self.critic.q(s_0, desired_action)
+        loss = -self._critic.q(s_0, desired_action)
         loss = torch.mean(torch.mean(loss, dim=list(range(1, len(loss.shape)))) * weights)
         loss_value = loss.item()
         self._optim_actor.zero_grad()
@@ -128,7 +128,7 @@ class DeepDeterministicPolicyGradient(Algorithm, HasCritic):
         if step % self._update_frequency == 0:
             loss_critic_value = self._critic_update(*batch, aux.weights)
             loss_actor_value = self._actor_update(batch.s_0, aux.weights)
-            self.critic.update_target_network(tau=self._tau)
+            self._critic.update_target_network(tau=self._tau)
             self.actor.update_target_network(tau=self._tau)
 
             self.loss_critic_value, self.loss_actor_value = loss_critic_value, loss_actor_value
@@ -136,7 +136,7 @@ class DeepDeterministicPolicyGradient(Algorithm, HasCritic):
 
     def policy_fn(self, s: Union[Tensor, ndarray]) -> Tensor:
         if isinstance(s, ndarray):
-            s = torch.tensor(s, device=self.device)
+            s = torch.tensor(s, device=self.device, dtype=torch.float32)
         return self.actor.a(s)
 
     def get_log(self):
@@ -148,5 +148,5 @@ class DeepDeterministicPolicyGradient(Algorithm, HasCritic):
     def get_models(self) -> List[Tuple[Module, str]]:
         return [
             (self.actor.net, "actor"),
-            (self.critic.net, "critic")
+            (self._critic.net, "critic")
         ]

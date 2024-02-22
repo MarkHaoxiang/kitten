@@ -25,10 +25,11 @@ class DataCollector(Loggable, ABC):
         self.memory = memory
 
     @abstractmethod
-    def collect(self, append_memory: bool = True, *args, **kwargs) -> List:
+    def collect(self, n: int, append_memory: bool = True, *args, **kwargs) -> List:
         """ Collect data on the environment
 
         Args:
+            n (int): Number of steps
             append_memory (Optional[bool]): Automatically added collected transitions to the replay buffer.
 
         Returns:
@@ -82,7 +83,8 @@ class GymCollector(DataCollector):
         action = self.policy(obs, *args, **kwargs)
         if isinstance(action, torch.Tensor):
             action = action.cpu().detach().numpy()
-        action = action.clip(self.env.action_space.low, self.env.action_space.high)
+        if isinstance(self.env.action_space, gym.spaces.Box):
+            action = action.clip(self.env.action_space.low, self.env.action_space.high)
         return action
 
     def collect(self,

@@ -109,7 +109,7 @@ class ClassicalBoxCritic(Critic):
     def forward(self, x: Tensor):
         return self.net(x)
 
-class ClassicalDiscreteValue(Critic, Value):
+class ClassicalDiscreteCritic(Critic):
     """ Critic for discrete low-dimensionality gym environments
     """
     def __init__(self,
@@ -132,15 +132,14 @@ class ClassicalDiscreteValue(Critic, Value):
         else:
             self.net = net
 
-    def q(self, s: Tensor, a: Tensor) -> Tensor:
-        return self.v(s)[a]
-
-    def v(self, s: Tensor) -> Tensor:
-        return self(s)
+    def q(self, s: Tensor, a: Optional[Tensor] = None) -> Tensor:
+        if a is None:
+            return self(s)
+        else:
+            return self(s)[a]
 
     def forward(self, x: Tensor):
         return self.net(x)
-
 
 class ClassicalBoxActor(Actor):
     """ Actor for continuous low-dimensionality gym environments

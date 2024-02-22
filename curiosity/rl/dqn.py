@@ -1,42 +1,46 @@
-from typing import Dict
+from typing import Dict, List, Tuple, Union
+from numpy import ndarray
 import torch
 import torch.nn as nn
 from torch import Tensor
 
 from curiosity.experience import AuxiliaryMemoryData, Transition
-from curiosity.rl import Algorithm
+from curiosity.rl import Algorithm, HasCritic
 
-from curiosity.nn import AddTargetNetwork
+from curiosity.nn import AddTargetNetwork, Critic
 
-# Note: This algorithm has been recently transferred from deprecated script form and is not yet functional
-
-class DQN(Algorithm):
+class DQN(Algorithm, HasCritic):
     """ Implements DQN
 
     V Mnih, et al. Playing Atari with Deep Reinforcement Learning. 2013.
     """
     def __init__(self,
-                 critic: nn.Module,
+                 critic: Critic,
                  gamma: float = 0.99,
                  lr: float = 1e-3,
                  update_frequency = 1,
-                 device: str = "cpu"):
-        self.critic = AddTargetNetwork(critic, device=device)
+                 device: str = "cpu",
+                 **kwargs):
+        self.device = device
 
+        self._critic = AddTargetNetwork(critic, device=device)
         self._gamma = gamma
         self._optim = torch.optim.Adam(params=self.critic.parameters(), lr=lr)
         self._update_frequency = update_frequency
-
         self.loss_critic_value = 0
+
+    @property
+    def critic(self) -> Critic:
+        return self._critic
     
     def td_error(self, s_0: Tensor, a: Tensor, r: Tensor, s_1: Tensor, d: Tensor):
         """ Returns TD difference for a transition
         """
-        x = self.critic(s_0)[torch.arange(len(s_0), a)]
+        # TODO: This doesn't work well with multiple batch sizes
+        x = self._critic.q(s_0)[torch.arange(len(s_0)), a]
         with torch.no_grad():
-            target_max = (~d) * torch.max(self.critic.target(s_1), dim=1).values
+            target_max = (~d) * torch.max(self.critic.target.q(s_1), dim=1).values
             y = r + target_max * self._gamma
-
         return y-x
 
     def update(self, batch: Transition, aux: AuxiliaryMemoryData, step: int):
@@ -49,7 +53,17 @@ class DQN(Algorithm):
 
         return self.loss_critic_value
 
+    def policy_fn(self, s: Union[Tensor, ndarray]) -> Tensor:
+        if isinstance(s, ndarray):
+            s = torch.tensor(s, device=self.device, dtype=torch.float32)
+        return torch.argmax(self.critic.q(s=s,a=None), dim=-1)
+
     def get_log(self) -> Dict:
         return {
             "critic_loss": self.loss_critic_value
         }
+    
+    def get_models(self) -> List[Tuple[nn.Module, str]]:
+        return [
+            (self.critic.net, "critic")
+        ]

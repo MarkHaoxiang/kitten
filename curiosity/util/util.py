@@ -8,7 +8,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from curiosity.nn import Actor, Critic, ClassicalBoxActor, ClassicalBoxCritic, ClassicalDiscreteValue
+from curiosity.nn import Actor, Critic, ClassicalBoxActor, ClassicalBoxCritic, ClassicalDiscreteCritic
 from curiosity.intrinsic.intrinsic import IntrinsicReward, NoIntrinsicReward
 from curiosity.intrinsic.icm import IntrinsicCuriosityModule
 from curiosity.intrinsic.rnd import RandomNetworkDistillation
@@ -132,7 +132,7 @@ def build_critic(env: Env, features: int = 128) -> Critic:
     if not pixels:
         if discrete:
             # TODO: Move into new build_value
-            result = ClassicalDiscreteValue(env, features=features)
+            result = ClassicalDiscreteCritic(env, features=features)
         else:
             result =  ClassicalBoxCritic(env,features=features)
     else:
