@@ -19,14 +19,26 @@ class DQN(Algorithm, HasCritic):
                  gamma: float = 0.99,
                  lr: float = 1e-3,
                  update_frequency = 1,
+                 target_update_frequency: int = 100,
                  device: str = "cpu",
                  **kwargs):
+        """ Deep Q-Networks
+
+        Args:
+            critic (Critic): Discrete critic.
+            gamma (float, optional): Discount factor. Defaults to 0.99.
+            lr (float, optional): Critic learning rate. Defaults to 1e-3.
+            update_frequency (int, optional): _description_. Defaults to 1.
+            target_update_frequency (int, optional): _description_. Defaults to 100.
+            device (str, optional): _description_. Defaults to "cpu".
+        """
         self.device = device
 
         self._critic = AddTargetNetwork(critic, device=device)
         self._gamma = gamma
         self._optim = torch.optim.Adam(params=self.critic.parameters(), lr=lr)
         self._update_frequency = update_frequency
+        self._target_update_frequency = target_update_frequency
         self.loss_critic_value = 0
 
     @property
@@ -50,6 +62,8 @@ class DQN(Algorithm, HasCritic):
             self.loss_critic_value = loss.item()
             loss.backward()
             self._optim.step()
+        if step % self._target_update_frequency == 0:
+            self._critic.update_target_network()
 
         return self.loss_critic_value
 

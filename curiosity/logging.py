@@ -273,7 +273,7 @@ class CuriosityEvaluator:
             elif wrapper.name == "NormalizeReward":
                 self.env.return_rms = env.return_rms
 
-        if video.enable:
+        if video != False and video.enable:
             if env.render_mode != "rgb_array":
                 raise ValueError(f"Video mode requires rgb_array render mode but got {env.render_mode}")
             self.env = RecordVideo(
@@ -344,8 +344,8 @@ def evaluate(env: Env, policy: Callable, repeat: int = 1):
                 action = policy(obs)
                 if isinstance(action, torch.Tensor):
                     action = action.cpu().numpy()
-                if action.shape == ():
-                    action = np.expand_dims(action, 0)
+                # if action.shape == ():
+                #     action = np.expand_dims(action, 0)
                 obs, reward, terminated, truncated, _ = env.step(action)
                 total_reward += reward
                 episode_reward += reward
