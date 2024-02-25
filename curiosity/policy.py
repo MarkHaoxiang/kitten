@@ -94,7 +94,7 @@ class ColoredNoisePolicy(Policy):
                  fn: Callable[[Union[Tensor, np.ndarray]], Tensor],
                  action_space: Space,
                  episode_length: Optional[int],
-                 scale: float = 1,
+                 scale: Union[float, np.ndarray, torch.Tensor] = 1,
                  beta: float = 1,
                  rng = None,
                  device: str = "cpu"):
@@ -124,10 +124,11 @@ class ColoredNoisePolicy(Policy):
         self._noise = pink.ColoredNoiseProcess(
             beta=beta,
             size=(*size, episode_length),
-            scale=scale,
+            scale=1,
             rng = rng
         )
         self._device = device
+        self.scale = torch.tensor(scale, device=self._device)
 
     def __call__(self, obs: Union[Tensor, np.ndarray]) -> Any:
         action =  super().__call__(obs)
@@ -135,6 +136,7 @@ class ColoredNoisePolicy(Policy):
             noise = self._noise.sample(1)
             if isinstance(action, torch.Tensor):
                 noise = torch.tensor(noise, device=self._device).reshape(action.shape)
+                noise = noise * self.scale
             action += noise
         return action
 

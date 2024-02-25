@@ -89,7 +89,7 @@ def visualise_experiment_value_estimate(experiment: CatsExperiment, device: str 
 
     # Policy 
     ax = axs[1]
-    actions = experiment.algorithm.policy_fn(states)
+    actions = experiment.algorithm.policy_fn(states)[:, :1]
     norm = mpl.colors.Normalize(vmin=-1, vmax=1)
     cmap = cm.viridis
     m = cm.ScalarMappable(norm=norm, cmap=cmap)

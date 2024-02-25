@@ -1,5 +1,6 @@
 # Std
 import copy
+import logging
 from typing import Any, Optional, Tuple
 
 # Training
@@ -29,6 +30,7 @@ class CatsExperiment:
                  death_is_not_the_end: bool = True,
                  fixed_reset: bool = True,
                  enable_policy_sampling: bool = True,
+                 reset_as_an_action: bool = False,
                  teleport_strategy: Optional[Tuple[str, Any]] = None,
                  environment_action_noise: float = 0,
                  seed: int = 0,
@@ -44,6 +46,7 @@ class CatsExperiment:
         self.enable_policy_sampling = enable_policy_sampling
         self.death_is_not_the_end = death_is_not_the_end
         self.environment_action_noise = environment_action_noise
+        self.reset_as_an_action = reset_as_an_action
         if teleport_strategy is None:
             self.teleport_strategy = None
         else:
@@ -79,8 +82,13 @@ class CatsExperiment:
 
     def _build_env(self):
         self.env = build_env(**self.cfg.env)
+
+        # Random noise to action (aleatoric uncertainty)
         if self.environment_action_noise > 0:
             self.env = StochasticActionWrapper(self.env, noise=self.environment_action_noise)
+        # Reset as an action
+        if self.reset_as_an_action:
+            self.env = ResetActionWrapper(self.env)
         self.rng = global_seed(self.cfg.seed, self.env)
 
     def _build_policy(self):
@@ -91,10 +99,14 @@ class CatsExperiment:
             device=self.device,
             **self.cfg.algorithm
         )
+        if isinstance(self.env.spec.max_episode_steps, int):
+            cycle = self.env.spec.max_episode_steps
+        else:
+            cycle = 1000
         self.policy = ColoredNoisePolicy(
             self.algorithm.policy_fn,
             self.env.action_space,
-            self.env.spec.max_episode_steps,
+            cycle,
             rng=self.rng,
             device=self.device,
             **self.cfg.noise
@@ -230,10 +242,12 @@ class CatsExperiment:
             self.normalise_observation.add_tensor_batch(
                 torch.tensor(n_obs, device=self.device).unsqueeze(0)
             )
-            
+
             # Teleport
             if not self.teleport_strategy is None:
                 self._teleport_update(obs)
+            if truncated:
+                self.current_index = 0
 
             if terminated or truncated:
                 self._reset()
@@ -275,8 +289,8 @@ class StochasticActionWrapper(gym.ActionWrapper, gym.utils.RecordConstructorArgs
         if 0 > noise:
             raise ValueError(f"Noise {noise} must be above 0")
 
-        gym.ActionWrapper.__init__(self, env)
         gym.utils.RecordConstructorArgs.__init__(self, noise=noise)
+        gym.ActionWrapper.__init__(self, env)
         self._noise = noise
 
     def action(self, action: Any) -> Any:
@@ -289,4 +303,56 @@ class StochasticActionWrapper(gym.ActionWrapper, gym.utils.RecordConstructorArgs
             return np.clip(action, self.action_space.low, self.action_space.high)
         else:
             # TODO: Support discrete space as well
+            raise NotImplementedError()
+
+class ResetActionWrapper(gym.Wrapper, gym.utils.RecordConstructorArgs):
+    """ This wrapper adds an extra action option to the environment, and taking it send a truncation signal
+    """
+    def __init__(self, env: gym.Env):
+        gym.utils.RecordConstructorArgs.__init__(self)
+        gym.Wrapper.__init__(self, env)
+
+        # Change action spaces
+        if isinstance(self.action_space, gym.spaces.Box):
+            assert len(self.action_space.shape) == 1, f"shape of action space should be 1d"
+            self.action_space = gym.spaces.Box(
+                low=np.concatenate((self.action_space.low, [0])),
+                high=np.concatenate((self.action_space.high, [1])),
+                shape=(self.action_space.shape[0]+1,),
+                dtype=self.action_space.dtype
+            )
+        elif isinstance(self.action_space, gym.spaces.Discrete):
+            self.action_space = gym.spaces.Discrete(
+                n = self.action_space.n + 1,
+                start = self.action_space.start
+            )
+        else:
+            # TODO
+            raise NotImplementedError()
+
+        self._previous_obs = None
+        
+    def reset(self, *, seed = None, options = None):
+        obs, info = self.env.reset(seed=seed, options=options)
+        self._previous_obs = obs
+        return obs, info
+    
+    def _env_step(self, action: Any):
+        observation, reward, terminated, truncated, info = self.env.step(action)
+        self._previous_obs = observation
+        return observation, reward, terminated, truncated, info
+
+    def step(self, action: Any):
+        if isinstance(self.action_space, gym.spaces.Box):
+            manual_truncation = action[-1] > 0.5
+            #manual_truncation = action[-1] > self.np_random.random() 
+            observation, reward, terminated, truncated, info = self._env_step(action[:-1])
+            return observation, reward, terminated, truncated or manual_truncation, info
+        elif isinstance(self.action_space, gym.spaces.Discrete):
+            if action == self.action_space.start + self.action_space.n - 1:
+                return self._previous_obs, 0, False, True, {}
+            else:
+                return self._env_step(action)
+        else:
+            # TODO
             raise NotImplementedError()
