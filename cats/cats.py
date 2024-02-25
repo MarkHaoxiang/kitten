@@ -30,7 +30,7 @@ class CatsExperiment:
                  death_is_not_the_end: bool = True,
                  fixed_reset: bool = True,
                  enable_policy_sampling: bool = True,
-                 reset_as_an_action: bool = False,
+                 reset_as_an_action: Optional[int] = None,
                  teleport_strategy: Optional[Tuple[str, Any]] = None,
                  environment_action_noise: float = 0,
                  seed: int = 0,
@@ -87,8 +87,11 @@ class CatsExperiment:
         if self.environment_action_noise > 0:
             self.env = StochasticActionWrapper(self.env, noise=self.environment_action_noise)
         # Reset as an action
-        if self.reset_as_an_action:
-            self.env = ResetActionWrapper(self.env)
+        if not self.reset_as_an_action is None:
+            self.env = ResetActionWrapper(
+                self.env,
+                check_frequency=self.reset_as_an_action
+            )
         self.rng = global_seed(self.cfg.seed, self.env)
 
     def _build_policy(self):
@@ -308,8 +311,8 @@ class StochasticActionWrapper(gym.ActionWrapper, gym.utils.RecordConstructorArgs
 class ResetActionWrapper(gym.Wrapper, gym.utils.RecordConstructorArgs):
     """ This wrapper adds an extra action option to the environment, and taking it send a truncation signal
     """
-    def __init__(self, env: gym.Env):
-        gym.utils.RecordConstructorArgs.__init__(self)
+    def __init__(self, env: gym.Env, check_frequency: int = 100):
+        gym.utils.RecordConstructorArgs.__init__(self, check_frequency=check_frequency)
         gym.Wrapper.__init__(self, env)
 
         # Change action spaces
@@ -331,10 +334,13 @@ class ResetActionWrapper(gym.Wrapper, gym.utils.RecordConstructorArgs):
             raise NotImplementedError()
 
         self._previous_obs = None
-        
+        self._check_frequency = check_frequency
+        self._current_step = 0
+
     def reset(self, *, seed = None, options = None):
         obs, info = self.env.reset(seed=seed, options=options)
         self._previous_obs = obs
+        self._current_step = 0
         return obs, info
     
     def _env_step(self, action: Any):
@@ -343,13 +349,21 @@ class ResetActionWrapper(gym.Wrapper, gym.utils.RecordConstructorArgs):
         return observation, reward, terminated, truncated, info
 
     def step(self, action: Any):
+        self._current_step += 1
+        should_check = self._current_step % self._check_frequency == 0
         if isinstance(self.action_space, gym.spaces.Box):
-            manual_truncation = action[-1] > 0.5
+            if should_check:
+                #manual_truncation = action[-1] > 0.5
+                manual_truncation = self.np_random.random() > action[-1]
+                # print(self._current_step, manual_truncation)
+            else:
+                manual_truncation = False
             #manual_truncation = action[-1] > self.np_random.random() 
             observation, reward, terminated, truncated, info = self._env_step(action[:-1])
             return observation, reward, terminated, truncated or manual_truncation, info
         elif isinstance(self.action_space, gym.spaces.Discrete):
-            if action == self.action_space.start + self.action_space.n - 1:
+            if should_check and\
+                action == self.action_space.start + self.action_space.n - 1:
                 return self._previous_obs, 0, False, True, {}
             else:
                 return self._env_step(action)
