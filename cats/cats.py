@@ -214,7 +214,7 @@ class CatsExperiment:
             with torch.no_grad():
                 self.teleport_index = self._teleport_selection(V)
             # TODO: Selecting Resets
-            
+
             self.current_index = self.teleport_index
             self.collector.env = self.teleport_targets_saves[self.teleport_index]
             self.collector.obs = self.teleport_targets_observations[self.teleport_index]
@@ -241,6 +241,8 @@ class CatsExperiment:
         for step in tqdm(range(1, self.cfg.train.total_frames+1)):
             # Collect Data
             obs, action, reward, n_obs, terminated, truncated = self.collector.collect(n=1)[-1]
+                # TODO: If resets are controllable, n_obs should be stored in RB for Policy, but not intrinsic
+                # Or should it be stored for intrinsic?
             self._update_memory(obs, action, reward, n_obs, terminated, truncated)                
             self.normalise_observation.add_tensor_batch(
                 torch.tensor(n_obs, device=self.device).unsqueeze(0)
