@@ -333,11 +333,11 @@ class KittenEvaluator:
         if repeats is None:
             repeats = self.repeats
 
-        self.policy.enable_evaluation()
+        policy.enable_evaluation()
         reward, maximum_reward, episode_length = evaluate(
             self.env, policy=policy, repeat=repeats
         )
-        self.policy.disable_evaluation()
+        policy.disable_evaluation()
 
         self.info["reward"] = reward
         self.info["max_reward"] = maximum_reward
