@@ -18,9 +18,9 @@ from gymnasium import Env
 from gymnasium.wrappers.record_video import RecordVideo
 import wandb
 
-from curiosity.policy import Policy
+from kitten.policy import Policy
 if TYPE_CHECKING:
-    from curiosity.rl import HasCritic
+    from kitten.rl import HasCritic
 
 class Loggable(ABC):
     """ Interface signalling a module which can be logged
@@ -47,7 +47,7 @@ class CriticValue(Loggable):
 
     #TODO: Expand to accept general value functions
     """
-    def __init__(self, target: HasCritic, evaluator: CuriosityEvaluator) -> None:
+    def __init__(self, target: HasCritic, evaluator: KittenEvaluator) -> None:
         super().__init__()
         self._target = target
         self._evaluator = evaluator
@@ -60,7 +60,7 @@ class CriticValue(Loggable):
             ).mean().item()
         }    
 
-class CuriosityLogger:
+class KittenLogger:
     """ Logging tool for reinforcement learning experiments
     """
     def __init__(self, cfg: DictConfig, algorithm: str, path: str = "log") -> None:
@@ -238,7 +238,7 @@ class CuriosityLogger:
         """
         shutil.rmtree(self.path)
 
-class CuriosityEvaluator:
+class KittenEvaluator:
     """ Evaluate Training Runs
     """
     def __init__(self,

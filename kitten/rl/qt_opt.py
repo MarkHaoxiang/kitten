@@ -6,10 +6,10 @@ import torch
 from torch import Tensor
 import torch.nn as nn
 from torch.nn.modules import Module
-from curiosity.experience import AuxiliaryMemoryData, Transition
+from kitten.experience import AuxiliaryMemoryData, Transition
 
-from curiosity.rl import Algorithm
-from curiosity.nn import Critic, AddTargetNetwork
+from kitten.rl import Algorithm
+from kitten.nn import Critic, AddTargetNetwork
 
 def cross_entropy_method(s_0: torch.Tensor, 
                          critic_network: Critic,

@@ -9,8 +9,8 @@ from matplotlib import pyplot as plt
 import matplotlib.cm as cm
 from sklearn.neighbors import KernelDensity
 
-from curiosity.experience.memory import ReplayBuffer
-from curiosity.experience import Transition
+from kitten.experience.memory import ReplayBuffer
+from kitten.experience import Transition
 
 from cats import CatsExperiment
 

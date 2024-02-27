@@ -3,8 +3,8 @@ import pytest
 import torch
 import torch.nn as nn
 
-from curiosity.intrinsic.icm import IntrinsicCuriosityModule
-from curiosity.experience import Transition, AuxiliaryMemoryData
+from kitten.intrinsic.icm import IntrinsicCuriosityModule
+from kitten.experience import Transition, AuxiliaryMemoryData
 
 DEVICE = 'cpu'
 torch.manual_seed(0)

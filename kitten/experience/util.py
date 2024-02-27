@@ -7,8 +7,8 @@ from gymnasium.spaces.discrete import Discrete
 from .memory import ReplayBuffer, PrioritizedReplayBuffer
 from .collector import DataCollector, GymCollector
 
-from curiosity.dataflow.normalisation import RunningMeanVariance
-from curiosity.experience import Transition
+from kitten.dataflow.normalisation import RunningMeanVariance
+from kitten.experience import Transition
 
 def build_transition_from_list(updates: List, device: str = "cpu") -> Transition:
     """ Utility to wrap collector results into a transition

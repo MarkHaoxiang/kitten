@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
-from curiosity.experience import AuxiliaryMemoryData, Transition
-from curiosity.intrinsic.intrinsic import IntrinsicReward
+from kitten.experience import AuxiliaryMemoryData, Transition
+from kitten.intrinsic.intrinsic import IntrinsicReward
 
 class IntrinsicCuriosityModule(IntrinsicReward, nn.Module):
     """ Intrinsic curiosity, intrinsic reward

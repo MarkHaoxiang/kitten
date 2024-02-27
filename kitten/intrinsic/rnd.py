@@ -1,10 +1,10 @@
 import torch
 from torch import Tensor
 import torch.nn as nn
-from curiosity.experience import AuxiliaryMemoryData, Transition
+from kitten.experience import AuxiliaryMemoryData, Transition
 
-from curiosity.intrinsic.intrinsic import IntrinsicReward
-from curiosity.experience import Transition
+from kitten.intrinsic.intrinsic import IntrinsicReward
+from kitten.experience import Transition
 
 class RandomNetworkDistillation(IntrinsicReward, nn.Module):
     """ Exploration by Random Network Distillation

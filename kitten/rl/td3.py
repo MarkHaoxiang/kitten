@@ -3,10 +3,10 @@ from typing import Optional, Tuple, List
 import torch
 import torch.nn as nn
 from torch import Tensor
-from curiosity.experience import AuxiliaryMemoryData, Transition
+from kitten.experience import AuxiliaryMemoryData, Transition
 
-from curiosity.nn import Actor, Critic, AddTargetNetwork
-from curiosity.rl.ddpg import DeepDeterministicPolicyGradient
+from kitten.nn import Actor, Critic, AddTargetNetwork
+from kitten.rl.ddpg import DeepDeterministicPolicyGradient
 
 class TwinDelayedDeepDeterministicPolicyGradient(DeepDeterministicPolicyGradient):
     """ TD3

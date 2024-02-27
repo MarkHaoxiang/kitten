@@ -3,8 +3,8 @@ from typing import Callable, Optional
 import torch
 from torch import Tensor
 import torch.nn as nn
-from curiosity.experience import AuxiliaryMemoryData, Transition
-from curiosity.intrinsic.intrinsic import IntrinsicReward
+from kitten.experience import AuxiliaryMemoryData, Transition
+from kitten.intrinsic.intrinsic import IntrinsicReward
 
 class Disagreement(IntrinsicReward):
     """ Self-Supervised Exploration via Disagreement

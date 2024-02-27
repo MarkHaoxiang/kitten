@@ -5,12 +5,12 @@ import hydra
 import torch
 from tqdm import tqdm
 
-from curiosity.rl import HasCritic
-from curiosity.experience import Transition
-from curiosity.experience.util import build_collector, build_replay_buffer, build_transition_from_list
-from curiosity.policy import ColoredNoisePolicy
-from curiosity.util.util import build_env, build_rl, build_intrinsic, global_seed
-from curiosity.logging import CuriosityEvaluator, CuriosityLogger, CriticValue
+from kitten.rl import HasCritic
+from kitten.experience import Transition
+from kitten.experience.util import build_collector, build_replay_buffer, build_transition_from_list
+from kitten.policy import ColoredNoisePolicy
+from kitten.util.util import build_env, build_rl, build_intrinsic, global_seed
+from kitten.logging import KittenEvaluator, KittenLogger, CriticValue
 
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -20,8 +20,8 @@ def train(cfg: DictConfig) -> None:
     env = build_env(**cfg.env)
 
     # Logging and Evaluation
-    logger = CuriosityLogger(cfg, cfg.algorithm.type, path=hydra.core.hydra_config.HydraConfig.get().runtime.output_dir)
-    evaluator = CuriosityEvaluator(env, device=DEVICE, **cfg.log.evaluation)
+    logger = KittenLogger(cfg, cfg.algorithm.type, path=hydra.core.hydra_config.HydraConfig.get().runtime.output_dir)
+    evaluator = KittenEvaluator(env, device=DEVICE, **cfg.log.evaluation)
         # TODO Move logging and evaluation down by adding seeding ability to ColoredNoisePolicy
 
     # RNG

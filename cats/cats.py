@@ -11,11 +11,11 @@ from omegaconf import DictConfig
 import gymnasium as gym
 
 # Curiosity
-from curiosity.experience.util import Transition, build_transition_from_update, build_transition_from_list
-from curiosity.experience.collector import GymCollector
-from curiosity.policy import ColoredNoisePolicy, Policy
-from curiosity.experience.util import build_replay_buffer
-from curiosity.util.util import *
+from kitten.experience.util import Transition, build_transition_from_update, build_transition_from_list
+from kitten.experience.collector import GymCollector
+from kitten.policy import ColoredNoisePolicy, Policy
+from kitten.experience.util import build_replay_buffer
+from kitten.util.util import *
 
 # Cats
 from rl import QTOptCats 

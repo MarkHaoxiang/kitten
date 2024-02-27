@@ -4,9 +4,9 @@ from typing import Union
 import numpy as np
 from torch import Tensor
 
-from curiosity.experience import AuxiliaryMemoryData, Transition
-from curiosity.nn import Critic
-from curiosity.logging import Loggable
+from kitten.experience import AuxiliaryMemoryData, Transition
+from kitten.nn import Critic
+from kitten.logging import Loggable
 
 # This file contains a set of interfaces commonly used in RL
 class Algorithm(Loggable, ABC):

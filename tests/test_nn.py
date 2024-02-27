@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from torch.optim import SGD
 
-from curiosity.nn import AddTargetNetwork
+from kitten.nn import AddTargetNetwork
 
 DEVICE = 'cpu'
 torch.manual_seed(0)

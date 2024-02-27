@@ -4,9 +4,9 @@ from typing import Optional
 import torch
 from torch import Tensor
 
-from curiosity.experience import AuxiliaryMemoryData, Transition
-from curiosity.logging import Loggable
-from curiosity.dataflow.normalisation import RunningMeanVariance
+from kitten.experience import AuxiliaryMemoryData, Transition
+from kitten.logging import Loggable
+from kitten.dataflow.normalisation import RunningMeanVariance
 
 class IntrinsicReward(Loggable, ABC):
     """ Interface for intrinsic exploration rewards

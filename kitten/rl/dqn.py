@@ -4,10 +4,10 @@ import torch
 import torch.nn as nn
 from torch import Tensor
 
-from curiosity.experience import AuxiliaryMemoryData, Transition
-from curiosity.rl import Algorithm, HasCritic
+from kitten.experience import AuxiliaryMemoryData, Transition
+from kitten.rl import Algorithm, HasCritic
 
-from curiosity.nn import AddTargetNetwork, Critic
+from kitten.nn import AddTargetNetwork, Critic
 
 class DQN(Algorithm, HasCritic):
     """ Implements DQN

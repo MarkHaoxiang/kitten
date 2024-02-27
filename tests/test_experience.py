@@ -4,7 +4,7 @@ import pytest
 import numpy as np
 import torch
 
-from curiosity.experience.memory import ReplayBuffer, PrioritizedReplayBuffer
+from kitten.experience.memory import ReplayBuffer, PrioritizedReplayBuffer
 
 DEVICE = 'cpu'
 torch.manual_seed(0)

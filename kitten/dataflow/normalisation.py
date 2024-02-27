@@ -1,7 +1,7 @@
 from typing import Any, Optional
 
 import torch
-from curiosity.dataflow.interface import Transform
+from kitten.dataflow.interface import Transform
 
 class RunningMeanVariance(Transform):
     """ https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance

@@ -7,11 +7,11 @@ from torch import Tensor
 import torch.nn as nn
 import gymnasium as gym
 
-from curiosity.experience import Transition
-from curiosity.rl import Algorithm
-from curiosity.rl.qt_opt import cross_entropy_method
-from curiosity.experience import AuxiliaryMemoryData
-from curiosity.nn import Critic, AddTargetNetwork
+from kitten.experience import Transition
+from kitten.rl import Algorithm
+from kitten.rl.qt_opt import cross_entropy_method
+from kitten.experience import AuxiliaryMemoryData
+from kitten.nn import Critic, AddTargetNetwork
 
 class QTOptCats(Algorithm):
     """ QtOpt with Ensembles

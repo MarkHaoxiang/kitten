@@ -7,9 +7,9 @@ import gymnasium as gym
 import numpy as np
 import torch
 
-from curiosity.experience.memory import ReplayBuffer
-from curiosity.logging import Loggable
-from curiosity.policy import Policy
+from kitten.experience.memory import ReplayBuffer
+from kitten.logging import Loggable
+from kitten.policy import Policy
 
 class DataCollector(Loggable, ABC):    
     def __init__(self, policy: Policy, env: gym.Env, memory: Optional[ReplayBuffer]):

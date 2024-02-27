@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from typing import Any, Callable, Union
 import types
 
-from curiosity.experience import AuxiliaryMemoryData, Transition
+from kitten.experience import AuxiliaryMemoryData, Transition
 
 class Transform(Callable, ABC):
     """ General data transformations

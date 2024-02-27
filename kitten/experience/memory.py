@@ -4,9 +4,9 @@ import numpy as np
 import torch
 from torch import Tensor
 
-from curiosity.logging import Loggable
-from curiosity.dataflow import Transform
-from curiosity.experience import AuxiliaryMemoryData
+from kitten.logging import Loggable
+from kitten.dataflow import Transform
+from kitten.experience import AuxiliaryMemoryData
 
 class ReplayBuffer(Loggable):
     """ Store history of episode transitions

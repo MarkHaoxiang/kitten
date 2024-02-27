@@ -6,9 +6,9 @@ import torch.nn as nn
 from torch import Tensor
 from torch.nn.modules import Module
 
-from curiosity.experience import AuxiliaryMemoryData, Transition
-from curiosity.nn import AddTargetNetwork, Actor, Critic
-from curiosity.rl import Algorithm, HasCritic
+from kitten.experience import AuxiliaryMemoryData, Transition
+from kitten.nn import AddTargetNetwork, Actor, Critic
+from kitten.rl import Algorithm, HasCritic
 
 class DeepDeterministicPolicyGradient(Algorithm, HasCritic):
     """ Implements DDPG

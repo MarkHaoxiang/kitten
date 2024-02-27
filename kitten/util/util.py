@@ -8,15 +8,15 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from curiosity.nn import Actor, Critic, ClassicalBoxActor, ClassicalBoxCritic, ClassicalDiscreteCritic
-from curiosity.intrinsic.intrinsic import IntrinsicReward, NoIntrinsicReward
-from curiosity.intrinsic.icm import IntrinsicCuriosityModule
-from curiosity.intrinsic.rnd import RandomNetworkDistillation
-from curiosity.intrinsic.disagreement import Disagreement
-from curiosity.rl import Algorithm
-from curiosity.rl.ddpg import DeepDeterministicPolicyGradient
-from curiosity.rl.td3 import TwinDelayedDeepDeterministicPolicyGradient
-from curiosity.rl.qt_opt import QTOpt
+from kitten.nn import Actor, Critic, ClassicalBoxActor, ClassicalBoxCritic, ClassicalDiscreteCritic
+from kitten.intrinsic.intrinsic import IntrinsicReward, NoIntrinsicReward
+from kitten.intrinsic.icm import IntrinsicCuriosityModule
+from kitten.intrinsic.rnd import RandomNetworkDistillation
+from kitten.intrinsic.disagreement import Disagreement
+from kitten.rl import Algorithm
+from kitten.rl.ddpg import DeepDeterministicPolicyGradient
+from kitten.rl.td3 import TwinDelayedDeepDeterministicPolicyGradient
+from kitten.rl.qt_opt import QTOpt
 
 def build_env(name: str,
               normalise_observation: bool = False,
