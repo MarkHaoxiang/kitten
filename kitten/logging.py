@@ -18,35 +18,40 @@ from gymnasium import Env
 from gymnasium.wrappers.record_video import RecordVideo
 import wandb
 
+# TODO: Make wandb and hydra optional dependencies
+
 from kitten.policy import Policy
+
 if TYPE_CHECKING:
     from kitten.rl import HasCritic
 
+
 class Loggable(ABC):
-    """ Interface signalling a module which can be logged
-    """
+    """Interface signalling a module which can be logged"""
 
     def get_log(self) -> Dict:
-        """ Collect logs for publishing
+        """Collect logs for publishing
 
         Returns:
             Dict: Dictionary of key-value logging pairs
         """
         return {}
-    
+
     def get_models(self) -> List[Tuple[nn.Module, str]]:
-        """ List of publishable networks with names
+        """List of publishable networks with names
 
         Returns:
             List[Tuple[nn.Module, str]]: list.
         """
         return []
 
+
 class CriticValue(Loggable):
-    """ The estimated critic value of the reset distribution
+    """The estimated critic value of the reset distribution
 
     #TODO: Expand to accept general value functions
     """
+
     def __init__(self, target: HasCritic, evaluator: KittenEvaluator) -> None:
         super().__init__()
         self._target = target
@@ -56,15 +61,18 @@ class CriticValue(Loggable):
         return {
             "critic_value": self._target.critic.q(
                 self._evaluator.saved_reset_states,
-                self._target.policy_fn(self._evaluator.saved_reset_states)
-            ).mean().item()
-        }    
+                self._target.policy_fn(self._evaluator.saved_reset_states),
+            )
+            .mean()
+            .item()
+        }
+
 
 class KittenLogger:
-    """ Logging tool for reinforcement learning experiments
-    """
+    """Logging tool for reinforcement learning experiments"""
+
     def __init__(self, cfg: DictConfig, algorithm: str, path: str = "log") -> None:
-        """ Logging tool for reinforcement learning experiments.
+        """Logging tool for reinforcement learning experiments.
 
         Wandb centric.
 
@@ -94,11 +102,11 @@ class KittenLogger:
             name=self.name,
             config=OmegaConf.to_container(cfg, resolve=True, throw_on_missing=True),
             dir=self.path,
-            mode = "online" if self.wandb_enable else "offline"
+            mode="online" if self.wandb_enable else "offline",
         )
 
     def generate_project_name(self, environment: str, algorithm: str) -> str:
-        """ Generates an identifier for the experiment
+        """Generates an identifier for the experiment
 
         Args:
             environment (str): Environment name
@@ -108,10 +116,20 @@ class KittenLogger:
             str: Project name
         """
         if not self.cfg.log.name:
-            return "{}_{}_{}".format(algorithm, environment, str(datetime.now()).replace(":","-").replace(".","-"))
+            return "{}_{}_{}".format(
+                algorithm,
+                environment,
+                str(datetime.now()).replace(":", "-").replace(".", "-"),
+            )
         return f"{algorithm}_{self.cfg.log.name}"
-    
-    def register_model(self, model: nn.Module, name: str, watch: bool=True, watch_frequency: Optional[int]=None):
+
+    def register_model(
+        self,
+        model: nn.Module,
+        name: str,
+        watch: bool = True,
+        watch_frequency: Optional[int] = None,
+    ):
         """Register a torch module to checkpoint
 
         Args:
@@ -129,10 +147,14 @@ class KittenLogger:
             wandb.watch(
                 model,
                 log="all",
-                log_freq=watch_frequency if not watch_frequency is None else self.cfg.log.frames_per_epoch,
-                idx=len(self.models)
+                log_freq=(
+                    watch_frequency
+                    if not watch_frequency is None
+                    else self.cfg.log.frames_per_epoch
+                ),
+                idx=len(self.models),
             )
-    
+
     def register_models(self, batch: List[Tuple[nn.Module, str]], **kwargs):
         """Register multiple models at once
 
@@ -161,24 +183,22 @@ class KittenLogger:
             self.register_provider(provider, name)
 
     def checkpoint_registered(self, frame: Optional[int] = None) -> None:
-        """ Utility to checkpoint registered models
+        """Utility to checkpoint registered models
 
         Args:
             frame (Optional[int], optional): training frame. Defaults to None.
         """
-        for (model, name) in self.models:
+        for model, name in self.models:
             self.checkpoint(model, name, frame)
-    
+
     def epoch(self) -> int:
-        """ Logging epoch
+        """Logging epoch
 
         Returns:
             The epoch count after logging
         """
         self._epoch += 1
-        log = {
-            "train/wall_time": self.get_wall_time()
-        }
+        log = {"train/wall_time": self.get_wall_time()}
         for provider, name in self.providers:
             for k, v in provider.get_log().items():
                 log[f"{name}/{k}"] = v
@@ -191,9 +211,11 @@ class KittenLogger:
         Returns:
             float:
         """
-        return time.time()-self._start_time
+        return time.time() - self._start_time
 
-    def checkpoint(self, model: nn.Module, name: str, frame: Optional[int] = None) -> None:
+    def checkpoint(
+        self, model: nn.Module, name: str, frame: Optional[int] = None
+    ) -> None:
         """Utility to save a model
 
         Args:
@@ -220,7 +242,7 @@ class KittenLogger:
         return join(self.path, "video")
 
     def log(self, kwargs):
-        """ Logging a metric
+        """Logging a metric
 
         Args:
             kwargs (_type_): Passed to Wandb
@@ -228,27 +250,28 @@ class KittenLogger:
         wandb.log(kwargs)
 
     def close(self):
-        """ Release resources
-        """
+        """Release resources"""
         if self.wandb_enable:
             wandb.finish()
 
     def clear(self):
-        """ Deletes associated files
-        """
+        """Deletes associated files"""
         shutil.rmtree(self.path)
 
+
 class KittenEvaluator:
-    """ Evaluate Training Runs
-    """
-    def __init__(self,
-                 env: Env,
-                 policy: Optional[Policy] = None,
-                 video = False,
-                 saved_reset_states: int=10,
-                 evaluation_repeats: int=10,
-                 device: str="cpu") -> None:
-        """ Evaluate Training Runs.
+    """Evaluate Training Runs"""
+
+    def __init__(
+        self,
+        env: Env,
+        policy: Optional[Policy] = None,
+        video=False,
+        saved_reset_states: int = 10,
+        evaluation_repeats: int = 10,
+        device: str = "cpu",
+    ) -> None:
+        """Evaluate Training Runs.
 
         Use the evaluator on every evaluation epoch.
 
@@ -260,8 +283,12 @@ class KittenEvaluator:
             device (str, optional): Device. Defaults to "cpu".
         """
         self.env = copy.deepcopy(env)
-        self.saved_reset_states = [self.env.reset(seed=i)[0] for i in range(saved_reset_states)]
-        self.saved_reset_states = torch.tensor(np.array(self.saved_reset_states), device=device, dtype=torch.float32)
+        self.saved_reset_states = [
+            self.env.reset(seed=i)[0] for i in range(saved_reset_states)
+        ]
+        self.saved_reset_states = torch.tensor(
+            np.array(self.saved_reset_states), device=device, dtype=torch.float32
+        )
 
         self.repeats = evaluation_repeats
         self.policy = policy
@@ -275,17 +302,21 @@ class KittenEvaluator:
 
         if video != False and video.enable:
             if env.render_mode != "rgb_array":
-                raise ValueError(f"Video mode requires rgb_array render mode but got {env.render_mode}")
+                raise ValueError(
+                    f"Video mode requires rgb_array render mode but got {env.render_mode}"
+                )
             self.env = RecordVideo(
                 env=self.env,
                 video_folder=video.path,
-                episode_trigger=lambda x: x%video.frames_per_video == 0,
-                disable_logger=True
+                episode_trigger=lambda x: x % video.frames_per_video == 0,
+                disable_logger=True,
             )
-    
+
         self.info = {}
 
-    def evaluate(self, policy: Optional[Policy] = None, repeats: Optional[int] = None) -> float:
+    def evaluate(
+        self, policy: Optional[Policy] = None, repeats: Optional[int] = None
+    ) -> float:
         """Evaluation of a policy on the environment
 
         Args:
@@ -303,7 +334,9 @@ class KittenEvaluator:
             repeats = self.repeats
 
         self.policy.enable_evaluation()
-        reward, maximum_reward, episode_length = evaluate(self.env, policy=policy, repeat=repeats)
+        reward, maximum_reward, episode_length = evaluate(
+            self.env, policy=policy, repeat=repeats
+        )
         self.policy.disable_evaluation()
 
         self.info["reward"] = reward
@@ -317,15 +350,16 @@ class KittenEvaluator:
 
     def __getattr__(self, name: str):
         return self.env.__getattribute__(name)
-    
+
     def close(self):
         self.env.close()
 
+
 def evaluate(env: Env, policy: Callable, repeat: int = 1):
-    """ Evaluates an episode
+    """Evaluates an episode
 
     Args:
-        env (Env): A Gym environment 
+        env (Env): A Gym environment
         policy (Callable): Function which accepts the observation from gym, returning an action within the action space
         repeat (int, optional): Number of attempts. Defaults to 1.
     """
@@ -350,7 +384,7 @@ def evaluate(env: Env, policy: Callable, repeat: int = 1):
                 total_reward += reward
                 episode_reward += reward
         maximum_reward = max(episode_reward, maximum_reward)
-    # Calculate reward 
+    # Calculate reward
     total_reward = total_reward / repeat
     episode_length = episode_length / repeat
     return total_reward, maximum_reward, episode_length

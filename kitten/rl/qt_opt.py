@@ -11,14 +11,17 @@ from kitten.experience import AuxiliaryMemoryData, Transition
 from kitten.rl import Algorithm
 from kitten.nn import Critic, AddTargetNetwork
 
-def cross_entropy_method(s_0: torch.Tensor, 
-                         critic_network: Critic,
-                         action_space: gym.spaces.Box,
-                         n: int = 64,
-                         m: int = 6,
-                         n_iterations: int = 2,
-                         device: str="cpu") -> torch.Tensor:
-    """ Sampling method to find action for a Q function on continuous spaces
+
+def cross_entropy_method(
+    s_0: torch.Tensor,
+    critic_network: Critic,
+    action_space: gym.spaces.Box,
+    n: int = 64,
+    m: int = 6,
+    n_iterations: int = 2,
+    device: str = "cpu",
+) -> torch.Tensor:
+    """Sampling method to find action for a Q function on continuous spaces
 
     Args:
         critic_network (torch.nn): Critic.
@@ -32,20 +35,23 @@ def cross_entropy_method(s_0: torch.Tensor,
         torch.Tensor: Action
     """
     if n_iterations <= 0:
-        raise ValueError("Number of iterations must be at least 1, currently {n_iterations}")
+        raise ValueError(
+            "Number of iterations must be at least 1, currently {n_iterations}"
+        )
 
     # For clipping
     env_action_min = torch.tensor(action_space.low, dtype=torch.float32, device=device)
     env_action_max = torch.tensor(action_space.high, dtype=torch.float32, device=device)
 
     # Reshape
-    s_0 = s_0.unsqueeze(1).expand((s_0.shape[0],n,*s_0.shape[1:]))
+    s_0 = s_0.unsqueeze(1).expand((s_0.shape[0], n, *s_0.shape[1:]))
 
     # Run cem
-    sampled_actions = torch.rand((s_0.shape[0], n, *action_space.shape),device=device)
-    sampled_actions = sampled_actions \
-        * (env_action_max-env_action_min)[None, None, :] \
+    sampled_actions = torch.rand((s_0.shape[0], n, *action_space.shape), device=device)
+    sampled_actions = (
+        sampled_actions * (env_action_max - env_action_min)[None, None, :]
         + env_action_min[None, None, :]
+    )
     batch_indices = torch.arange(sampled_actions.shape[0]).view(-1, 1).expand(-1, m)
 
     for _ in range(n_iterations):
@@ -53,49 +59,61 @@ def cross_entropy_method(s_0: torch.Tensor,
         indices = torch.topk(q, m, dim=1).indices.squeeze()
         best_actions = sampled_actions[batch_indices, indices, :]
         mu, std = best_actions.mean(dim=1), best_actions.std(dim=1)
-        sampled_actions = torch.randn_like(sampled_actions) * std[:,None,:] + mu[:,None,:]
-        sampled_actions = torch.clamp(
-            sampled_actions,
-            min=env_action_min,
-            max=env_action_max
+        sampled_actions = (
+            torch.randn_like(sampled_actions) * std[:, None, :] + mu[:, None, :]
         )
-    
+        sampled_actions = torch.clamp(
+            sampled_actions, min=env_action_min, max=env_action_max
+        )
+
     return mu
 
+
 class QTOpt(Algorithm):
-    """ Q-learning for continuous actions with Cross-Entropy Maximisation
+    """Q-learning for continuous actions with Cross-Entropy Maximisation
 
     With clipped Double DQN
 
     Kalashnikov et al. QT-Opt: Scalable Deep Reinforcement Learning for Vision-Based Robotic Manipulation
     """
-    def __init__(self,
-                 critic_1_network: Critic,
-                 critic_2_network: Critic,
-                 obs_space: gym.spaces.Box, # This is a hack #TODO: How do we pass batch sizes around?
-                 action_space: gym.spaces.Box,
-                 gamma: float = 0.99,
-                 lr: float = 1e-3,
-                 tau: float = 0.005,
-                 cem_n: int = 64,
-                 cem_m: int = 6,
-                 cem_n_iterations: int = 2,
-                 clip_grad_norm: Optional[float] = 1,
-                 update_frequency: int = 1,
-                 device: str = "cpu",
-                 **kwargs) -> None:
+
+    def __init__(
+        self,
+        critic_1_network: Critic,
+        critic_2_network: Critic,
+        obs_space: gym.spaces.Box,  # This is a hack #TODO: How do we pass batch sizes around?
+        action_space: gym.spaces.Box,
+        gamma: float = 0.99,
+        lr: float = 1e-3,
+        tau: float = 0.005,
+        cem_n: int = 64,
+        cem_m: int = 6,
+        cem_n_iterations: int = 2,
+        clip_grad_norm: Optional[float] = 1,
+        update_frequency: int = 1,
+        device: str = "cpu",
+        **kwargs,
+    ) -> None:
         super().__init__()
 
         self.critic_1 = AddTargetNetwork(critic_1_network, device=device)
         self.critic_2 = AddTargetNetwork(critic_2_network, device=device)
-        self.critic = self.critic_1 # Also a hack for logging # TODO: How to get include critic value within loggable?
-        self.device=device
+        self.critic = (
+            self.critic_1
+        )  # Also a hack for logging # TODO: How to get include critic value within loggable?
+        self.device = device
 
         self._gamma = gamma
         self._tau = tau
-        self._env_action_scale = torch.tensor(action_space.high-action_space.low, device=device) / 2.0
-        self._env_action_min = torch.tensor(action_space.low, dtype=torch.float32, device=device)
-        self._env_action_max = torch.tensor(action_space.low, dtype=torch.float32, device=device)
+        self._env_action_scale = (
+            torch.tensor(action_space.high - action_space.low, device=device) / 2.0
+        )
+        self._env_action_min = torch.tensor(
+            action_space.low, dtype=torch.float32, device=device
+        )
+        self._env_action_max = torch.tensor(
+            action_space.low, dtype=torch.float32, device=device
+        )
         self._obs_space = obs_space
         self._action_space = action_space
         self._clip_grad_norm = clip_grad_norm
@@ -105,13 +123,16 @@ class QTOpt(Algorithm):
         self._n_iterations = cem_n_iterations
 
         self._optim_critic = torch.optim.Adam(
-            params=list(self.critic_1.net.parameters()) + list(self.critic_2.net.parameters()),
-            lr=lr
+            params=list(self.critic_1.net.parameters())
+            + list(self.critic_2.net.parameters()),
+            lr=lr,
         )
 
         self.loss_critic_value = 0
 
-    def policy_fn(self, s: Union[Tensor, ndarray], critic: Optional[Critic] = None) -> Tensor:
+    def policy_fn(
+        self, s: Union[Tensor, ndarray], critic: Optional[Critic] = None
+    ) -> Tensor:
         if isinstance(s, ndarray):
             s = torch.tensor(s, device=self.device)
         if critic is None:
@@ -127,20 +148,19 @@ class QTOpt(Algorithm):
             n=self._n,
             m=self._m,
             n_iterations=self._n_iterations,
-            device=self.device
+            device=self.device,
         )
         if squeeze:
             result = result.squeeze()
         return result
 
-    def td_error(self, s_0: Tensor, a: Tensor, r :Tensor, s_1: Tensor, d: Tensor):
-        """Returns TD difference for a transition
-        """
+    def td_error(self, s_0: Tensor, a: Tensor, r: Tensor, s_1: Tensor, d: Tensor):
+        """Returns TD difference for a transition"""
         x = self.critic_1.q(s_0, a).squeeze()
         with torch.no_grad():
             a_1 = self.policy_fn(s_1)
             target_max = (~d) * self.critic.target.q(s_1, a_1).squeeze()
-            y = (r + target_max * self._gamma)
+            y = r + target_max * self._gamma
         return y - x
 
     def _critic_update(self, batch: Transition, aux: AuxiliaryMemoryData):
@@ -151,21 +171,30 @@ class QTOpt(Algorithm):
             a_2 = self.policy_fn(batch.s_1, critic=self.critic_2.target)
             target_max_1 = self.critic_1.target.q(batch.s_1, a_1).squeeze()
             target_max_2 = self.critic_2.target.q(batch.s_1, a_2).squeeze()
-            y = batch.r + (~batch.d) * torch.minimum(target_max_1, target_max_2) * self._gamma
-        loss_critic = torch.mean((aux.weights * (y-x_1)) ** 2) + torch.mean((aux.weights * (y-x_2)) ** 2)
+            y = (
+                batch.r
+                + (~batch.d) * torch.minimum(target_max_1, target_max_2) * self._gamma
+            )
+        loss_critic = torch.mean((aux.weights * (y - x_1)) ** 2) + torch.mean(
+            (aux.weights * (y - x_2)) ** 2
+        )
         loss_value = loss_critic.item()
         self._optim_critic.zero_grad()
         loss_critic.backward()
         if not self._clip_grad_norm is None:
-            nn.utils.clip_grad_norm_(self.critic_1.net.parameters(), self._clip_grad_norm)
-            nn.utils.clip_grad_norm_(self.critic_2.net.parameters(), self._clip_grad_norm)
+            nn.utils.clip_grad_norm_(
+                self.critic_1.net.parameters(), self._clip_grad_norm
+            )
+            nn.utils.clip_grad_norm_(
+                self.critic_2.net.parameters(), self._clip_grad_norm
+            )
         self._optim_critic.step()
 
         return loss_value
 
     def update(self, batch: Transition, aux: AuxiliaryMemoryData, step: int):
         if step % self._update_frequency == 0:
-            self.loss_critic_value =  self._critic_update(batch, aux)
+            self.loss_critic_value = self._critic_update(batch, aux)
             self.critic_1.update_target_network(tau=self._tau)
             self.critic_2.update_target_network(tau=self._tau)
         return self.loss_critic_value
@@ -176,7 +205,4 @@ class QTOpt(Algorithm):
         }
 
     def get_models(self) -> List[Tuple[Module, str]]:
-        return [
-            (self.critic_1.net, "critic"),
-            (self.critic_2.net, "critic_2")
-        ]
+        return [(self.critic_1.net, "critic"), (self.critic_2.net, "critic_2")]

@@ -6,16 +6,20 @@ from kitten.experience import AuxiliaryMemoryData, Transition
 from kitten.intrinsic.intrinsic import IntrinsicReward
 from kitten.experience import Transition
 
+
 class RandomNetworkDistillation(IntrinsicReward, nn.Module):
-    """ Exploration by Random Network Distillation
+    """Exploration by Random Network Distillation
 
     Burda et al. https://arxiv.org/pdf/1810.12894.pdf
     """
-    def __init__(self,
-                 target_net: nn.Module,
-                 predictor_net: nn.Module,
-                 lr: float = 1e-3,
-                 **kwargs):
+
+    def __init__(
+        self,
+        target_net: nn.Module,
+        predictor_net: nn.Module,
+        lr: float = 1e-3,
+        **kwargs,
+    ):
         super().__init__(**kwargs)
         self.target_net = target_net
         self.predictor_net = predictor_net
@@ -26,7 +30,7 @@ class RandomNetworkDistillation(IntrinsicReward, nn.Module):
             param.requires_grad = False
 
     def forward(self, s_1: Tensor) -> Tensor:
-        """ Calculates the intrinsic reward
+        """Calculates the intrinsic reward
 
         Args:
             s_1 (Tensor): Next obs
@@ -36,18 +40,18 @@ class RandomNetworkDistillation(IntrinsicReward, nn.Module):
         """
         random_embedding = self.target_net(s_1)
         predicted_embedding = self.predictor_net(s_1)
-        r_i = ((random_embedding - predicted_embedding)**2).mean(-1)
+        r_i = ((random_embedding - predicted_embedding) ** 2).mean(-1)
         return r_i
 
-    def _update(self, batch: Transition, aux: AuxiliaryMemoryData, step: int): 
+    def _update(self, batch: Transition, aux: AuxiliaryMemoryData, step: int):
         # Train Predictor Network
         random_embedding = self.target_net(batch.s_1)
         predicted_embedding = self.predictor_net(batch.s_1)
         weights = aux.weights.unsqueeze(-1)
 
         self._optim.zero_grad()
-        loss = torch.mean(((random_embedding - predicted_embedding) * weights)**2)
-        self.info['loss'] = loss.item()
+        loss = torch.mean(((random_embedding - predicted_embedding) * weights) ** 2)
+        self.info["loss"] = loss.item()
         loss.backward()
         self._optim.step()
 

@@ -8,7 +8,13 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from kitten.nn import Actor, Critic, ClassicalBoxActor, ClassicalBoxCritic, ClassicalDiscreteCritic
+from kitten.nn import (
+    Actor,
+    Critic,
+    ClassicalBoxActor,
+    ClassicalBoxCritic,
+    ClassicalDiscreteCritic,
+)
 from kitten.intrinsic.intrinsic import IntrinsicReward, NoIntrinsicReward
 from kitten.intrinsic.icm import IntrinsicCuriosityModule
 from kitten.intrinsic.rnd import RandomNetworkDistillation
@@ -18,16 +24,15 @@ from kitten.rl.ddpg import DeepDeterministicPolicyGradient
 from kitten.rl.td3 import TwinDelayedDeepDeterministicPolicyGradient
 from kitten.rl.qt_opt import QTOpt
 
-def build_env(name: str,
-              normalise_observation: bool = False,
-              **kwargs) -> gym.Env:
+
+def build_env(name: str, normalise_observation: bool = False, **kwargs) -> gym.Env:
     """Utility to construct an environment
 
     Calls gym.make, applies extra wrappers and resets
 
     Args:
         name (str): Environment name within registry
-        normalise_observation (bool, optional): Wraps NormalizeObservation. 
+        normalise_observation (bool, optional): Wraps NormalizeObservation.
             Use with online methods, and normalise with replay buffer otherwise. Defaults to False.
 
     Returns:
@@ -42,20 +47,27 @@ def build_env(name: str,
     env.reset()
     return env
 
+
 def build_rl(env: gym.Env, algorithm_configuration, device: str) -> Algorithm:
-    """ Utility to construct a RL algorithm
-    """
+    """Utility to construct a RL algorithm"""
     if algorithm_configuration.type == "ddpg":
         return DeepDeterministicPolicyGradient(
             build_actor(env, **algorithm_configuration.actor),
             build_critic(env, **algorithm_configuration.critic),
             device=device,
-            **algorithm_configuration
+            **algorithm_configuration,
         )
-    elif algorithm_configuration.type =="td3":
-        env_action_scale = torch.tensor(env.action_space.high-env.action_space.low, device=device) / 2.0
-        env_action_min = torch.tensor(env.action_space.low, dtype=torch.float32, device=device)
-        env_action_max = torch.tensor(env.action_space.high, dtype=torch.float32, device=device)
+    elif algorithm_configuration.type == "td3":
+        env_action_scale = (
+            torch.tensor(env.action_space.high - env.action_space.low, device=device)
+            / 2.0
+        )
+        env_action_min = torch.tensor(
+            env.action_space.low, dtype=torch.float32, device=device
+        )
+        env_action_max = torch.tensor(
+            env.action_space.high, dtype=torch.float32, device=device
+        )
         return TwinDelayedDeepDeterministicPolicyGradient(
             build_actor(env, **algorithm_configuration.actor),
             build_critic(env, **algorithm_configuration.critic),
@@ -64,21 +76,22 @@ def build_rl(env: gym.Env, algorithm_configuration, device: str) -> Algorithm:
             env_action_scale=env_action_scale,
             env_action_min=env_action_min,
             env_action_max=env_action_max,
-            **algorithm_configuration
+            **algorithm_configuration,
         )
-    elif algorithm_configuration.type =="qt_opt":
+    elif algorithm_configuration.type == "qt_opt":
         return QTOpt(
             build_critic(env, **algorithm_configuration.critic),
             build_critic(env, **algorithm_configuration.critic),
             action_space=env.action_space,
             obs_space=env.observation_space,
             device=device,
-            **algorithm_configuration
+            **algorithm_configuration,
         )
 
     elif algorithm_configuration.type == "dqn":
         raise NotImplementedError()
     raise ValueError("Reinforcement learning algorithm type not valid")
+
 
 def build_actor(env: Env, features: int = 128) -> Actor:
     """Builds an actor for gym environment
@@ -86,7 +99,7 @@ def build_actor(env: Env, features: int = 128) -> Actor:
     Args:
         env (Env): Training gym environment
         feature (int): Width of each NN layer
- 
+
     Returns:
         nn.Module: Actor NNs
     """
@@ -108,6 +121,7 @@ def build_actor(env: Env, features: int = 128) -> Actor:
         raise NotImplementedError("Pixel space is WIP")
 
     return result
+
 
 def build_critic(env: Env, features: int = 128) -> Critic:
     """Builds a critic for gym environment
@@ -134,7 +148,7 @@ def build_critic(env: Env, features: int = 128) -> Critic:
             # TODO: Move into new build_value
             result = ClassicalDiscreteCritic(env, features=features)
         else:
-            result =  ClassicalBoxCritic(env,features=features)
+            result = ClassicalBoxCritic(env, features=features)
     else:
         # Architecture from OpenAI baselines
         # Deprecated
@@ -170,17 +184,26 @@ def build_critic(env: Env, features: int = 128) -> Critic:
     return result
 
 
-def build_intrinsic(env, intrinsic_configuration, device: str = "cpu") -> IntrinsicReward:
+def build_intrinsic(
+    env, intrinsic_configuration, device: str = "cpu"
+) -> IntrinsicReward:
     if intrinsic_configuration.type == "icm":
         return build_icm(env=env, device=device, **intrinsic_configuration)
-    elif intrinsic_configuration.type =="rnd":
+    elif intrinsic_configuration.type == "rnd":
         return build_rnd(env=env, device=device, **intrinsic_configuration)
-    elif intrinsic_configuration.type =="disagreement":
+    elif intrinsic_configuration.type == "disagreement":
         return build_disagreement(env=env, device=device, **intrinsic_configuration)
     return NoIntrinsicReward()
 
-def build_icm(env: Env, encoding_size: int, device: str, clip_grad_norm: Optional[float] = 1, **kwargs):
-    """ Builds a default intrinsic curiosity module
+
+def build_icm(
+    env: Env,
+    encoding_size: int,
+    device: str,
+    clip_grad_norm: Optional[float] = 1,
+    **kwargs,
+):
+    """Builds a default intrinsic curiosity module
     Args:
         env (Env): gym environment
         encoding_size (int): Number of features for the encoding
@@ -195,41 +218,50 @@ def build_icm(env: Env, encoding_size: int, device: str, clip_grad_norm: Optiona
         nn.Linear(in_features=obs_size, out_features=encoding_size),
         nn.LeakyReLU(),
         nn.Linear(in_features=encoding_size, out_features=encoding_size),
-        nn.LeakyReLU()
+        nn.LeakyReLU(),
     ).to(device=device)
     forward_head = nn.Sequential(
-        nn.Linear(in_features=encoding_size+action_size, out_features=encoding_size),
+        nn.Linear(in_features=encoding_size + action_size, out_features=encoding_size),
         nn.LeakyReLU(),
-        nn.Linear(in_features=encoding_size, out_features=encoding_size)
+        nn.Linear(in_features=encoding_size, out_features=encoding_size),
     ).to(device=device)
     inverse_head = nn.Sequential(
         nn.Linear(in_features=encoding_size * 2, out_features=encoding_size),
         nn.LeakyReLU(),
-        nn.Linear(in_features=encoding_size, out_features=action_size)
+        nn.Linear(in_features=encoding_size, out_features=action_size),
     ).to(device=device)
 
-    result =  IntrinsicCuriosityModule(feature_net, forward_head, inverse_head, discrete_action_space=False, **kwargs)
+    result = IntrinsicCuriosityModule(
+        feature_net, forward_head, inverse_head, discrete_action_space=False, **kwargs
+    )
     return result
 
-def build_rnd(env: Env, encoding_size: int, lr: float = 1e-3, device: str = 'cpu', **kwargs):
+
+def build_rnd(
+    env: Env, encoding_size: int, lr: float = 1e-3, device: str = "cpu", **kwargs
+):
     obs_size = env.observation_space.shape[0]
     target_net = nn.Sequential(
         nn.Linear(in_features=obs_size, out_features=encoding_size),
         nn.LeakyReLU(),
         nn.Linear(in_features=encoding_size, out_features=encoding_size),
-        nn.LeakyReLU()
+        nn.LeakyReLU(),
     ).to(device=device)
     predictor_net = nn.Sequential(
         nn.Linear(in_features=obs_size, out_features=encoding_size),
         nn.LeakyReLU(),
         nn.Linear(in_features=encoding_size, out_features=encoding_size),
-        nn.LeakyReLU()
+        nn.LeakyReLU(),
     ).to(device=device)
     return RandomNetworkDistillation(target_net, predictor_net, lr, **kwargs)
 
-def build_disagreement(env: Env, encoding_size: int, lr: float = 1e-3, device: str = 'cpu', **kwargs):
+
+def build_disagreement(
+    env: Env, encoding_size: int, lr: float = 1e-3, device: str = "cpu", **kwargs
+):
     obs_size = env.observation_space.shape[0]
     action_size = env.action_space.shape[0]
+
     # TODO: How to integrate different featurisers
     def build_forward_head():
         return nn.Sequential(
@@ -237,12 +269,14 @@ def build_disagreement(env: Env, encoding_size: int, lr: float = 1e-3, device: s
             nn.LeakyReLU(),
             nn.Linear(in_features=encoding_size, out_features=encoding_size),
             nn.LeakyReLU(),
-            nn.Linear(in_features=encoding_size, out_features=obs_size)
+            nn.Linear(in_features=encoding_size, out_features=obs_size),
         ).to(device=device)
-    return Disagreement(build_forward_head, feature_net= None, lr=lr, **kwargs)
+
+    return Disagreement(build_forward_head, feature_net=None, lr=lr, **kwargs)
+
 
 def global_seed(seed: int, *envs):
-    """ Utility to help set determinism
+    """Utility to help set determinism
 
     Args:
         seed (int): seed for rng generation
