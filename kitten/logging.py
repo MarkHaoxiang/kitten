@@ -353,6 +353,12 @@ class KittenEvaluator:
 
     def close(self):
         self.env.close()
+    
+    def __getstate__(self):
+        return vars(self)
+
+    def __setstate__(self, state):
+        vars(self).update(state)
 
 
 def evaluate(env: Env, policy: Callable, repeat: int = 1):
