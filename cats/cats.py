@@ -10,7 +10,7 @@ from tqdm import tqdm
 from omegaconf import DictConfig
 import gymnasium as gym
 
-# Curiosity
+# Kitten
 from kitten.experience.util import (
     Transition,
     build_transition_from_update,

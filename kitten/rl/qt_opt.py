@@ -5,10 +5,9 @@ from numpy import ndarray
 import torch
 from torch import Tensor
 import torch.nn as nn
-from torch.nn.modules import Module
-from kitten.experience import AuxiliaryMemoryData, Transition
 
-from kitten.rl import Algorithm
+from kitten.experience import AuxiliaryMemoryData, Transition
+from kitten.rl import Algorithm, HasCritic
 from kitten.nn import Critic, AddTargetNetwork
 
 
@@ -69,7 +68,7 @@ def cross_entropy_method(
     return mu
 
 
-class QTOpt(Algorithm):
+class QTOpt(Algorithm, HasCritic):
     """Q-learning for continuous actions with Cross-Entropy Maximisation
 
     With clipped Double DQN
@@ -96,13 +95,10 @@ class QTOpt(Algorithm):
     ) -> None:
         super().__init__()
 
-        self.critic_1 = AddTargetNetwork(critic_1_network, device=device)
-        self.critic_2 = AddTargetNetwork(critic_2_network, device=device)
-        self.critic = (
-            self.critic_1
-        )  # Also a hack for logging # TODO: How to get include critic value within loggable?
         self.device = device
 
+        self._critic_1 = AddTargetNetwork(critic_1_network, device=device)
+        self._critic_2 = AddTargetNetwork(critic_2_network, device=device)
         self._gamma = gamma
         self._tau = tau
         self._env_action_scale = (
@@ -123,8 +119,8 @@ class QTOpt(Algorithm):
         self._n_iterations = cem_n_iterations
 
         self._optim_critic = torch.optim.Adam(
-            params=list(self.critic_1.net.parameters())
-            + list(self.critic_2.net.parameters()),
+            params=list(self._critic_1.net.parameters())
+            + list(self._critic_2.net.parameters()),
             lr=lr,
         )
 
@@ -136,7 +132,7 @@ class QTOpt(Algorithm):
         if isinstance(s, ndarray):
             s = torch.tensor(s, device=self.device)
         if critic is None:
-            critic = self.critic_1
+            critic = self._critic_1
         squeeze = False
         if self._obs_space.shape == s.shape:
             squeeze = True
@@ -156,7 +152,7 @@ class QTOpt(Algorithm):
 
     def td_error(self, s_0: Tensor, a: Tensor, r: Tensor, s_1: Tensor, d: Tensor):
         """Returns TD difference for a transition"""
-        x = self.critic_1.q(s_0, a).squeeze()
+        x = self._critic_1.q(s_0, a).squeeze()
         with torch.no_grad():
             a_1 = self.policy_fn(s_1)
             target_max = (~d) * self.critic.target.q(s_1, a_1).squeeze()
@@ -164,13 +160,13 @@ class QTOpt(Algorithm):
         return y - x
 
     def _critic_update(self, batch: Transition, aux: AuxiliaryMemoryData):
-        x_1 = self.critic_1.q(batch.s_0, batch.a).squeeze()
-        x_2 = self.critic_2.q(batch.s_0, batch.a).squeeze()
+        x_1 = self._critic_1.q(batch.s_0, batch.a).squeeze()
+        x_2 = self._critic_2.q(batch.s_0, batch.a).squeeze()
         with torch.no_grad():
-            a_1 = self.policy_fn(batch.s_1, critic=self.critic_1.target)
-            a_2 = self.policy_fn(batch.s_1, critic=self.critic_2.target)
-            target_max_1 = self.critic_1.target.q(batch.s_1, a_1).squeeze()
-            target_max_2 = self.critic_2.target.q(batch.s_1, a_2).squeeze()
+            a_1 = self.policy_fn(batch.s_1, critic=self._critic_1.target)
+            a_2 = self.policy_fn(batch.s_1, critic=self._critic_2.target)
+            target_max_1 = self._critic_1.target.q(batch.s_1, a_1).squeeze()
+            target_max_2 = self._critic_2.target.q(batch.s_1, a_2).squeeze()
             y = (
                 batch.r
                 + (~batch.d) * torch.minimum(target_max_1, target_max_2) * self._gamma
@@ -183,10 +179,10 @@ class QTOpt(Algorithm):
         loss_critic.backward()
         if not self._clip_grad_norm is None:
             nn.utils.clip_grad_norm_(
-                self.critic_1.net.parameters(), self._clip_grad_norm
+                self._critic_1.net.parameters(), self._clip_grad_norm
             )
             nn.utils.clip_grad_norm_(
-                self.critic_2.net.parameters(), self._clip_grad_norm
+                self._critic_2.net.parameters(), self._clip_grad_norm
             )
         self._optim_critic.step()
 
@@ -195,8 +191,8 @@ class QTOpt(Algorithm):
     def update(self, batch: Transition, aux: AuxiliaryMemoryData, step: int):
         if step % self._update_frequency == 0:
             self.loss_critic_value = self._critic_update(batch, aux)
-            self.critic_1.update_target_network(tau=self._tau)
-            self.critic_2.update_target_network(tau=self._tau)
+            self._critic_1.update_target_network(tau=self._tau)
+            self._critic_2.update_target_network(tau=self._tau)
         return self.loss_critic_value
 
     def get_log(self):
@@ -204,5 +200,9 @@ class QTOpt(Algorithm):
             "critic_loss": self.loss_critic_value,
         }
 
-    def get_models(self) -> List[Tuple[Module, str]]:
-        return [(self.critic_1.net, "critic"), (self.critic_2.net, "critic_2")]
+    def get_models(self) -> List[Tuple[nn.Module, str]]:
+        return [(self._critic_1.net, "critic"), (self._critic_2.net, "critic_2")]
+
+    @property
+    def critic(self) -> Critic:
+        return self._critic_1
