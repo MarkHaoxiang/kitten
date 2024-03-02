@@ -353,7 +353,7 @@ class KittenEvaluator:
 
     def close(self):
         self.env.close()
-    
+
     def __getstate__(self):
         return vars(self)
 
