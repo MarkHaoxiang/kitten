@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import random
 
 import torch
@@ -20,14 +21,20 @@ class Generator:
         self._np_rng = np_rng
         self._torch_rng = torch_rng
 
+    def __getstate__(self):
+        result = copy.copy(vars(self))
+        result["_torch_rng"] = self._torch_rng.get_state()
+        return result
+
+    def __setstate__(self, state):
+        objects = vars(self)
+        self._torch_rng = torch.default_generator
+        torch_rng_state = state.pop("_torch_rng")
+        self._torch_rng.set_state(torch_rng_state)
+        objects.update(state)
+
     def __getattr__(self, name: str):
-        try:
-            return self._np_rng.__getattribute__(name)
-        except AttributeError:
-            try:
-                return self._torch_rng.__getattribute__(name)
-            except AttributeError:
-                raise AttributeError(name)
+        return self._np_rng.__getattribute__(name)
 
     @property
     def torch(self) -> torch.Generator:
@@ -36,6 +43,18 @@ class Generator:
     @property
     def numpy(self) -> np.random.Generator:
         return self._np_rng
+    
+    # def __getstate__(self):
+    #     result = vars(self)
+    #     result["_torch_rng"] = self._torch_rng.get_state()
+    #     return result
+# 
+    # def __setstate__(self, state):
+    #     self._torch_rng = torch.default_generator
+    #     self._torch_rng.set_state(state.pop("_torch_rng"))
+    #     result = vars(self)
+    #     result.pop("_torch_rng")
+    #     result.update(state)
 
 def global_seed(seed: int, *envs):
     """Utility to help set determinism
