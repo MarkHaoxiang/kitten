@@ -1,5 +1,4 @@
-from typing import Optional
-import random
+from typing import Optional, Union
 
 import gymnasium as gym
 from gymnasium import Env
@@ -15,7 +14,7 @@ from kitten.nn import (
     ClassicalBoxCritic,
     ClassicalDiscreteCritic,
 )
-from kitten.intrinsic.intrinsic import IntrinsicReward, NoIntrinsicReward
+from kitten.intrinsic import IntrinsicReward, NoIntrinsicReward
 from kitten.intrinsic.icm import IntrinsicCuriosityModule
 from kitten.intrinsic.rnd import RandomNetworkDistillation
 from kitten.intrinsic.disagreement import Disagreement
@@ -24,8 +23,13 @@ from kitten.rl.ddpg import DeepDeterministicPolicyGradient
 from kitten.rl.td3 import TwinDelayedDeepDeterministicPolicyGradient
 from kitten.rl.qt_opt import QTOpt
 
+from .rng import Generator
 
-def build_env(name: str, normalise_observation: bool = False, **kwargs) -> gym.Env:
+
+def build_env(name: str,
+              normalise_observation: bool = False,
+              seed: Optional[Union[int, Generator, np.random.Generator]] = None,
+              **kwargs) -> gym.Env:
     """Utility to construct an environment
 
     Calls gym.make, applies extra wrappers and resets
@@ -43,10 +47,14 @@ def build_env(name: str, normalise_observation: bool = False, **kwargs) -> gym.E
     # Wrappers
     if normalise_observation:
         env = gym.wrappers.NormalizeObservation(env)
-    # Reset
-    env.reset()
+    # Reset and seeding
+    if isinstance(seed, Generator):
+        seed = int(seed.numpy.integers(65535))
+    elif isinstance(seed, np.random.Generator):
+        seed = int(seed.integers(65535))
+    env.reset(seed=seed)
+    env.action_space.seed(seed)
     return env
-
 
 def build_rl(env: gym.Env, algorithm_configuration, device: str) -> Algorithm:
     """Utility to construct a RL algorithm"""
@@ -273,19 +281,3 @@ def build_disagreement(
         ).to(device=device)
 
     return Disagreement(build_forward_head, feature_net=None, lr=lr, **kwargs)
-
-
-def global_seed(seed: int, *envs):
-    """Utility to help set determinism
-
-    Args:
-        seed (int): seed for rng generation
-        envs (Env): all environments
-    """
-    random.seed(seed)
-    torch.manual_seed(seed)
-    np.random.seed(seed)
-    for env in envs:
-        env.reset(seed=seed)
-        env.action_space.seed(seed)
-    return np.random.default_rng(seed)

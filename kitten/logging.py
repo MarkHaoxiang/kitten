@@ -282,6 +282,7 @@ class KittenEvaluator:
             saved_reset_states (int, optional): Set of stored observations from the reset distribution. Defaults to 10.
             device (str, optional): Device. Defaults to "cpu".
         """
+        # Hack for seeding
         self.env = copy.deepcopy(env)
         self.saved_reset_states = [
             self.env.reset(seed=i)[0] for i in range(saved_reset_states)
@@ -289,6 +290,7 @@ class KittenEvaluator:
         self.saved_reset_states = torch.tensor(
             np.array(self.saved_reset_states), device=device, dtype=torch.float32
         )
+        self.env = copy.deepcopy(env)
 
         self.repeats = evaluation_repeats
         self.policy = policy

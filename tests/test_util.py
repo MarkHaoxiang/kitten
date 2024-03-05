@@ -5,7 +5,7 @@ import unittest
 import torch
 import gymnasium as gym
 
-from kitten.util import global_seed
+from kitten.common import global_seed
 from kitten.dataflow.normalisation import RunningMeanVariance
 
 class TestDeterminism:

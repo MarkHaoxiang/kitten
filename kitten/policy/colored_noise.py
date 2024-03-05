@@ -8,7 +8,7 @@ import torch
 from torch import Tensor
 
 from kitten.policy import Policy
-
+from kitten.common import Generator
 
 class ColoredNoisePolicy(Policy):
     def __init__(
@@ -18,7 +18,7 @@ class ColoredNoisePolicy(Policy):
         episode_length: Optional[int],
         scale: Union[float, np.ndarray, torch.Tensor] = 1,
         beta: float = 1,
-        rng=None,
+        rng: Optional[Union[Generator, np.random.Generator]] = None,
         device: str = "cpu",
     ):
         """Pink Noise Exploration
@@ -44,6 +44,8 @@ class ColoredNoisePolicy(Policy):
             raise ValueError("Action space not supported")
         if episode_length is None:
             episode_length = 1000
+        if isinstance(rng, Generator):
+            rng = rng.numpy
         self._noise = pink.ColoredNoiseProcess(
             beta=beta, size=(*size, episode_length), scale=1, rng=rng
         )
