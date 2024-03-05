@@ -296,11 +296,12 @@ class KittenEvaluator:
         self.policy = policy
 
         # Link evaluation environment with train environment statistics
-        for wrapper in env.spec.additional_wrappers:
-            if wrapper.name == "NormalizeObservation":
-                self.env.obs_rms = env.obs_rms
-            elif wrapper.name == "NormalizeReward":
-                self.env.return_rms = env.return_rms
+        if env.spec is not None:
+            for wrapper in env.spec.additional_wrappers:
+                if wrapper.name == "NormalizeObservation":
+                    self.env.obs_rms = env.obs_rms
+                elif wrapper.name == "NormalizeReward":
+                    self.env.return_rms = env.return_rms
 
         if video != False and video.enable:
             if env.render_mode != "rgb_array":

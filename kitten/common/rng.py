@@ -43,18 +43,7 @@ class Generator:
     @property
     def numpy(self) -> np.random.Generator:
         return self._np_rng
-    
-    # def __getstate__(self):
-    #     result = vars(self)
-    #     result["_torch_rng"] = self._torch_rng.get_state()
-    #     return result
-# 
-    # def __setstate__(self, state):
-    #     self._torch_rng = torch.default_generator
-    #     self._torch_rng.set_state(state.pop("_torch_rng"))
-    #     result = vars(self)
-    #     result.pop("_torch_rng")
-    #     result.update(state)
+
 
 def global_seed(seed: int, *envs):
     """Utility to help set determinism
