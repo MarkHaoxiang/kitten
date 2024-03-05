@@ -15,6 +15,7 @@ import torch.nn as nn
 import numpy as np
 from omegaconf import OmegaConf, DictConfig
 from gymnasium import Env
+from gymnasium.spaces import Box
 from gymnasium.wrappers.record_video import RecordVideo
 import wandb
 
@@ -290,7 +291,6 @@ class KittenEvaluator:
         self.saved_reset_states = torch.tensor(
             np.array(self.saved_reset_states), device=device, dtype=torch.float32
         )
-        self.env = copy.deepcopy(env)
 
         self.repeats = evaluation_repeats
         self.policy = policy
@@ -387,8 +387,8 @@ def evaluate(env: Env, policy: Callable, repeat: int = 1):
                 action = policy(obs)
                 if isinstance(action, torch.Tensor):
                     action = action.cpu().numpy()
-                # if action.shape == ():
-                #     action = np.expand_dims(action, 0)
+                if action.shape == () and isinstance(env.action_space, Box):
+                    action = np.expand_dims(action, 0)
                 obs, reward, terminated, truncated, _ = env.step(action)
                 total_reward += reward
                 episode_reward += reward
