@@ -1,6 +1,7 @@
 from typing import Any, Optional, Callable, List
 
 import torch
+import numpy as np
 from gymnasium import Env
 from gymnasium.spaces.discrete import Discrete
 
@@ -14,11 +15,11 @@ from kitten.experience import Transition
 def build_transition_from_list(updates: List, device: str = "cpu") -> Transition:
     """Utility to wrap collector results into a transition"""
     return build_transition_from_update(
-        obs=[x[0] for x in updates],
-        action=[x[1] for x in updates],
-        reward=[x[2] for x in updates],
-        n_obs=[x[3] for x in updates],
-        terminated=[x[4] for x in updates],
+        obs=np.array([x[0] for x in updates]),
+        action=np.array([x[1] for x in updates]),
+        reward=np.array([x[2] for x in updates]),
+        n_obs=np.array([x[3] for x in updates]),
+        terminated=np.array([x[4] for x in updates]),
         add_batch=False,
         device=device,
     )
