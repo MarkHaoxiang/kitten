@@ -56,8 +56,8 @@ class TwinDelayedDeepDeterministicPolicyGradient(DeepDeterministicPolicyGradient
             clip_grad_norm=clip_grad_norm,
             device=device,
         )
-        self.critic_1 = self.critic
-        self.critic_2 = AddTargetNetwork(critic_2_network, device=device)
+        self._critic_1 = self.critic
+        self._critic_2 = AddTargetNetwork(critic_2_network, device=device)
         self.target_noise = target_noise
         self.target_noise_clip = target_noise_clip
 
@@ -65,8 +65,8 @@ class TwinDelayedDeepDeterministicPolicyGradient(DeepDeterministicPolicyGradient
         self._env_action_min = env_action_min
         self._env_action_max = env_action_max
         self._optim_critic = torch.optim.Adam(
-            params=list(self.critic_1.net.parameters())
-            + list(self.critic_2.net.parameters()),
+            params=list(self._critic_1.net.parameters())
+            + list(self._critic_2.net.parameters()),
             lr=lr,
         )
         self._critic_update_frequency = critic_update_frequency
@@ -89,8 +89,8 @@ class TwinDelayedDeepDeterministicPolicyGradient(DeepDeterministicPolicyGradient
         """
         # Improvement 1: Clipped Double-Q Learning
         # ====================
-        x_1 = self.critic_1.q(s_0, a).squeeze()
-        x_2 = self.critic_2.q(s_0, a).squeeze()
+        x_1 = self._critic_1.q(s_0, a).squeeze()
+        x_2 = self._critic_2.q(s_0, a).squeeze()
         with torch.no_grad():
             a_1 = self.actor.target.a(s_1)
             # Improvement 2: Target policy smoothing
@@ -105,8 +105,8 @@ class TwinDelayedDeepDeterministicPolicyGradient(DeepDeterministicPolicyGradient
             )
             a_1 = torch.clamp(a_1, min=self._env_action_min, max=self._env_action_max)
             # ====================
-            target_max_1 = self.critic_1.target.q(s_1, a_1).squeeze()
-            target_max_2 = self.critic_2.target.q(s_1, a_1).squeeze()
+            target_max_1 = self._critic_1.target.q(s_1, a_1).squeeze()
+            target_max_2 = self._critic_2.target.q(s_1, a_1).squeeze()
             y = r + (~d) * torch.minimum(target_max_1, target_max_2) * self._gamma
         loss_critic = torch.mean((weights * (y - x_1)) ** 2) + torch.mean(
             (weights * (y - x_2)) ** 2
@@ -116,10 +116,10 @@ class TwinDelayedDeepDeterministicPolicyGradient(DeepDeterministicPolicyGradient
         loss_critic.backward()
         if not self._clip_grad_norm is None:
             nn.utils.clip_grad_norm_(
-                self.critic_1.net.parameters(), self._clip_grad_norm
+                self._critic_1.net.parameters(), self._clip_grad_norm
             )
             nn.utils.clip_grad_norm_(
-                self.critic_2.net.parameters(), self._clip_grad_norm
+                self._critic_2.net.parameters(), self._clip_grad_norm
             )
         self._optim_critic.step()
         # ====================
@@ -143,8 +143,8 @@ class TwinDelayedDeepDeterministicPolicyGradient(DeepDeterministicPolicyGradient
             self.loss_critic_value = self._critic_update(*batch, aux.weights)
         if step % self._policy_update_frequency == 0:
             self.loss_actor_value = self._actor_update(batch.s_0, aux.weights)
-            self.critic_1.update_target_network(tau=self._tau)
-            self.critic_2.update_target_network(tau=self._tau)
+            self._critic_1.update_target_network(tau=self._tau)
+            self._critic_2.update_target_network(tau=self._tau)
             self.actor.update_target_network(tau=self._tau)
 
         return self.loss_critic_value, self.loss_actor_value
@@ -153,5 +153,5 @@ class TwinDelayedDeepDeterministicPolicyGradient(DeepDeterministicPolicyGradient
         return [
             (self.actor.net, "actor"),
             (self.critic.net, "critic"),
-            (self.critic_2.net, "critic_2"),
+            (self._critic_2.net, "critic_2"),
         ]
