@@ -20,6 +20,7 @@ from kitten.experience.memory import ReplayBuffer
 from kitten.experience.collector import GymCollector
 from kitten.policy import ColoredNoisePolicy, Policy
 from kitten.common import *
+from kitten.common.util import *
 from kitten.dataflow.normalisation import RunningMeanVariance
 
 # Cats
