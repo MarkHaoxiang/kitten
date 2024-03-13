@@ -245,6 +245,7 @@ class PrioritizedReplayBuffer(ReplayBuffer):
         bucket_size = priority_sum / n
         selection = (
             np.linspace(0, priority_sum - bucket_size, n)
+            # TODO: Dangerous random call. Change to rng object
             + np.random.rand(n) * bucket_size
         )
 
