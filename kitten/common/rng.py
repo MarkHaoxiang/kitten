@@ -32,8 +32,6 @@ class Generator:
         torch_rng_state = state.pop("_torch_rng")
         self._torch_rng.set_state(torch_rng_state)
         objects.update(state)
-        # Bit of a hack
-        np.random.seed(self._np_rng.integers(65535))
 
     def __getattr__(self, name: str):
         return self._np_rng.__getattribute__(name)
