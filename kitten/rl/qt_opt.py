@@ -1,5 +1,3 @@
-from typing import Dict, List, Optional, Tuple, Union
-
 import gymnasium as gym
 from numpy import ndarray
 import torch
@@ -88,8 +86,8 @@ class QTOpt(Algorithm, HasCritic):
         cem_n: int = 64,
         cem_m: int = 6,
         cem_n_iterations: int = 2,
-        clip_grad_norm: Optional[float] = 1,
-        update_frequency: int = 1,
+        clip_grad_norm: float | None = 1.0,
+        update_frequency: int = 1.0,
         device: str = "cpu",
         **kwargs,
     ) -> None:
@@ -126,9 +124,7 @@ class QTOpt(Algorithm, HasCritic):
 
         self.loss_critic_value = 0
 
-    def policy_fn(
-        self, s: Union[Tensor, ndarray], critic: Optional[Critic] = None
-    ) -> Tensor:
+    def policy_fn(self, s: Tensor | ndarray, critic: Critic | None = None) -> Tensor:
         if isinstance(s, ndarray):
             s = torch.tensor(s, device=self.device)
         if critic is None:
@@ -200,7 +196,7 @@ class QTOpt(Algorithm, HasCritic):
             "critic_loss": self.loss_critic_value,
         }
 
-    def get_models(self) -> List[Tuple[nn.Module, str]]:
+    def get_models(self) -> list[tuple[nn.Module, str]]:
         return [(self._critic_1.net, "critic"), (self._critic_2.net, "critic_2")]
 
     @property

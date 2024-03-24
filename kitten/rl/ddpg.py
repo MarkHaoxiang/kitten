@@ -1,4 +1,3 @@
-from typing import List, Optional, Tuple, Union
 from numpy import ndarray
 
 import torch
@@ -24,7 +23,7 @@ class DeepDeterministicPolicyGradient(Algorithm, HasCritic):
         gamma: float = 0.99,
         lr: float = 1e-3,
         tau: float = 0.005,
-        clip_grad_norm: Optional[float] = 1,
+        clip_grad_norm: float | None = 1,
         update_frequency: int = 1,
         device: str = "cpu",
         **kwargs,
@@ -128,7 +127,7 @@ class DeepDeterministicPolicyGradient(Algorithm, HasCritic):
 
     def update(
         self, batch: Transition, aux: AuxiliaryMemoryData, step: int
-    ) -> Tuple[float, float]:
+    ) -> tuple[float, float]:
         """Runs a DDPG update step
 
         Args:
@@ -151,7 +150,7 @@ class DeepDeterministicPolicyGradient(Algorithm, HasCritic):
             )
         return self.loss_critic_value, self.loss_actor_value
 
-    def policy_fn(self, s: Union[Tensor, ndarray]) -> Tensor:
+    def policy_fn(self, s: Tensor | ndarray) -> Tensor:
         if isinstance(s, ndarray):
             s = torch.tensor(s, device=self.device, dtype=torch.float32)
         return self.actor.a(s)
@@ -162,5 +161,5 @@ class DeepDeterministicPolicyGradient(Algorithm, HasCritic):
             "actor_loss": self.loss_actor_value,
         }
 
-    def get_models(self) -> List[Tuple[Module, str]]:
+    def get_models(self) -> list[tuple[Module, str]]:
         return [(self.actor.net, "actor"), (self._critic.net, "critic")]

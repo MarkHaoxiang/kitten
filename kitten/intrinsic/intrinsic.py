@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-from typing import Optional
 
 import torch
 from torch import Tensor
@@ -17,7 +16,7 @@ class IntrinsicReward(Loggable, ABC):
         int_coef: float = 1,
         ext_coef: float = 1,
         reward_normalisation: bool = False,
-        normalised_obs_clip: Optional[float] = None,
+        normalised_obs_clip: float | None = None,
         **kwargs,
     ) -> None:
         """Initialises an intrinsic reward module

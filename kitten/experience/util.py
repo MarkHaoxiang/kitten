@@ -1,4 +1,4 @@
-from typing import Any, Optional, Callable, List
+from typing import Callable, List
 
 import torch
 import numpy as np
@@ -47,7 +47,7 @@ def build_replay_buffer(
     capacity: int = 10000,
     type="experience_replay",
     normalise_observation: bool = False,
-    error_fn: Optional[Callable] = None,
+    error_fn: Callable | None = None,
     device: str = "cpu",
     **kwargs,
 ) -> ReplayBuffer:
@@ -119,7 +119,7 @@ def build_replay_buffer(
 def build_collector(
     policy,
     env: Env,
-    memory: Optional[ReplayBuffer] = None,
+    memory: ReplayBuffer | None = None,
     device: torch.device = "cpu",
 ) -> DataCollector:
     """Creates a collector for env

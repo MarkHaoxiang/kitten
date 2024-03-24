@@ -1,4 +1,4 @@
-from typing import Callable, Union, Optional
+from typing import Callable
 
 from gymnasium.spaces import Space
 import numpy as np
@@ -10,9 +10,9 @@ from kitten.policy import Policy
 class EpsilonGreedyPolicy(Policy):
     def __init__(
         self,
-        fn: Callable[[Union[Tensor, np.ndarray]], Tensor],
+        fn: Callable[[Tensor | np.ndarray], Tensor],
         action_space: Space,
-        rng: Optional[np.random.Generator] = None,
+        rng: np.random.Generator | None = None,
         device: str = "cpu",
     ):
         """Epsilon Greedy Exploration
@@ -30,7 +30,7 @@ class EpsilonGreedyPolicy(Policy):
             self._rng = rng
         self._action_space = action_space
 
-    def __call__(self, obs: Union[Tensor, np.ndarray], epsilon: float = 0.1):
+    def __call__(self, obs: Tensor | np.ndarray, epsilon: float = 0.1):
         x = super().__call__(obs)
         if self.train:
             if self._rng.random() <= epsilon:

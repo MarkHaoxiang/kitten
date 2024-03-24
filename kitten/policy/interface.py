@@ -1,4 +1,4 @@
-from typing import Any, Callable, Union
+from typing import Any, Callable
 
 import numpy as np
 import torch
@@ -8,7 +8,7 @@ from torch import Tensor
 class Policy:
     def __init__(
         self,
-        fn: Callable[[Union[Tensor, np.ndarray]], Tensor],
+        fn: Callable[[Tensor | np.ndarray], Tensor],
         transform_obs: bool = True,
         device="cpu",
     ):
@@ -24,7 +24,7 @@ class Policy:
         self._transform_obs = transform_obs
         self.device = device
 
-    def __call__(self, obs: Union[Tensor, np.ndarray], *args, **kwargs) -> Any:
+    def __call__(self, obs: Tensor | np.ndarray, *args, **kwargs) -> Any:
         """Actions from observations
 
         Args:

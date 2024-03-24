@@ -1,4 +1,4 @@
-from typing import Callable, Optional
+from typing import Callable
 
 import torch
 from torch import Tensor
@@ -16,7 +16,7 @@ class Disagreement(IntrinsicReward):
     def __init__(
         self,
         build_forward_head: Callable,
-        feature_net: Optional[nn.Module] = None,
+        feature_net: nn.Module | None = None,
         ensemble_number: int = 5,
         lr: float = 1e-3,
         discrete_action_space: bool = False,

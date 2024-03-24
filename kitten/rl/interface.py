@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-from typing import Union
 
 import numpy as np
 from torch import Tensor
@@ -24,7 +23,7 @@ class Algorithm(Loggable, ABC):
         """
         raise NotImplementedError
 
-    def policy_fn(self, s: Union[Tensor, np.ndarray]) -> Tensor:
+    def policy_fn(self, s: Tensor | np.ndarray) -> Tensor:
         """A function that takes an observation and returns an action
 
         Args:

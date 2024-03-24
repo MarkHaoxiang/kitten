@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 import copy
-from typing import Callable, Optional
+from typing import Callable
 
 import gymnasium as gym
 from gymnasium import Env
@@ -91,7 +91,7 @@ class AddTargetNetwork(nn.Module):
 class ClassicalBoxCritic(Critic):
     """Critic for continuous low-dimensionality gym environments"""
 
-    def __init__(self, env: Env, net: Optional[nn.Module] = None, features: int = 128):
+    def __init__(self, env: Env, net: nn.Module | None = None, features: int = 128):
         super().__init__()
         if not isinstance(env.action_space, gym.spaces.Box):
             raise ValueError("Unsupported Environment")
@@ -121,7 +121,7 @@ class ClassicalBoxCritic(Critic):
 class ClassicalDiscreteCritic(Critic):
     """Critic for discrete low-dimensionality gym environments"""
 
-    def __init__(self, env: Env, net: Optional[nn.Module] = None, features: int = 128):
+    def __init__(self, env: Env, net: nn.Module | None = None, features: int = 128):
         super().__init__()
         if not isinstance(env.action_space, gym.spaces.Discrete):
             raise ValueError("Unsupported Environment")
@@ -138,7 +138,7 @@ class ClassicalDiscreteCritic(Critic):
         else:
             self.net = net
 
-    def q(self, s: Tensor, a: Optional[Tensor] = None) -> Tensor:
+    def q(self, s: Tensor, a: Tensor | None = None) -> Tensor:
         if a is None:
             return self(s)
         else:
@@ -151,7 +151,7 @@ class ClassicalDiscreteCritic(Critic):
 class ClassicalBoxActor(Actor):
     """Actor for continuous low-dimensionality gym environments"""
 
-    def __init__(self, env: Env, net: Optional[nn.Module] = None, features: int = 128):
+    def __init__(self, env: Env, net: nn.Module | None = None, features: int = 128):
         super().__init__()
         if net is None:
             self.net = nn.Sequential(

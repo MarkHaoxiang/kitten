@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import List, Optional
 
 import gymnasium as gym
 import numpy as np
@@ -13,7 +12,7 @@ from kitten.policy import Policy
 
 
 class DataCollector(Loggable, ABC):
-    def __init__(self, policy: Policy, env: gym.Env, memory: Optional[ReplayBuffer]):
+    def __init__(self, policy: Policy, env: gym.Env, memory: ReplayBuffer | None):
         """Constructs a data collector
 
         Args:
@@ -26,7 +25,7 @@ class DataCollector(Loggable, ABC):
         self.memory = memory
 
     @abstractmethod
-    def collect(self, n: int, append_memory: bool = True, *args, **kwargs) -> List:
+    def collect(self, n: int, append_memory: bool = True, *args, **kwargs) -> list:
         """Collect data on the environment
 
         Args:
@@ -39,7 +38,7 @@ class DataCollector(Loggable, ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def early_start(self, n: int) -> List:
+    def early_start(self, n: int) -> list:
         """Runs the environment for a certain number of steps using a random policy.
 
         For example, to fill the replay buffer or initialise normalisations.
@@ -66,7 +65,7 @@ class GymCollector(DataCollector):
         self,
         policy: Policy,
         env: gym.Env,
-        memory: Optional[ReplayBuffer] = None,
+        memory: ReplayBuffer | None = None,
         device: torch.device = "cpu",
     ):
         self.obs, _ = env.reset()
@@ -98,7 +97,7 @@ class GymCollector(DataCollector):
         early_start: bool = False,
         *args,
         **kwargs,
-    ) -> List:
+    ) -> list:
         if not early_start:
             self.frame += n
         with torch.no_grad():
@@ -126,7 +125,7 @@ class GymCollector(DataCollector):
             self.obs = obs
             return result
 
-    def early_start(self, n: int, dry_run: bool = False) -> List:
+    def early_start(self, n: int, dry_run: bool = False) -> list:
         """Runs the environment for a certain number of steps using a random policy.
 
         For example, to fill the replay buffer or initialise normalisations.

@@ -1,8 +1,6 @@
 from abc import ABC, abstractmethod
-from typing import Any, Callable, Union
+from typing import Any, Callable
 import types
-
-from kitten.experience import AuxiliaryMemoryData, Transition
 
 
 class Transform(Callable, ABC):
@@ -58,7 +56,7 @@ class Transform(Callable, ABC):
 
     def prepend(
         self,
-        f: Union[types.FunctionType, types.MethodType],
+        f: types.FunctionType | types.MethodType,
         bind_method_type: bool = True,
     ):
         """A function continuation"""
@@ -79,7 +77,7 @@ class Transform(Callable, ABC):
 
     def append(
         self,
-        f: Union[types.FunctionType, types.MethodType],
+        f: types.FunctionType | types.MethodType,
         bind_method_type: bool = True,
     ):
         """A function continuation"""

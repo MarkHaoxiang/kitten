@@ -1,5 +1,3 @@
-from typing import Optional, Union
-
 import gymnasium as gym
 from gymnasium import Env
 from gymnasium.spaces import Box, Discrete
@@ -29,7 +27,7 @@ from .rng import Generator
 def build_env(
     name: str,
     normalise_observation: bool = False,
-    seed: Optional[Union[int, Generator, np.random.Generator]] = None,
+    seed: int | Generator | np.random.Generator | None = None,
     **kwargs,
 ) -> gym.Env:
     """Utility to construct an environment
@@ -211,7 +209,7 @@ def build_icm(
     env: Env,
     encoding_size: int,
     device: str,
-    clip_grad_norm: Optional[float] = 1,
+    clip_grad_norm: float | None = 1.0,
     **kwargs,
 ):
     """Builds a default intrinsic curiosity module

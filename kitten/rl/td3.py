@@ -1,5 +1,3 @@
-from typing import Optional, Tuple, List
-
 import torch
 import torch.nn as nn
 from torch import Tensor
@@ -26,7 +24,7 @@ class TwinDelayedDeepDeterministicPolicyGradient(DeepDeterministicPolicyGradient
         gamma: float = 0.99,
         lr: float = 1e-3,
         tau: float = 0.005,
-        clip_grad_norm: Optional[float] = 1,
+        clip_grad_norm: float | None = 1,
         target_noise: float = 0.1,
         target_noise_clip: float = 0.2,
         critic_update_frequency: int = 1,
@@ -128,7 +126,7 @@ class TwinDelayedDeepDeterministicPolicyGradient(DeepDeterministicPolicyGradient
 
     def update(
         self, batch: Transition, aux: AuxiliaryMemoryData, step: int
-    ) -> Tuple[float, float]:
+    ) -> tuple[float, float]:
         """Runs a DDPG update step
 
         Args:
@@ -149,7 +147,7 @@ class TwinDelayedDeepDeterministicPolicyGradient(DeepDeterministicPolicyGradient
 
         return self.loss_critic_value, self.loss_actor_value
 
-    def get_models(self) -> List[Tuple[nn.Module, str]]:
+    def get_models(self) -> list[tuple[nn.Module, str]]:
         return [
             (self.actor.net, "actor"),
             (self.critic.net, "critic"),

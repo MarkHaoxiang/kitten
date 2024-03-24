@@ -1,4 +1,4 @@
-from typing import Any, Callable, Optional, Union
+from typing import Any, Callable
 
 import gymnasium as gym
 from gymnasium.spaces import Space
@@ -14,12 +14,12 @@ from kitten.common import Generator
 class ColoredNoisePolicy(Policy):
     def __init__(
         self,
-        fn: Callable[[Union[Tensor, np.ndarray]], Tensor],
+        fn: Callable[[Tensor | np.ndarray], Tensor],
         action_space: Space,
-        episode_length: Optional[int],
-        scale: Union[float, np.ndarray, torch.Tensor] = 1,
+        episode_length: int | None = None,
+        scale: float | np.ndarray | torch.Tensor = 1.0,
         beta: float = 1,
-        rng: Optional[Union[Generator, np.random.Generator]] = None,
+        rng: Generator | np.random.Generator | None = None,
         device: str = "cpu",
     ):
         """Pink Noise Exploration
@@ -53,7 +53,7 @@ class ColoredNoisePolicy(Policy):
         self._device = device
         self.scale = torch.tensor(scale, device=self._device)
 
-    def __call__(self, obs: Union[Tensor, np.ndarray]) -> Any:
+    def __call__(self, obs: Tensor | np.ndarray) -> Any:
         action = super().__call__(obs)
         if self.train:
             noise = self._noise.sample(1)

@@ -1,4 +1,4 @@
-from typing import Optional, Sequence, Union, Callable, Tuple
+from typing import Sequence, Callable
 
 import numpy as np
 import torch
@@ -16,8 +16,8 @@ class ReplayBuffer(Loggable):
         self,
         capacity: int,
         shape: Sequence[int],
-        dtype: Optional[Union[torch.dtype, Sequence[torch.dtype]]] = None,
-        transforms: Optional[Union[Transform, Sequence[Transform]]] = None,
+        dtype: torch.dtype | Sequence[torch.dtype] | None = None,
+        transforms: Transform | Sequence[Transform] | None = None,
         device: str = "cpu",
         **kwargs,
     ) -> None:
@@ -61,7 +61,7 @@ class ReplayBuffer(Loggable):
         self._append_index = 0  # Position of next tensor to be inserted
         self._full = False  # Bookmark to check if storage has looped around
 
-    def append(self, inputs: Tuple[Tensor], **kwargs) -> int:
+    def append(self, inputs: tuple[Tensor], **kwargs) -> int:
         """Add a transition experience to the buffer
 
         Args:
@@ -114,7 +114,7 @@ class ReplayBuffer(Loggable):
         self._append_index = self._append_index % self.capacity
         return n_insert
 
-    def _append_preprocess(self, inputs: Tuple[Tensor]):
+    def _append_preprocess(self, inputs: tuple[Tensor]):
         """Utility to transform new transitions into expected format before entry"""
         res = []
         for i in range(self.N):
@@ -130,7 +130,7 @@ class ReplayBuffer(Loggable):
             res.append(x)
         return res
 
-    def sample(self, n: int) -> Tuple[Tuple, AuxiliaryMemoryData]:
+    def sample(self, n: int) -> tuple[tuple, AuxiliaryMemoryData]:
         """Sample from the replay buffer
 
         Args:
@@ -192,8 +192,8 @@ class PrioritizedReplayBuffer(ReplayBuffer):
         epsilon: float = 0.1,
         alpha: float = 0.6,
         beta_0: float = 0.4,
-        dtype: Optional[Union[torch.dtype, Sequence[torch.dtype]]] = None,
-        normalise: Union[bool, Sequence[bool]] = False,
+        dtype: torch.dtype | Sequence[torch.dtype] | None = None,
+        normalise: bool | Sequence[bool] = False,
         beta_annealing_steps: int = 10000,
         device: str = "cpu",
     ) -> None:
@@ -218,7 +218,7 @@ class PrioritizedReplayBuffer(ReplayBuffer):
         # Logging
         self.mean_batch_error = 0
 
-    def append(self, inputs: Tuple[Tensor], update: bool = True) -> None:
+    def append(self, inputs: tuple[Tensor], update: bool = True) -> None:
         """Add transitions to the replay buffer
 
         Args:
@@ -233,7 +233,7 @@ class PrioritizedReplayBuffer(ReplayBuffer):
             j = i % self.capacity
             self._sift_up(self._maximum_priority, j)
 
-    def sample(self, n: int) -> Tuple[Tuple, AuxiliaryMemoryData]:
+    def sample(self, n: int) -> tuple[tuple, AuxiliaryMemoryData]:
         # Invariant checks
         if n > len(self):
             return ValueError(

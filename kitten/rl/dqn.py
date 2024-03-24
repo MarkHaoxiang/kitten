@@ -1,4 +1,3 @@
-from typing import Dict, List, Tuple, Union
 from numpy import ndarray
 import torch
 import torch.nn as nn
@@ -70,13 +69,13 @@ class DQN(Algorithm, HasCritic):
 
         return self.loss_critic_value
 
-    def policy_fn(self, s: Union[Tensor, ndarray]) -> Tensor:
+    def policy_fn(self, s: Tensor | ndarray) -> Tensor:
         if isinstance(s, ndarray):
             s = torch.tensor(s, device=self.device, dtype=torch.float32)
         return torch.argmax(self.critic.q(s=s, a=None), dim=-1)
 
-    def get_log(self) -> Dict:
+    def get_log(self) -> dict:
         return {"critic_loss": self.loss_critic_value}
 
-    def get_models(self) -> List[Tuple[nn.Module, str]]:
+    def get_models(self) -> list[tuple[nn.Module, str]]:
         return [(self.critic.net, "critic")]

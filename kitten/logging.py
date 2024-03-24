@@ -7,7 +7,7 @@ import math
 import os
 from os.path import join
 import shutil
-from typing import Callable, Dict, Optional, Tuple, List, TYPE_CHECKING
+from typing import Callable, TYPE_CHECKING
 import time
 
 import torch
@@ -30,7 +30,7 @@ if TYPE_CHECKING:
 class Loggable(ABC):
     """Interface signalling a module which can be logged"""
 
-    def get_log(self) -> Dict:
+    def get_log(self) -> dict:
         """Collect logs for publishing
 
         Returns:
@@ -38,7 +38,7 @@ class Loggable(ABC):
         """
         return {}
 
-    def get_models(self) -> List[Tuple[nn.Module, str]]:
+    def get_models(self) -> list[tuple[nn.Module, str]]:
         """List of publishable networks with names
 
         Returns:
@@ -58,7 +58,7 @@ class CriticValue(Loggable):
         self._target = target
         self._evaluator = evaluator
 
-    def get_log(self) -> Dict:
+    def get_log(self) -> dict:
         return {
             "critic_value": self._target.critic.q(
                 self._evaluator.saved_reset_states,
@@ -89,7 +89,7 @@ class KittenLogger:
         self._start_time = time.time()
         self._epoch = 0
         self.models = []
-        self.providers: List[Loggable] = []
+        self.providers: list[Loggable] = []
 
         # Log
         self.path = join(path, self.name)
@@ -129,7 +129,7 @@ class KittenLogger:
         model: nn.Module,
         name: str,
         watch: bool = True,
-        watch_frequency: Optional[int] = None,
+        watch_frequency: int | None = None,
     ):
         """Register a torch module to checkpoint
 
@@ -156,7 +156,7 @@ class KittenLogger:
                 idx=len(self.models),
             )
 
-    def register_models(self, batch: List[Tuple[nn.Module, str]], **kwargs):
+    def register_models(self, batch: list[tuple[nn.Module, str]], **kwargs):
         """Register multiple models at once
 
         Args:
@@ -183,7 +183,7 @@ class KittenLogger:
         for provider, name in batch:
             self.register_provider(provider, name)
 
-    def checkpoint_registered(self, frame: Optional[int] = None) -> None:
+    def checkpoint_registered(self, frame: int | None = None) -> None:
         """Utility to checkpoint registered models
 
         Args:
@@ -214,9 +214,7 @@ class KittenLogger:
         """
         return time.time() - self._start_time
 
-    def checkpoint(
-        self, model: nn.Module, name: str, frame: Optional[int] = None
-    ) -> None:
+    def checkpoint(self, model: nn.Module, name: str, frame: int | None = None) -> None:
         """Utility to save a model
 
         Args:
@@ -266,7 +264,7 @@ class KittenEvaluator:
     def __init__(
         self,
         env: Env,
-        policy: Optional[Policy] = None,
+        policy: Policy | None = None,
         video=False,
         saved_reset_states: int = 10,
         evaluation_repeats: int = 10,
@@ -318,7 +316,7 @@ class KittenEvaluator:
         self.info = {}
 
     def evaluate(
-        self, policy: Optional[Policy] = None, repeats: Optional[int] = None
+        self, policy: Policy | None = None, repeats: int | None = None
     ) -> float:
         """Evaluation of a policy on the environment
 
