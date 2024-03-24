@@ -26,10 +26,12 @@ from kitten.rl.qt_opt import QTOpt
 from .rng import Generator
 
 
-def build_env(name: str,
-              normalise_observation: bool = False,
-              seed: Optional[Union[int, Generator, np.random.Generator]] = None,
-              **kwargs) -> gym.Env:
+def build_env(
+    name: str,
+    normalise_observation: bool = False,
+    seed: Optional[Union[int, Generator, np.random.Generator]] = None,
+    **kwargs,
+) -> gym.Env:
     """Utility to construct an environment
 
     Calls gym.make, applies extra wrappers and resets
@@ -55,6 +57,7 @@ def build_env(name: str,
     env.reset(seed=seed)
     env.action_space.seed(seed)
     return env
+
 
 def build_rl(env: gym.Env, algorithm_configuration, device: str) -> Algorithm:
     """Utility to construct a RL algorithm"""

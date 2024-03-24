@@ -10,6 +10,7 @@ from torch import Tensor
 from kitten.policy import Policy
 from kitten.common import Generator
 
+
 class ColoredNoisePolicy(Policy):
     def __init__(
         self,

@@ -4,8 +4,9 @@ from torch.optim import SGD
 
 from kitten.nn import AddTargetNetwork
 
-DEVICE = 'cpu'
+DEVICE = "cpu"
 torch.manual_seed(0)
+
 
 class TestTargetNetwork:
     def build_test_network(self):
@@ -15,7 +16,9 @@ class TestTargetNetwork:
         # Test creation
         net = AddTargetNetwork(self.build_test_network())
         test_data = torch.rand((3,))
-        assert net(test_data).shape == net.target(test_data).shape, "Shape of target network and network are not equal"
+        assert (
+            net(test_data).shape == net.target(test_data).shape
+        ), "Shape of target network and network are not equal"
         # Test Optimise
         original_net = net(test_data)
         original_target = net.target(test_data)

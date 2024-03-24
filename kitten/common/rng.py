@@ -6,13 +6,12 @@ import random
 import torch
 import numpy as np
 
+
 class Generator:
-    """ Encapsulates Torch and Numpy generators to maintain consistent state across different modules
-    """
-    def __init__(self, 
-                 np_rng: np.random.Generator,
-                 torch_rng: torch.Generator) -> None:
-        """  Encapsulates Torch and Numpy generators to maintain consistent state across different modules
+    """Encapsulates Torch and Numpy generators to maintain consistent state across different modules"""
+
+    def __init__(self, np_rng: np.random.Generator, torch_rng: torch.Generator) -> None:
+        """Encapsulates Torch and Numpy generators to maintain consistent state across different modules
 
         Args:
             np_rng (np.random.Generator): Numpy Generator.
@@ -24,14 +23,18 @@ class Generator:
     def __getstate__(self):
         result = copy.copy(vars(self))
         result["_torch_rng"] = self._torch_rng.get_state()
+        result["_legacy_np_rng"] = np.random.get_state()
         return result
 
     def __setstate__(self, state):
         objects = vars(self)
         self._torch_rng = torch.default_generator
         torch_rng_state = state.pop("_torch_rng")
+        legacy_np_state = state.pop("_legacy_np_rng")
         self._torch_rng.set_state(torch_rng_state)
         objects.update(state)
+        # Bit of a hack
+        np.random.set_state(legacy_np_state)
 
     def __getattr__(self, name: str):
         return self._np_rng.__getattribute__(name)

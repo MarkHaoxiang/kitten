@@ -339,11 +339,15 @@ class CatsExperiment:
                 reset_sample = self.reset_distribution[indices]
                 if self.reset_as_an_action:
                     s_1 = torch.where(
-                        input=reset_sample, other=s_1, condition=batch_truncated.unsqueeze(-1)
+                        input=reset_sample,
+                        other=s_1,
+                        condition=batch_truncated.unsqueeze(-1),
                     )
                 if self.death_is_not_the_end:
                     s_1 = torch.where(
-                        input=reset_sample, other=s_1, condition=batch_death.unsqueeze(-1)
+                        input=reset_sample,
+                        other=s_1,
+                        condition=batch_death.unsqueeze(-1),
                     )
 
             batch = Transition(batch.s_0, batch.a, r_i, s_1, batch.d)
@@ -357,35 +361,6 @@ class CatsExperiment:
                     obs, action, reward, n_obs, terminated, device=self.device
                 )
             )[2].item()
-
-
-class StochasticActionWrapper(gym.ActionWrapper, gym.utils.RecordConstructorArgs):
-    """Adds unobservable random noise to incoming actions as a source of aleatoric uncertainty"""
-
-    def __init__(self, env: gym.Env, noise: float = 0.1):
-        """A wrapper to add random noise (aleatoric uncertainty) to actions
-
-        Args:
-            env (gym.Env): The environment to apply the wrapper
-            noise (float, optional): Amount of noise (Scaled Gaussian with action_scale for Box spaces). Defaults to 0.1.
-        """
-        if 0 > noise:
-            raise ValueError(f"Noise {noise} must be above 0")
-
-        gym.utils.RecordConstructorArgs.__init__(self, noise=noise)
-        gym.ActionWrapper.__init__(self, env)
-        self._noise = noise
-
-    def action(self, action: Any) -> Any:
-        """Adds random noise to the action and clips within valid bounds"""
-        if isinstance(self.action_space, gym.spaces.Box):
-            noise = self.np_random.normal(loc=0, scale=self._noise, size=action.shape)
-            noise = noise * (self.action_space.high - self.action_space.low)
-            action = action + noise
-            return np.clip(action, self.action_space.low, self.action_space.high)
-        else:
-            # TODO: Support discrete space as well
-            raise NotImplementedError()
 
 
 class ResetActionWrapper(gym.Wrapper, gym.utils.RecordConstructorArgs):
@@ -434,7 +409,7 @@ class ResetActionWrapper(gym.Wrapper, gym.utils.RecordConstructorArgs):
         should_check = self._current_step % self._check_frequency == 0
         if isinstance(self.action_space, gym.spaces.Box):
             if should_check:
-                #manual_truncation = action[-1] > 0.5
+                # manual_truncation = action[-1] > 0.5
                 manual_truncation = self.np_random.random() > action[-1]
                 # print(self._current_step, manual_truncation)
             else:
