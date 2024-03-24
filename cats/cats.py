@@ -1,6 +1,5 @@
 # Std
 import copy
-import logging
 from typing import Any, Optional, Tuple
 
 # Training
@@ -24,7 +23,8 @@ from kitten.common.util import *
 from kitten.dataflow.normalisation import RunningMeanVariance
 
 # Cats
-from rl import QTOptCats
+from .rl import QTOptCats
+from .env import *
 
 
 class CatsExperiment:
@@ -101,6 +101,10 @@ class CatsExperiment:
 
     def _build_env(self):
         self.env = build_env(**self.cfg.env)
+
+        # Fixed-Reset
+        if self.fixed_reset:
+            self.env = FixedResetWrapper(self.env)
 
         # Random noise to action (aleatoric uncertainty)
         if self.environment_action_noise > 0:
@@ -182,10 +186,7 @@ class CatsExperiment:
         """Manual reset of the environment"""
         if self.enable_policy_sampling:
             self.algorithm.reset_critic()
-        if self.fixed_reset:
-            o, i = self.collector.env.reset(seed=self.cfg.seed)
-        else:
-            o, i = self.collector.env.reset()
+        o, _ = self.collector.env.reset()
         self.collector.obs = o
         return o
 
@@ -361,72 +362,3 @@ class CatsExperiment:
                     obs, action, reward, n_obs, terminated, device=self.device
                 )
             )[2].item()
-
-
-class ResetActionWrapper(gym.Wrapper, gym.utils.RecordConstructorArgs):
-    """This wrapper adds an extra action option to the environment, and taking it send a truncation signal"""
-
-    def __init__(self, env: gym.Env, check_frequency: int = 100):
-        gym.utils.RecordConstructorArgs.__init__(self, check_frequency=check_frequency)
-        gym.Wrapper.__init__(self, env)
-
-        # Change action spaces
-        if isinstance(self.action_space, gym.spaces.Box):
-            assert (
-                len(self.action_space.shape) == 1
-            ), f"shape of action space should be 1d"
-            self.action_space = gym.spaces.Box(
-                low=np.concatenate((self.action_space.low, [0])),
-                high=np.concatenate((self.action_space.high, [1])),
-                shape=(self.action_space.shape[0] + 1,),
-                dtype=self.action_space.dtype,
-            )
-        elif isinstance(self.action_space, gym.spaces.Discrete):
-            self.action_space = gym.spaces.Discrete(
-                n=self.action_space.n + 1, start=self.action_space.start
-            )
-        else:
-            # TODO
-            raise NotImplementedError()
-
-        self._previous_obs = None
-        self._check_frequency = check_frequency
-        self._current_step = 0
-
-    def reset(self, *, seed=None, options=None):
-        obs, info = self.env.reset(seed=seed, options=options)
-        self._previous_obs = obs
-        self._current_step = 0
-        return obs, info
-
-    def _env_step(self, action: Any):
-        observation, reward, terminated, truncated, info = self.env.step(action)
-        self._previous_obs = observation
-        return observation, reward, terminated, truncated, info
-
-    def step(self, action: Any):
-        self._current_step += 1
-        should_check = self._current_step % self._check_frequency == 0
-        if isinstance(self.action_space, gym.spaces.Box):
-            if should_check:
-                # manual_truncation = action[-1] > 0.5
-                manual_truncation = self.np_random.random() > action[-1]
-                # print(self._current_step, manual_truncation)
-            else:
-                manual_truncation = False
-            # manual_truncation = action[-1] > self.np_random.random()
-            observation, reward, terminated, truncated, info = self._env_step(
-                action[:-1]
-            )
-            return observation, reward, terminated, truncated or manual_truncation, info
-        elif isinstance(self.action_space, gym.spaces.Discrete):
-            if (
-                should_check
-                and action == self.action_space.start + self.action_space.n - 1
-            ):
-                return self._previous_obs, 0, False, True, {}
-            else:
-                return self._env_step(action)
-        else:
-            # TODO
-            raise NotImplementedError()

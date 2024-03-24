@@ -1,8 +1,7 @@
 import math
-from typing import Tuple
 
 import numpy as np
-import gym
+import gymnasium as gym
 import torch
 import matplotlib as mpl
 from matplotlib import pyplot as plt
