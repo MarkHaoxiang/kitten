@@ -26,13 +26,11 @@ if has_wandb and has_omegaconf:
     from omegaconf import OmegaConf, DictConfig
 
 from kitten.policy import Policy
-from kitten.common.typing import (
-    Log,
-    ModuleNamePairs
-)
+from kitten.common.typing import Log, ModuleNamePairs
 
 if TYPE_CHECKING:
     from kitten.rl import HasCritic
+
 
 class Loggable(ABC):
     """Interface signalling a module which can be logged"""
@@ -45,7 +43,7 @@ class Loggable(ABC):
         """
         return {}
 
-    def get_models(self) ->  ModuleNamePairs:
+    def get_models(self) -> ModuleNamePairs:
         """List of publishable networks with names
 
         Returns:
@@ -98,8 +96,8 @@ class KittenLogger:
         self.wandb_enable = cfg.log.wandb
         self._start_time = time.time()
         self._epoch = 0
-        self.models = []
-        self.providers: list[Loggable] = []
+        self.models: ModuleNamePairs = []
+        self.providers: list[tuple[Loggable, str]] = []
 
         # Log
         self.path = join(path, self.name)
@@ -111,7 +109,9 @@ class KittenLogger:
         wandb.init(
             project="curiosity",
             name=self.name,
-            config=OmegaConf.to_container(cfg, resolve=True, throw_on_missing=True),
+            config=OmegaConf.to_container(  # type: ignore[arg-type]
+                cfg, resolve=True, throw_on_missing=True
+            ),
             dir=self.path,
             mode="online" if self.wandb_enable else "offline",
         )
@@ -275,7 +275,7 @@ class KittenEvaluator:
         self,
         env: Env,
         policy: Policy | None = None,
-        video=False,
+        video: bool = False,
         saved_reset_states: int = 10,
         evaluation_repeats: int = 10,
         device: str = "cpu",
@@ -293,23 +293,26 @@ class KittenEvaluator:
         """
         # Hack for seeding
         self.env = copy.deepcopy(env)
-        self.saved_reset_states = [
-            self.env.reset(seed=i)[0] for i in range(saved_reset_states)
-        ]
         self.saved_reset_states = torch.tensor(
-            np.array(self.saved_reset_states), device=device, dtype=torch.float32
+            data=np.array(
+                [self.env.reset(seed=i)[0] for i in range(saved_reset_states)]
+            ),
+            device=device,
+            dtype=torch.float32,
         )
 
         self.repeats = evaluation_repeats
         self.policy = policy
 
         # Link evaluation environment with train environment statistics
-        if env.spec is not None:
-            for wrapper in env.spec.additional_wrappers:
-                if wrapper.name == "NormalizeObservation":
-                    self.env.obs_rms = env.obs_rms
-                elif wrapper.name == "NormalizeReward":
-                    self.env.return_rms = env.return_rms
+        # Deprecated
+        # Use Kitten Transforms instead
+        # if env.spec is not None:
+        #     for wrapper in env.spec.additional_wrappers:
+        #         if wrapper.name == "NormalizeObservation":
+        #             self.env.obs_rms = env.obs_rms
+        #         elif wrapper.name == "NormalizeReward":
+        #             self.env.return_rms = env.return_rms
 
         if video != False and video.enable:
             if env.render_mode != "rgb_array":
@@ -323,7 +326,7 @@ class KittenEvaluator:
                 disable_logger=True,
             )
 
-        self.info = {}
+        self.info: Log = {}
 
     def evaluate(
         self, policy: Policy | None = None, repeats: int | None = None
@@ -372,7 +375,7 @@ class KittenEvaluator:
         vars(self).update(state)
 
 
-def evaluate(env: Env, policy: Callable, repeat: int = 1):
+def evaluate(env: Env, policy: Callable, repeat: int = 1) -> tuple[float, float, float]:
     """Evaluates an episode
 
     Args:
@@ -380,11 +383,11 @@ def evaluate(env: Env, policy: Callable, repeat: int = 1):
         policy (Callable): Function which accepts the observation from gym, returning an action within the action space
         repeat (int, optional): Number of attempts. Defaults to 1.
     """
-    total_reward = 0
+    total_reward = 0.0
+    episode_length = 0.0
     maximum_reward = -math.inf
-    episode_length = 0
     for seed in range(repeat):
-        episode_reward = 0
+        episode_reward = 0.0
         with torch.no_grad():
             env.close()
             obs, _ = env.reset(seed=seed)
@@ -398,8 +401,8 @@ def evaluate(env: Env, policy: Callable, repeat: int = 1):
                 if action.shape == () and isinstance(env.action_space, Box):
                     action = np.expand_dims(action, 0)
                 obs, reward, terminated, truncated, _ = env.step(action)
-                total_reward += reward
-                episode_reward += reward
+                total_reward += float(reward)
+                episode_reward += float(reward)
         maximum_reward = max(episode_reward, maximum_reward)
     # Calculate reward
     total_reward = total_reward / repeat

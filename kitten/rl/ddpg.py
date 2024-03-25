@@ -8,10 +8,8 @@ from torch.nn.modules import Module
 from kitten.experience import AuxiliaryMemoryData, Transitions
 from kitten.nn import AddTargetNetwork, Actor, Critic
 from kitten.rl import Algorithm, HasCritic
-from kitten.common.typing import (
-    Log,
-    ModuleNamePairs
-)
+from kitten.common.typing import Log, ModuleNamePairs
+
 
 class DeepDeterministicPolicyGradient(Algorithm, HasCritic):
     """Implements DDPG
@@ -62,11 +60,7 @@ class DeepDeterministicPolicyGradient(Algorithm, HasCritic):
     def critic(self) -> Critic:
         return self._critic.net
 
-    def _critic_update(
-        self,
-        batch: Transitions, 
-        aux: AuxiliaryMemoryData
-    ) -> float:
+    def _critic_update(self, batch: Transitions, aux: AuxiliaryMemoryData) -> float:
         """Runs a critic update
 
         Args:
@@ -80,7 +74,9 @@ class DeepDeterministicPolicyGradient(Algorithm, HasCritic):
         Returns:
             float: critic loss
         """
-        td_error = self.td_error(batch.s_0, batch.a, batch.r, batch.s_1, batch.d) * aux.weights
+        td_error = (
+            self.td_error(batch.s_0, batch.a, batch.r, batch.s_1, batch.d) * aux.weights
+        )
         loss = torch.mean(td_error**2)
         loss_value = loss.item()
         self._optim_critic.zero_grad()

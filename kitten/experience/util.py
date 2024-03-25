@@ -4,6 +4,7 @@ import torch
 import numpy as np
 from gymnasium import Env
 from gymnasium.spaces.discrete import Discrete
+from gymnasium.spaces.box import Box
 
 from .memory import ReplayBuffer, PrioritizedReplayBuffer
 from .collector import DataCollector, GymCollector
@@ -11,6 +12,7 @@ from .collector import DataCollector, GymCollector
 from kitten.dataflow.normalisation import RunningMeanVariance
 from kitten.experience import Transitions
 from kitten.common.typing import Device
+
 
 def build_transition_from_list(updates: List, device: Device = "cpu") -> Transitions:
     """Utility to wrap collector results into a transition"""
@@ -26,7 +28,13 @@ def build_transition_from_list(updates: List, device: Device = "cpu") -> Transit
 
 
 def build_transition_from_update(
-    obs, action, reward, n_obs, terminated, add_batch: bool = True, device: Device = "cpu"
+    obs,
+    action,
+    reward,
+    n_obs,
+    terminated,
+    add_batch: bool = True,
+    device: Device = "cpu",
 ) -> Transitions:
     """Utility to wrap a single gym update into a transition"""
     obs = torch.tensor(obs, device=device, dtype=torch.float32)
@@ -64,18 +72,23 @@ def build_replay_buffer(
     discrete = isinstance(env.action_space, Discrete)
     if normalise_observation:
         rmv = RunningMeanVariance()
-        normalise_observation = [rmv, None, None, rmv, None]
+        _normalise_observation = [rmv, None, None, rmv, None]
     else:
-        normalise_observation = [None, None, None, None, None]
+        _normalise_observation = [None, None, None, None, None]
+
+    observation_space = env.observation_space
+    action_space = env.action_space
+    if observation_space.shape is None or action_space.shape is None:
+        raise ValueError("Invalid space")
 
     if type == "experience_replay":
         return ReplayBuffer(
             capacity=capacity,
             shape=(
-                env.observation_space.shape,
-                env.action_space.shape,
+                observation_space.shape,
+                action_space.shape,
                 (),
-                env.observation_space.shape,
+                observation_space.shape,
                 (),
             ),
             dtype=(
@@ -85,7 +98,7 @@ def build_replay_buffer(
                 torch.float32,
                 torch.bool,
             ),
-            transforms=normalise_observation,
+            transforms=_normalise_observation,
             device=device,
             **kwargs,
         )
@@ -96,10 +109,10 @@ def build_replay_buffer(
             error_fn=error_fn,
             capacity=capacity,
             shape=(
-                env.observation_space.shape,
-                env.action_space.shape,
+                observation_space.shape,
+                action_space.shape,
                 (),
-                env.observation_space.shape,
+                observation_space.shape,
                 (),
             ),
             dtype=(
@@ -109,7 +122,7 @@ def build_replay_buffer(
                 torch.float32,
                 torch.bool,
             ),
-            transforms=normalise_observation,
+            transforms=_normalise_observation,
             device=device,
             **kwargs,
         )

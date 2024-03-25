@@ -70,9 +70,7 @@ class TwinDelayedDeepDeterministicPolicyGradient(DeepDeterministicPolicyGradient
         self._critic_update_frequency = critic_update_frequency
         self._policy_update_frequency = policy_update_frequency
 
-    def _critic_update(
-        self, batch: Transitions, aux: AuxiliaryMemoryData
-    ) -> float:
+    def _critic_update(self, batch: Transitions, aux: AuxiliaryMemoryData) -> float:
         """Runs a critic update
 
         Args:
@@ -105,7 +103,10 @@ class TwinDelayedDeepDeterministicPolicyGradient(DeepDeterministicPolicyGradient
             # ====================
             target_max_1 = self._critic_1.target.q(batch.s_1, a_1).squeeze()
             target_max_2 = self._critic_2.target.q(batch.s_1, a_1).squeeze()
-            y = batch.r + (~batch.d) * torch.minimum(target_max_1, target_max_2) * self._gamma
+            y = (
+                batch.r
+                + (~batch.d) * torch.minimum(target_max_1, target_max_2) * self._gamma
+            )
         loss_critic = torch.mean((aux.weights * (y - x_1)) ** 2) + torch.mean(
             (aux.weights * (y - x_2)) ** 2
         )

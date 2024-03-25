@@ -6,13 +6,12 @@ from torch import nn
 
 T = TypeVar("T", bound=nn.Module)
 
+
 class AddTargetNetwork(nn.Module, Generic[T]):
     """Wraps an extra target network for delayed updates"""
-    def __init__(self,
-                 net: T,
-                 device="cpu"
-        ):
-        """ Wraps an extra target network for delayed updates
+
+    def __init__(self, net: T, device="cpu"):
+        """Wraps an extra target network for delayed updates
 
         Args:
             net (T): Network.
@@ -41,10 +40,10 @@ class AddTargetNetwork(nn.Module, Generic[T]):
                 net_param.data * tau + target_param.data * (1 - tau)
             )
 
-    @property 
+    @property
     def net(self) -> T:
         return self._net
-    
+
     @property
     def target(self) -> T:
         return self._target

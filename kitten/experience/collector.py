@@ -1,6 +1,5 @@
-from __future__ import annotations
-
 from abc import ABC, abstractmethod
+from typing import Any
 
 import gymnasium as gym
 import numpy as np
@@ -10,6 +9,7 @@ from kitten.experience.memory import ReplayBuffer
 from kitten.logging import Loggable
 from kitten.policy import Policy
 from kitten.common.typing import Device
+
 
 class DataCollector(Loggable, ABC):
     def __init__(self, policy: Policy, env: gym.Env, memory: ReplayBuffer | None):
@@ -25,7 +25,7 @@ class DataCollector(Loggable, ABC):
         self.memory = memory
 
     @abstractmethod
-    def collect(self, n: int, append_memory: bool = True, *args, **kwargs) -> list:
+    def collect(self, n: int, append_memory: bool = True, *args, **kwargs) -> list[Any]:
         """Collect data on the environment
 
         Args:
@@ -38,7 +38,7 @@ class DataCollector(Loggable, ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def early_start(self, n: int) -> list:
+    def early_start(self, n: int) -> list[Any]:
         """Runs the environment for a certain number of steps using a random policy.
 
         For example, to fill the replay buffer or initialise normalisations.
@@ -97,7 +97,7 @@ class GymCollector(DataCollector):
         early_start: bool = False,
         *args,
         **kwargs,
-    ) -> list:
+    ) -> list[Any]:
         if not early_start:
             self.frame += n
         with torch.no_grad():
@@ -113,8 +113,7 @@ class GymCollector(DataCollector):
                 if not self.memory is None and append_memory:
                     self.memory.append(transition_tuple, update=not early_start)
                 # Add Truncation info back in
-                transition_tuple = (obs, action, reward, n_obs, terminated, truncated)
-                result.append(transition_tuple)
+                result.append((obs, action, reward, n_obs, terminated, truncated))
                 # Reset
                 if terminated or truncated:
                     n_obs, _ = self.env.reset()

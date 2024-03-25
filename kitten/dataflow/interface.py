@@ -87,6 +87,7 @@ class Transform(Callable, ABC):
                 return f(self(*args, **kwargs))
 
             f.__self__.__setattr__(f.__name__, types.MethodType(g, f.__self__))
+            return f.__self__.__getattribute__(f.__name__)
         elif isinstance(f, types.FunctionType) or isinstance(f, types.MethodType):
 
             def g(*args, **kwargs):

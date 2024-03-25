@@ -199,6 +199,7 @@ def build_critic(env: Env, features: int = 128) -> Critic:
                 return result
         result =  AtariNetwork()"""
 
+
 def build_intrinsic(
     env, intrinsic_configuration, device: str = "cpu"
 ) -> IntrinsicReward:

@@ -6,9 +6,8 @@ from torch import Tensor
 from kitten.experience import AuxiliaryMemoryData, Transitions
 from kitten.logging import Loggable
 from kitten.dataflow.normalisation import RunningMeanVariance
-from kitten.common.typing import (
-    Log
-)
+from kitten.common.typing import Log
+
 
 class IntrinsicReward(Loggable, ABC):
     """Interface for intrinsic exploration rewards"""
@@ -107,6 +106,7 @@ class IntrinsicReward(Loggable, ABC):
 
     def get_log(self):
         return self.info
+
 
 class NoIntrinsicReward(IntrinsicReward):
     def _reward(self, batch: Transitions):

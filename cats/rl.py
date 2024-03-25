@@ -15,13 +15,16 @@ from kitten.rl.qt_opt import cross_entropy_method
 from kitten.experience import AuxiliaryMemoryData
 from kitten.nn import Critic, AddTargetNetwork
 
+
 @dataclass
 class NextStateValueMixin:
     v_1: Float[Tensor, "*batch"] | None = None
 
+
 @dataclass
 class NextStateValueOverloadAux(NextStateValueMixin, AuxiliaryMemoryData):
     pass
+
 
 class QTOptCats(Algorithm):
     """QtOpt with Ensembles and other modifications"""
@@ -89,9 +92,7 @@ class QTOptCats(Algorithm):
         mu, var = q.mean(), q.var()
         return mu, var
 
-    def policy_fn(
-        self, s: Tensor | np.ndarray, critic: Critic | None = None
-    ) -> Tensor:
+    def policy_fn(self, s: Tensor | np.ndarray, critic: Critic | None = None) -> Tensor:
         if isinstance(s, np.ndarray):
             s = torch.tensor(s, device=self.device)
         if critic is None:

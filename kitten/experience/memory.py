@@ -1,4 +1,5 @@
-from typing import Sequence, Callable
+from typing import Any, Sequence, Callable
+from numbers import Number
 
 import numpy as np
 import torch
@@ -7,7 +8,8 @@ from torch import Tensor
 from kitten.logging import Loggable
 from kitten.dataflow import Transform
 from kitten.experience import AuxiliaryMemoryData
-from kitten.common.typing import Device
+from kitten.common.typing import Device, Shape
+
 
 class ReplayBuffer(Loggable):
     """Store history of episode transitions"""
@@ -15,9 +17,9 @@ class ReplayBuffer(Loggable):
     def __init__(
         self,
         capacity: int,
-        shape: Sequence[int],
-        dtype: torch.dtype | Sequence[torch.dtype] | None = None,
-        transforms: Transform | Sequence[Transform] | None = None,
+        shape: Sequence[Shape],
+        dtype: torch.dtype | Sequence[torch.dtype] = torch.float32,
+        transforms: Transform | Sequence[Transform | None] | None = None,
         device: Device = "cpu",
         **kwargs,
     ) -> None:
@@ -40,16 +42,12 @@ class ReplayBuffer(Loggable):
         self.N = len(shape)
         self.device = device
         # Dtype
-        if hasattr(dtype, "__getitem__"):
-            self.storage = [
-                torch.zeros((capacity, *s), device=self.device, dtype=dtype[i])
-                for i, s in enumerate(shape)
-            ]
-        else:
-            self.storage = [
-                torch.zeros((capacity, *s), device=self.device, dtype=dtype)
-                for s in shape
-            ]
+        if not isinstance(dtype, Sequence):
+            dtype = [dtype for _ in range(len(shape))]
+        self.storage = [
+            torch.zeros((capacity, *s), device=self.device, dtype=dtype[i])
+            for i, s in enumerate(shape)
+        ]
 
         # Transforms
         if isinstance(transforms, Transform):
@@ -61,7 +59,7 @@ class ReplayBuffer(Loggable):
         self._append_index = 0  # Position of next tensor to be inserted
         self._full = False  # Bookmark to check if storage has looped around
 
-    def append(self, inputs: tuple[Tensor], **kwargs) -> int:
+    def append(self, inputs: tuple[Any, ...], **kwargs) -> int:
         """Add a transition experience to the buffer
 
         Args:
@@ -114,7 +112,7 @@ class ReplayBuffer(Loggable):
         self._append_index = self._append_index % self.capacity
         return n_insert
 
-    def _append_preprocess(self, inputs: tuple[Tensor]):
+    def _append_preprocess(self, inputs: tuple[Any, ...]):
         """Utility to transform new transitions into expected format before entry"""
         res = []
         for i in range(self.N):
@@ -130,7 +128,7 @@ class ReplayBuffer(Loggable):
             res.append(x)
         return res
 
-    def sample(self, n: int) -> tuple[tuple, AuxiliaryMemoryData]:
+    def sample(self, n: int) -> tuple[tuple[Tensor, ...], AuxiliaryMemoryData]:
         """Sample from the replay buffer
 
         Args:
@@ -171,9 +169,10 @@ class ReplayBuffer(Loggable):
         # Transforms
         if transforms and not self.transforms is None:
             for i, result in enumerate(results):
-                if self.transforms[i] is None:
+                transform = self.transforms[i]
+                if transform is None:
                     continue
-                results[i] = self.transforms[i](result)
+                results[i] = transform(result)
         return tuple(results)
 
 
@@ -188,12 +187,12 @@ class PrioritizedReplayBuffer(ReplayBuffer):
         self,
         error_fn: Callable,
         capacity: int,
-        shape: Sequence[int],
+        shape: Sequence[Shape],
         epsilon: float = 0.1,
         alpha: float = 0.6,
         beta_0: float = 0.4,
-        dtype: torch.dtype | Sequence[torch.dtype] | None = None,
-        normalise: bool | Sequence[bool] = False,
+        dtype: torch.dtype | Sequence[torch.dtype] = torch.float32,
+        transforms: Transform | Sequence[Transform | None] | None = None,
         beta_annealing_steps: int = 10000,
         device: Device = "cpu",
     ) -> None:
@@ -201,7 +200,7 @@ class PrioritizedReplayBuffer(ReplayBuffer):
             capacity=capacity,
             shape=shape,
             dtype=dtype,
-            normalise=normalise,
+            transforms=transforms,
             device=device,
         )
 
@@ -218,7 +217,7 @@ class PrioritizedReplayBuffer(ReplayBuffer):
         # Logging
         self.mean_batch_error = 0
 
-    def append(self, inputs: tuple[Tensor], update: bool = True) -> None:
+    def append(self, inputs: tuple[Any, ...], update: bool = True, **kwargs) -> int:
         """Add transitions to the replay buffer
 
         Args:
@@ -232,11 +231,12 @@ class PrioritizedReplayBuffer(ReplayBuffer):
         for i in range(initial_append_index, initial_append_index + n_insert):
             j = i % self.capacity
             self._sift_up(self._maximum_priority, j)
+        return n_insert
 
-    def sample(self, n: int) -> tuple[tuple, AuxiliaryMemoryData]:
+    def sample(self, n: int) -> tuple[tuple[Tensor, ...], AuxiliaryMemoryData]:
         # Invariant checks
         if n > len(self):
-            return ValueError(
+            raise ValueError(
                 f"Trying to sample {n} values but only {len(self)} available"
             )
 

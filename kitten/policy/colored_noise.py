@@ -2,7 +2,7 @@ from typing import Any, Callable
 
 import gymnasium as gym
 from gymnasium.spaces import Space
-import pink
+import pink  # type: ignore[import-untyped]
 import numpy as np
 import torch
 from torch import Tensor

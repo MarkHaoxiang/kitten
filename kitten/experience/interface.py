@@ -1,4 +1,3 @@
-from collections import namedtuple
 from collections.abc import Iterator
 from dataclasses import dataclass
 
@@ -6,11 +5,7 @@ from torch import Tensor
 from jaxtyping import Bool, Float, Shaped, Integer, jaxtyped
 from typeguard import typechecked as typechecker
 
-from kitten.common.typing import Size
-
-
-def shape_annotation(shape: Size) -> str:
-    return " ".join(map(str, shape))
+from kitten.common.typing import Shape, shape_annotation
 
 
 class Transitions:
@@ -68,7 +63,7 @@ class Transitions:
         self._action_annotation = shape_annotation(self._action_shape)
 
     @property
-    def shape(self) -> Size:
+    def shape(self) -> Shape:
         return self._batch_shape
 
     @property

@@ -38,8 +38,8 @@ class Algorithm(Loggable, ABC):
 
 
 class HasCritic(ABC):
-    """ Reinforcement Learning Algorithm with a Critic Module
-    """
+    """Reinforcement Learning Algorithm with a Critic Module"""
+
     @property
     @abstractmethod
     def critic(self) -> Critic:

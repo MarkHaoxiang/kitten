@@ -53,14 +53,17 @@ class Actor(ABC, nn.Module):
     def to_policy_fn(self) -> Callable:
         return lambda s: self(s)
 
+
 class ClassicalBoxCritic(Critic):
     """Critic for continuous low-dimensionality gym environments"""
 
     def __init__(self, env: Env, net: nn.Module | None = None, features: int = 128):
         super().__init__()
-        if not isinstance(env.action_space, gym.spaces.Box):
-            raise ValueError("Unsupported Environment")
-        if net is None:
+        assert isinstance(env.action_space, gym.spaces.Box)
+        assert isinstance(env.observation_space, gym.spaces.Box)
+        if net is not None:
+            self.net = net
+        else:
             self.net = nn.Sequential(
                 nn.Linear(
                     in_features=env.observation_space.shape[-1]
@@ -72,8 +75,6 @@ class ClassicalBoxCritic(Critic):
                 nn.LeakyReLU(),
                 nn.Linear(in_features=features, out_features=1),
             )
-        else:
-            self.net = net
 
     def q(self, s: Tensor, a: Tensor) -> Tensor:
         combined = torch.cat((s, a), dim=-1)
@@ -88,9 +89,12 @@ class ClassicalDiscreteCritic(Critic):
 
     def __init__(self, env: Env, net: nn.Module | None = None, features: int = 128):
         super().__init__()
-        if not isinstance(env.action_space, gym.spaces.Discrete):
-            raise ValueError("Unsupported Environment")
-        if net is None:
+        assert isinstance(env.action_space, gym.spaces.Discrete)
+        assert isinstance(env.observation_space, gym.spaces.Box)
+
+        if net is not None:
+            self.net = net
+        else:
             self.net = nn.Sequential(
                 nn.Linear(
                     in_features=env.observation_space.shape[-1], out_features=features
@@ -98,10 +102,8 @@ class ClassicalDiscreteCritic(Critic):
                 nn.LeakyReLU(),
                 nn.Linear(in_features=features, out_features=features),
                 nn.LeakyReLU(),
-                nn.Linear(in_features=features, out_features=env.action_space.n),
+                nn.Linear(in_features=features, out_features=int(env.action_space.n)),
             )
-        else:
-            self.net = net
 
     def q(self, s: Tensor, a: Tensor | None = None) -> Tensor:
         if a is None:
@@ -118,8 +120,10 @@ class ClassicalBoxActor(Actor):
 
     def __init__(self, env: Env, net: nn.Module | None = None, features: int = 128):
         super().__init__()
+        assert isinstance(env.action_space, gym.spaces.Box)
+        assert isinstance(env.observation_space, gym.spaces.Box)
         if net is None:
-            self.net = nn.Sequential(
+            self.net: nn.Module = nn.Sequential(
                 nn.Linear(
                     in_features=env.observation_space.shape[0], out_features=features
                 ),
