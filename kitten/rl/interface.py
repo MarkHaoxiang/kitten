@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from typing import Any
 
 import numpy as np
 from torch import Tensor
@@ -13,7 +14,7 @@ class Algorithm(Loggable, ABC):
     """Interface for RL Policy Improvement Algorithms"""
 
     @abstractmethod
-    def update(self, batch: Transitions, aux: AuxiliaryMemoryData, step: int) -> None:
+    def update(self, batch: Transitions, aux: AuxiliaryMemoryData, step: int) -> Any:
         """Policy improvement update
 
         Args:
@@ -37,7 +38,8 @@ class Algorithm(Loggable, ABC):
 
 
 class HasCritic(ABC):
-
+    """ Reinforcement Learning Algorithm with a Critic Module
+    """
     @property
     @abstractmethod
     def critic(self) -> Critic:

@@ -6,7 +6,7 @@ from torch import Tensor
 from kitten.experience import AuxiliaryMemoryData, Transitions
 from kitten.rl import Algorithm, HasCritic
 
-from kitten.nn import AddTargetNetwork, Critic
+from kitten.nn import AddTargetNetwork, ClassicalDiscreteCritic
 
 
 class DQN(Algorithm, HasCritic):
@@ -17,7 +17,7 @@ class DQN(Algorithm, HasCritic):
 
     def __init__(
         self,
-        critic: Critic,
+        critic: ClassicalDiscreteCritic,
         gamma: float = 0.99,
         lr: float = 1e-3,
         update_frequency=1,
@@ -42,11 +42,11 @@ class DQN(Algorithm, HasCritic):
         self._optim = torch.optim.Adam(params=self.critic.parameters(), lr=lr)
         self._update_frequency = update_frequency
         self._target_update_frequency = target_update_frequency
-        self.loss_critic_value = 0
+        self._loss_critic_value = 0.0
 
     @property
-    def critic(self) -> Critic:
-        return self._critic
+    def critic(self) -> ClassicalDiscreteCritic:
+        return self._critic.net
 
     def td_error(self, s_0: Tensor, a: Tensor, r: Tensor, s_1: Tensor, d: Tensor):
         """Returns TD difference for a transition"""
@@ -61,13 +61,13 @@ class DQN(Algorithm, HasCritic):
         if step % self._update_frequency == 0:
             self._optim.zero_grad()
             loss = torch.mean((self.td_error(*batch) * aux.weights) ** 2)
-            self.loss_critic_value = loss.item()
+            self._loss_critic_value = loss.item()
             loss.backward()
             self._optim.step()
         if step % self._target_update_frequency == 0:
             self._critic.update_target_network()
 
-        return self.loss_critic_value
+        return self._loss_critic_value
 
     def policy_fn(self, s: Tensor | ndarray) -> Tensor:
         if isinstance(s, ndarray):
@@ -75,7 +75,7 @@ class DQN(Algorithm, HasCritic):
         return torch.argmax(self.critic.q(s=s, a=None), dim=-1)
 
     def get_log(self) -> dict:
-        return {"critic_loss": self.loss_critic_value}
+        return {"critic_loss": self._loss_critic_value}
 
     def get_models(self) -> list[tuple[nn.Module, str]]:
-        return [(self.critic.net, "critic")]
+        return [(self._critic, "critic")]

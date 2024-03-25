@@ -87,7 +87,7 @@ class QTOpt(Algorithm, HasCritic):
         cem_m: int = 6,
         cem_n_iterations: int = 2,
         clip_grad_norm: float | None = 1.0,
-        update_frequency: int = 1.0,
+        update_frequency: int = 1,
         device: str = "cpu",
         **kwargs,
     ) -> None:
@@ -128,14 +128,14 @@ class QTOpt(Algorithm, HasCritic):
         if isinstance(s, ndarray):
             s = torch.tensor(s, device=self.device)
         if critic is None:
-            critic = self._critic_1
+            policy_critic = self._critic_1.net
         squeeze = False
         if self._obs_space.shape == s.shape:
             squeeze = True
             s = s.unsqueeze(0)
         result = cross_entropy_method(
             s_0=s,
-            critic_network=critic,
+            critic_network=policy_critic,
             action_space=self._action_space,
             n=self._n,
             m=self._m,
@@ -201,4 +201,4 @@ class QTOpt(Algorithm, HasCritic):
 
     @property
     def critic(self) -> Critic:
-        return self._critic_1
+        return self._critic_1.net

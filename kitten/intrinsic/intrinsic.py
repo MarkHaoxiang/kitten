@@ -6,7 +6,9 @@ from torch import Tensor
 from kitten.experience import AuxiliaryMemoryData, Transitions
 from kitten.logging import Loggable
 from kitten.dataflow.normalisation import RunningMeanVariance
-
+from kitten.common.typing import (
+    Log
+)
 
 class IntrinsicReward(Loggable, ABC):
     """Interface for intrinsic exploration rewards"""
@@ -28,15 +30,14 @@ class IntrinsicReward(Loggable, ABC):
             normalised_obs_clip (float, optional): Clip observations. Introduced in RND. Defaults to 5.
         """
         super().__init__()
-        self.info = {}
+        self.info: Log = {}
         # Intrinsic Reward Weighting
         self._int_coef = int_coef
         self._ext_coef = ext_coef
 
         # Normalisation
-        self._reward_normalisation = (
-            RunningMeanVariance() if reward_normalisation else False
-        )
+        self._enable_reward_normalisation = reward_normalisation
+        self._reward_normalisation = RunningMeanVariance()
         self._normalised_obs_clip = normalised_obs_clip
 
     def _clip_batch(self, batch: Transitions):
@@ -58,7 +59,7 @@ class IntrinsicReward(Loggable, ABC):
         """
         batch = self._clip_batch(batch)
         r_i = self._reward(batch)
-        if self._reward_normalisation:
+        if self._enable_reward_normalisation:
             r_i = r_i / self._reward_normalisation.std.unsqueeze(0)
         self.info["mean_intrinsic_reward"] = torch.mean(r_i).item()
         self.info["max_intrinsic_reward"] = torch.max(r_i).item()
@@ -83,7 +84,7 @@ class IntrinsicReward(Loggable, ABC):
         """
         batch = self._clip_batch(batch)
         # Update Reward Normalisation
-        if self._reward_normalisation:
+        if self._enable_reward_normalisation:
             rewards = self._reward(batch)
             self._reward_normalisation.add_tensor_batch(rewards, aux.weights)
         # Update assistance networks
@@ -100,17 +101,16 @@ class IntrinsicReward(Loggable, ABC):
             batch: Transition
         """
         batch = self._clip_batch(batch)
-        if self._reward_normalisation:
+        if self._enable_reward_normalisation:
             rewards = self._reward(batch)
             self._reward_normalisation.add_tensor_batch(rewards)
 
     def get_log(self):
         return self.info
 
-
 class NoIntrinsicReward(IntrinsicReward):
     def _reward(self, batch: Transitions):
         return torch.zeros(batch.r.shape[0], device=batch.r.device)
 
-    def _update(self, batch: Transitions, weights: Tensor, step: int):
+    def _update(self, batch: Transitions, aux: AuxiliaryMemoryData, step: int):
         pass

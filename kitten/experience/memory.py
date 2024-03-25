@@ -7,7 +7,7 @@ from torch import Tensor
 from kitten.logging import Loggable
 from kitten.dataflow import Transform
 from kitten.experience import AuxiliaryMemoryData
-
+from kitten.common.typing import Device
 
 class ReplayBuffer(Loggable):
     """Store history of episode transitions"""
@@ -18,7 +18,7 @@ class ReplayBuffer(Loggable):
         shape: Sequence[int],
         dtype: torch.dtype | Sequence[torch.dtype] | None = None,
         transforms: Transform | Sequence[Transform] | None = None,
-        device: str = "cpu",
+        device: Device = "cpu",
         **kwargs,
     ) -> None:
         """Replay buffer to store past observations
@@ -195,7 +195,7 @@ class PrioritizedReplayBuffer(ReplayBuffer):
         dtype: torch.dtype | Sequence[torch.dtype] | None = None,
         normalise: bool | Sequence[bool] = False,
         beta_annealing_steps: int = 10000,
-        device: str = "cpu",
+        device: Device = "cpu",
     ) -> None:
         super().__init__(
             capacity=capacity,

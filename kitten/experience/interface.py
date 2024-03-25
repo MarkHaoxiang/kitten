@@ -102,6 +102,6 @@ class Transitions:
 @jaxtyped(typechecker=typechecker)
 @dataclass()
 class AuxiliaryMemoryData:
-    weights: Float[Tensor, "*batch"] | float
+    weights: Float[Tensor, "*batch"]
     random: Float[Tensor, "*batch"]
     indices: Integer[Tensor, "*batch"]

@@ -9,7 +9,7 @@ import torch
 from kitten.experience.memory import ReplayBuffer
 from kitten.logging import Loggable
 from kitten.policy import Policy
-
+from kitten.common.typing import Device
 
 class DataCollector(Loggable, ABC):
     def __init__(self, policy: Policy, env: gym.Env, memory: ReplayBuffer | None):
@@ -66,7 +66,7 @@ class GymCollector(DataCollector):
         policy: Policy,
         env: gym.Env,
         memory: ReplayBuffer | None = None,
-        device: torch.device = "cpu",
+        device: Device = "cpu",
     ):
         self.obs, _ = env.reset()
         self.device = device

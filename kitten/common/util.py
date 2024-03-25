@@ -60,6 +60,7 @@ def build_env(
 def build_rl(env: gym.Env, algorithm_configuration, device: str) -> Algorithm:
     """Utility to construct a RL algorithm"""
     if algorithm_configuration.type == "ddpg":
+        assert isinstance(env.action_space, gym.spaces.Box)
         return DeepDeterministicPolicyGradient(
             build_actor(env, **algorithm_configuration.actor),
             build_critic(env, **algorithm_configuration.critic),
@@ -67,6 +68,7 @@ def build_rl(env: gym.Env, algorithm_configuration, device: str) -> Algorithm:
             **algorithm_configuration,
         )
     elif algorithm_configuration.type == "td3":
+        assert isinstance(env.action_space, gym.spaces.Box)
         env_action_scale = (
             torch.tensor(env.action_space.high - env.action_space.low, device=device)
             / 2.0
@@ -88,6 +90,8 @@ def build_rl(env: gym.Env, algorithm_configuration, device: str) -> Algorithm:
             **algorithm_configuration,
         )
     elif algorithm_configuration.type == "qt_opt":
+        assert isinstance(env.action_space, gym.spaces.Box)
+        assert isinstance(env.observation_space, gym.spaces.Box)
         return QTOpt(
             build_critic(env, **algorithm_configuration.critic),
             build_critic(env, **algorithm_configuration.critic),
@@ -98,6 +102,7 @@ def build_rl(env: gym.Env, algorithm_configuration, device: str) -> Algorithm:
         )
 
     elif algorithm_configuration.type == "dqn":
+        assert isinstance(env.action_space, gym.spaces.Discrete)
         raise NotImplementedError()
     raise ValueError("Reinforcement learning algorithm type not valid")
 
@@ -114,8 +119,10 @@ def build_actor(env: Env, features: int = 128) -> Actor:
     """
     # Action space
     discrete = isinstance(env.action_space, Discrete)
-    if not discrete and len(env.action_space.shape) != 1:
-        raise ValueError(f"Action space {env.action_space} is not supported")
+    if not discrete:
+        assert isinstance(env.action_space, gym.spaces.Box)
+        if len(env.action_space.shape) != 1:
+            raise ValueError(f"Action space {env.action_space} is not supported")
 
     # Observation space
     if not isinstance(env.observation_space, Box):
@@ -144,8 +151,10 @@ def build_critic(env: Env, features: int = 128) -> Critic:
     """
     # Action space
     discrete = isinstance(env.action_space, Discrete)
-    if not discrete and len(env.action_space.shape) != 1:
-        raise ValueError(f"Action space {env.action_space} is not supported")
+    if not discrete:
+        assert isinstance(env.action_space, gym.spaces.Box)
+        if len(env.action_space.shape) != 1:
+            raise ValueError(f"Action space {env.action_space} is not supported")
 
     # Observation space
     if not isinstance(env.observation_space, Box):
@@ -155,9 +164,9 @@ def build_critic(env: Env, features: int = 128) -> Critic:
     if not pixels:
         if discrete:
             # TODO: Move into new build_value
-            result = ClassicalDiscreteCritic(env, features=features)
+            return ClassicalDiscreteCritic(env, features=features)
         else:
-            result = ClassicalBoxCritic(env, features=features)
+            return ClassicalBoxCritic(env, features=features)
     else:
         # Architecture from OpenAI baselines
         # Deprecated
@@ -190,9 +199,6 @@ def build_critic(env: Env, features: int = 128) -> Critic:
                 return result
         result =  AtariNetwork()"""
 
-    return result
-
-
 def build_intrinsic(
     env, intrinsic_configuration, device: str = "cpu"
 ) -> IntrinsicReward:
@@ -220,6 +226,8 @@ def build_icm(
     Returns:
         _type_: ICM
     """
+    assert isinstance(env.observation_space, gym.spaces.Box)
+    assert isinstance(env.action_space, gym.spaces.Box)
     obs_size = env.observation_space.shape[0]
     action_size = env.action_space.shape[0]
 
@@ -249,6 +257,7 @@ def build_icm(
 def build_rnd(
     env: Env, encoding_size: int, lr: float = 1e-3, device: str = "cpu", **kwargs
 ):
+    assert isinstance(env.observation_space, gym.spaces.Box)
     obs_size = env.observation_space.shape[0]
     target_net = nn.Sequential(
         nn.Linear(in_features=obs_size, out_features=encoding_size),
@@ -268,6 +277,8 @@ def build_rnd(
 def build_disagreement(
     env: Env, encoding_size: int, lr: float = 1e-3, device: str = "cpu", **kwargs
 ):
+    assert isinstance(env.observation_space, gym.spaces.Box)
+    assert isinstance(env.action_space, gym.spaces.Box)
     obs_size = env.observation_space.shape[0]
     action_size = env.action_space.shape[0]
 

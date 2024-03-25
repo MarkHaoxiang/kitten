@@ -42,7 +42,7 @@ class DeepDeterministicPolicyGradient(Algorithm, HasCritic):
             policy_improvement_frequency (int): Steps between policy improvement.
             device (str, optional): Training hardware. Defaults to "cpu".
         """
-        self._actor = AddTargetNetwork[Critic](actor_network, device=device)
+        self._actor = AddTargetNetwork[Actor](actor_network, device=device)
         self._critic = AddTargetNetwork[Critic](critic_network, device=device)
         self.device = device
 
@@ -63,7 +63,9 @@ class DeepDeterministicPolicyGradient(Algorithm, HasCritic):
         return self._critic.net
 
     def _critic_update(
-        self, s_0: Tensor, a: Tensor, r: Tensor, s_1: Tensor, d: Tensor, weights: Tensor
+        self,
+        batch: Transitions, 
+        aux: AuxiliaryMemoryData
     ) -> float:
         """Runs a critic update
 
@@ -78,7 +80,7 @@ class DeepDeterministicPolicyGradient(Algorithm, HasCritic):
         Returns:
             float: critic loss
         """
-        td_error = self.td_error(s_0, a, r, s_1, d) * weights
+        td_error = self.td_error(batch.s_0, batch.a, batch.r, batch.s_1, batch.d) * aux.weights
         loss = torch.mean(td_error**2)
         loss_value = loss.item()
         self._optim_critic.zero_grad()
@@ -143,7 +145,7 @@ class DeepDeterministicPolicyGradient(Algorithm, HasCritic):
             Tuple[float, float]: Critic loss and actor loss
         """
         if step % self._update_frequency == 0:
-            loss_critic_value = self._critic_update(*batch, aux.weights)
+            loss_critic_value = self._critic_update(batch, aux)
             loss_actor_value = self._actor_update(batch.s_0, aux.weights)
             self._critic.update_target_network(tau=self._tau)
             self._actor.update_target_network(tau=self._tau)
