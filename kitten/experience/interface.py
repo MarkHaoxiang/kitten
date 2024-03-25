@@ -1,8 +1,9 @@
 from collections import namedtuple
 from collections.abc import Iterator
+from dataclasses import dataclass
 
 from torch import Tensor
-from jaxtyping import Bool, Float, Shaped, jaxtyped
+from jaxtyping import Bool, Float, Shaped, Integer, jaxtyped
 from typeguard import typechecked as typechecker
 
 from kitten.common.typing import Size
@@ -13,7 +14,7 @@ def shape_annotation(shape: Size) -> str:
 
 
 class Transitions:
-    """Represents a standard Markov chain trainsition
+    """Represents base Markov Chain Transitions gathered as experinece
 
     # TODO: Support dictionary based observations and actions
     #   - We probably want to generalise out the interface for transitions to allow objects
@@ -98,12 +99,9 @@ class Transitions:
         return iter((self.s_0, self.a, self.r, self.s_1, self.t))
 
 
-# Auxiliary information contained on retrieval from memory
-AuxiliaryMemoryData = namedtuple(
-    "AuxiliaryMemoryData",
-    [
-        "weights",  # Recommended importance weighting to match memory data distribution
-        "random",  # Random number associated with sample - eg. for bootstrapping split
-        "indices",  # Index of sample within memory
-    ],
-)
+@jaxtyped(typechecker=typechecker)
+@dataclass()
+class AuxiliaryMemoryData:
+    weights: Float[Tensor, "*batch"] | float
+    random: Float[Tensor, "*batch"]
+    indices: Integer[Tensor, "*batch"]

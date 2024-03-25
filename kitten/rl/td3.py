@@ -90,7 +90,7 @@ class TwinDelayedDeepDeterministicPolicyGradient(DeepDeterministicPolicyGradient
         x_1 = self._critic_1.q(s_0, a).squeeze()
         x_2 = self._critic_2.q(s_0, a).squeeze()
         with torch.no_grad():
-            a_1 = self.actor.target.a(s_1)
+            a_1 = self._actor.target.a(s_1)
             # Improvement 2: Target policy smoothing
             # ====================
             a_1 += (
@@ -143,13 +143,13 @@ class TwinDelayedDeepDeterministicPolicyGradient(DeepDeterministicPolicyGradient
             self.loss_actor_value = self._actor_update(batch.s_0, aux.weights)
             self._critic_1.update_target_network(tau=self._tau)
             self._critic_2.update_target_network(tau=self._tau)
-            self.actor.update_target_network(tau=self._tau)
+            self._actor.update_target_network(tau=self._tau)
 
         return self.loss_critic_value, self.loss_actor_value
 
     def get_models(self) -> list[tuple[nn.Module, str]]:
         return [
-            (self.actor.net, "actor"),
+            (self._actor.net, "actor"),
             (self.critic.net, "critic"),
             (self._critic_2.net, "critic_2"),
         ]

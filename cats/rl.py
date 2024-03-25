@@ -1,4 +1,5 @@
-from typing import Callable, Optional, Union, List, Tuple
+from typing import Callable
+from dataclasses import dataclass
 import random
 
 import numpy as np
@@ -6,6 +7,7 @@ import torch
 from torch import Tensor
 import torch.nn as nn
 import gymnasium as gym
+from jaxtyping import Float
 
 from kitten.experience import Transitions
 from kitten.rl import Algorithm
@@ -13,6 +15,13 @@ from kitten.rl.qt_opt import cross_entropy_method
 from kitten.experience import AuxiliaryMemoryData
 from kitten.nn import Critic, AddTargetNetwork
 
+@dataclass
+class NextStateValueMixin:
+    v_1: Float[Tensor, "*batch"] | None = None
+
+@dataclass
+class NextStateValueOverloadAux(NextStateValueMixin, AuxiliaryMemoryData):
+    pass
 
 class QTOptCats(Algorithm):
     """QtOpt with Ensembles and other modifications"""
@@ -29,7 +38,7 @@ class QTOptCats(Algorithm):
         cem_n: int = 64,
         cem_m: int = 6,
         cem_n_iterations: int = 2,
-        clip_grad_norm: Optional[float] = 1,
+        clip_grad_norm: float | None = 1,
         update_frequency: int = 1,
         device: str = "cpu",
         **kwargs,
@@ -81,7 +90,7 @@ class QTOptCats(Algorithm):
         return mu, var
 
     def policy_fn(
-        self, s: Union[Tensor, np.ndarray], critic: Optional[Critic] = None
+        self, s: Tensor | np.ndarray, critic: Critic | None = None
     ) -> Tensor:
         if isinstance(s, np.ndarray):
             s = torch.tensor(s, device=self.device)
@@ -137,7 +146,7 @@ class QTOptCats(Algorithm):
 
         return loss_value
 
-    def update(self, batch: Transitions, aux: AuxiliaryMemoryData, step: int):
+    def update(self, batch: Transitions, aux: NextStateValueOverloadAux, step: int):
         if step % self._update_frequency == 0:
             self.loss_critic_value = self._critic_update(batch, aux)
             for critic in self.critics:
@@ -149,7 +158,7 @@ class QTOptCats(Algorithm):
             "critic_loss": self.loss_critic_value,
         }
 
-    def get_models(self) -> List[Tuple[nn.Module, str]]:
+    def get_models(self) -> list[tuple[nn.Module, str]]:
         return list(
             zip(self.critics, [f"critic_{i}" for i in range(len(self.critics))])
         )

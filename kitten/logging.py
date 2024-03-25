@@ -6,6 +6,7 @@ from datetime import datetime
 import math
 import os
 from os.path import join
+import importlib.util
 import shutil
 from typing import Callable, TYPE_CHECKING
 import time
@@ -13,24 +14,30 @@ import time
 import torch
 import torch.nn as nn
 import numpy as np
-from omegaconf import OmegaConf, DictConfig
 from gymnasium import Env
 from gymnasium.spaces import Box
 from gymnasium.wrappers.record_video import RecordVideo
-import wandb
 
-# TODO: Make wandb and hydra optional dependencies
+# KittenLogger
+has_wandb = importlib.util.find_spec("wandb") is not None
+has_omegaconf = importlib.util.find_spec("omegaconf") is not None
+if has_wandb and has_omegaconf:
+    import wandb
+    from omegaconf import OmegaConf, DictConfig
 
 from kitten.policy import Policy
+from kitten.common.typing import (
+    Log,
+    ModuleNamePairs
+)
 
 if TYPE_CHECKING:
     from kitten.rl import HasCritic
 
-
 class Loggable(ABC):
     """Interface signalling a module which can be logged"""
 
-    def get_log(self) -> dict:
+    def get_log(self) -> Log:
         """Collect logs for publishing
 
         Returns:
@@ -38,7 +45,7 @@ class Loggable(ABC):
         """
         return {}
 
-    def get_models(self) -> list[tuple[nn.Module, str]]:
+    def get_models(self) ->  ModuleNamePairs:
         """List of publishable networks with names
 
         Returns:
@@ -58,7 +65,7 @@ class CriticValue(Loggable):
         self._target = target
         self._evaluator = evaluator
 
-    def get_log(self) -> dict:
+    def get_log(self) -> Log:
         return {
             "critic_value": self._target.critic.q(
                 self._evaluator.saved_reset_states,
@@ -82,6 +89,9 @@ class KittenLogger:
             algorithm (str): Base RL algorithm
             path (str, optional): Path for saved logs. Defaults to "log".
         """
+        if not has_wandb or not has_omegaconf:
+            raise ImportError("Wandb / Omegaconf not available")
+
         self.cfg = cfg
         self.name = self.generate_project_name(cfg.env.name, algorithm)
         self.checkpoint_enable = cfg.log.checkpoint.enable

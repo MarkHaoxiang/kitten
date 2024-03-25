@@ -8,7 +8,10 @@ from torch.nn.modules import Module
 from kitten.experience import AuxiliaryMemoryData, Transitions
 from kitten.nn import AddTargetNetwork, Actor, Critic
 from kitten.rl import Algorithm, HasCritic
-
+from kitten.common.typing import (
+    Log,
+    ModuleNamePairs
+)
 
 class DeepDeterministicPolicyGradient(Algorithm, HasCritic):
     """Implements DDPG
@@ -39,12 +42,12 @@ class DeepDeterministicPolicyGradient(Algorithm, HasCritic):
             policy_improvement_frequency (int): Steps between policy improvement.
             device (str, optional): Training hardware. Defaults to "cpu".
         """
-        self.actor = AddTargetNetwork(actor_network, device=device)
-        self._critic = AddTargetNetwork(critic_network, device=device)
+        self._actor = AddTargetNetwork[Critic](actor_network, device=device)
+        self._critic = AddTargetNetwork[Critic](critic_network, device=device)
         self.device = device
 
         self._gamma = gamma
-        self._optim_actor = torch.optim.Adam(params=self.actor.net.parameters(), lr=lr)
+        self._optim_actor = torch.optim.Adam(params=self._actor.net.parameters(), lr=lr)
         self._optim_critic = torch.optim.Adam(
             params=self._critic.net.parameters(), lr=lr
         )
@@ -52,11 +55,12 @@ class DeepDeterministicPolicyGradient(Algorithm, HasCritic):
         self._clip_grad_norm = clip_grad_norm
         self._update_frequency = update_frequency
 
-        self.loss_critic_value, self.loss_actor_value = 0, 0
+        self._loss_critic_value: float = 0.0
+        self._loss_actor_value: float = 0.0
 
     @property
-    def critic(self):
-        return self._critic
+    def critic(self) -> Critic:
+        return self._critic.net
 
     def _critic_update(
         self, s_0: Tensor, a: Tensor, r: Tensor, s_1: Tensor, d: Tensor, weights: Tensor
@@ -92,7 +96,7 @@ class DeepDeterministicPolicyGradient(Algorithm, HasCritic):
         x = self._critic.q(s_0, a).squeeze()
         with torch.no_grad():
             target_max = (~d) * self._critic.target.q(
-                s_1, self.actor.target.a(s_1)
+                s_1, self._actor.target.a(s_1)
             ).squeeze()
             y = r + target_max * self._gamma
         return y - x
@@ -111,7 +115,7 @@ class DeepDeterministicPolicyGradient(Algorithm, HasCritic):
         Returns:
             float: actor loss
         """
-        desired_action = self.actor.a(s_0)
+        desired_action = self._actor.a(s_0)
         loss = -self._critic.q(s_0, desired_action)
         loss = torch.mean(
             torch.mean(loss, dim=list(range(1, len(loss.shape)))) * weights
@@ -120,7 +124,7 @@ class DeepDeterministicPolicyGradient(Algorithm, HasCritic):
         self._optim_actor.zero_grad()
         loss.backward()
         if not self._clip_grad_norm is None:
-            nn.utils.clip_grad_norm_(self.actor.net.parameters(), self._clip_grad_norm)
+            nn.utils.clip_grad_norm_(self._actor.net.parameters(), self._clip_grad_norm)
         self._optim_actor.step()
 
         return loss_value
@@ -142,24 +146,24 @@ class DeepDeterministicPolicyGradient(Algorithm, HasCritic):
             loss_critic_value = self._critic_update(*batch, aux.weights)
             loss_actor_value = self._actor_update(batch.s_0, aux.weights)
             self._critic.update_target_network(tau=self._tau)
-            self.actor.update_target_network(tau=self._tau)
+            self._actor.update_target_network(tau=self._tau)
 
-            self.loss_critic_value, self.loss_actor_value = (
+            self._loss_critic_value, self._loss_actor_value = (
                 loss_critic_value,
                 loss_actor_value,
             )
-        return self.loss_critic_value, self.loss_actor_value
+        return self._loss_critic_value, self._loss_actor_value
 
     def policy_fn(self, s: Tensor | ndarray) -> Tensor:
         if isinstance(s, ndarray):
             s = torch.tensor(s, device=self.device, dtype=torch.float32)
-        return self.actor.a(s)
+        return self._actor.a(s)
 
-    def get_log(self):
+    def get_log(self) -> Log:
         return {
-            "critic_loss": self.loss_critic_value,
-            "actor_loss": self.loss_actor_value,
+            "critic_loss": self._loss_critic_value,
+            "actor_loss": self._loss_actor_value,
         }
 
-    def get_models(self) -> list[tuple[Module, str]]:
-        return [(self.actor.net, "actor"), (self._critic.net, "critic")]
+    def get_models(self) -> ModuleNamePairs:
+        return [(self._actor.net, "actor"), (self._critic.net, "critic")]
