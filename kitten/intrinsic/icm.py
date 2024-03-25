@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from kitten.experience import AuxiliaryMemoryData, Transition
+from kitten.experience import AuxiliaryMemoryData, Transitions
 from kitten.intrinsic.intrinsic import IntrinsicReward
 
 
@@ -107,11 +107,11 @@ class IntrinsicCuriosityModule(IntrinsicReward, nn.Module):
             self.info["inverse_loss"] = inverse_loss.item()
         return forward_loss * self.beta + inverse_loss * (1 - self.beta)
 
-    def _update(self, batch: Transition, aux: AuxiliaryMemoryData, step: int):
+    def _update(self, batch: Transitions, aux: AuxiliaryMemoryData, step: int):
         self._optim.zero_grad()
         loss = self._calc_loss(batch.s_0, batch.s_1, batch.a, aux.weights)
         loss.backward()
         self._optim.step()
 
-    def _reward(self, batch: Transition):
+    def _reward(self, batch: Transitions):
         return self.forward(batch.s_0, batch.s_1, batch.a)

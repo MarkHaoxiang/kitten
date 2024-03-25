@@ -9,14 +9,14 @@ import matplotlib.cm as cm
 from sklearn.neighbors import KernelDensity
 
 from kitten.experience.memory import ReplayBuffer
-from kitten.experience import Transition
+from kitten.experience import Transitions
 
 from cats import CatsExperiment
 
 
 def entropy_memory(memory: ReplayBuffer):
     # Construct a density estimator
-    s = Transition(*memory.sample(len(memory))[0][:5]).s_0.cpu().numpy()
+    s = Transitions(*memory.sample(len(memory))[0][:5]).s_0.cpu().numpy()
     kde = KernelDensity(kernel="gaussian", bandwidth="scott").fit(s)
     log_likelihoods = kde.score_samples(kde.sample(n_samples=10000))
     return -log_likelihoods.mean()
@@ -42,7 +42,7 @@ def visualise_memory(experiment: CatsExperiment):
         ax.set_ylim(env.observation_space.low[2], env.observation_space.high[2])
         ax.set_ylabel("Angular Velocity")
 
-    batch = Transition(*memory.storage[:5])
+    batch = Transitions(*memory.storage[:5])
     s = batch.s_0.cpu().numpy()
     # Colors based on time
     norm = mpl.colors.Normalize(vmin=0, vmax=len(s) - 1)

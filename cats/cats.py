@@ -11,7 +11,7 @@ import gymnasium as gym
 
 # Kitten
 from kitten.experience.util import (
-    Transition,
+    Transitions,
     build_transition_from_update,
     build_transition_from_list,
 )
@@ -311,13 +311,13 @@ class CatsExperiment:
 
             # Updates
             data, aux = self.memory.sample(self.cfg.train.minibatch_size)
-            batch = Transition(*data[:5])
+            batch = Transitions(*data[:5])
             batch_death = batch.d
             batch_truncated = data[-1]
 
             # Death is not the end - disabled termination
             if self.death_is_not_the_end:
-                batch = Transition(
+                batch = Transitions(
                     batch.s_0,
                     batch.a,
                     batch.r,
@@ -351,7 +351,7 @@ class CatsExperiment:
                         condition=batch_death.unsqueeze(-1),
                     )
 
-            batch = Transition(batch.s_0, batch.a, r_i, s_1, batch.d)
+            batch = Transitions(batch.s_0, batch.a, r_i, s_1, batch.d)
             self.algorithm.update(batch, aux, step=step)
 
             # Log

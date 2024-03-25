@@ -3,7 +3,7 @@ from abc import ABC, abstractmethod
 import torch
 from torch import Tensor
 
-from kitten.experience import AuxiliaryMemoryData, Transition
+from kitten.experience import AuxiliaryMemoryData, Transitions
 from kitten.logging import Loggable
 from kitten.dataflow.normalisation import RunningMeanVariance
 
@@ -39,7 +39,7 @@ class IntrinsicReward(Loggable, ABC):
         )
         self._normalised_obs_clip = normalised_obs_clip
 
-    def _clip_batch(self, batch: Transition):
+    def _clip_batch(self, batch: Transitions):
         if not self._normalised_obs_clip is None:
             s_0 = torch.clamp(
                 batch.s_0, -self._normalised_obs_clip, self._normalised_obs_clip
@@ -47,10 +47,10 @@ class IntrinsicReward(Loggable, ABC):
             s_1 = torch.clamp(
                 batch.s_1, -self._normalised_obs_clip, self._normalised_obs_clip
             )
-            batch = Transition(s_0, batch.a, batch.r, s_1, batch.d)
+            batch = Transitions(s_0, batch.a, batch.r, s_1, batch.d)
         return batch
 
-    def reward(self, batch: Transition):
+    def reward(self, batch: Transitions):
         """Calculates the intrinsic exploration reward
 
         Args:
@@ -70,10 +70,10 @@ class IntrinsicReward(Loggable, ABC):
         )
 
     @abstractmethod
-    def _reward(self, batch: Transition):
+    def _reward(self, batch: Transitions):
         raise NotImplementedError
 
-    def update(self, batch: Transition, aux: AuxiliaryMemoryData, step: int):
+    def update(self, batch: Transitions, aux: AuxiliaryMemoryData, step: int):
         """Intrinsic reward module update
 
         Args:
@@ -90,10 +90,10 @@ class IntrinsicReward(Loggable, ABC):
         self._update(batch, aux, step)
 
     @abstractmethod
-    def _update(self, batch: Transition, aux: AuxiliaryMemoryData, step: int):
+    def _update(self, batch: Transitions, aux: AuxiliaryMemoryData, step: int):
         raise NotImplementedError
 
-    def initialise(self, batch: Transition):
+    def initialise(self, batch: Transitions):
         """Initialise internal state (eg. for normalisation)
 
         Args:
@@ -109,8 +109,8 @@ class IntrinsicReward(Loggable, ABC):
 
 
 class NoIntrinsicReward(IntrinsicReward):
-    def _reward(self, batch: Transition):
+    def _reward(self, batch: Transitions):
         return torch.zeros(batch.r.shape[0], device=batch.r.device)
 
-    def _update(self, batch: Transition, weights: Tensor, step: int):
+    def _update(self, batch: Transitions, weights: Tensor, step: int):
         pass

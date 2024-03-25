@@ -1,10 +1,10 @@
 import torch
 from torch import Tensor
 import torch.nn as nn
-from kitten.experience import AuxiliaryMemoryData, Transition
+from kitten.experience import AuxiliaryMemoryData, Transitions
 
 from kitten.intrinsic.intrinsic import IntrinsicReward
-from kitten.experience import Transition
+from kitten.experience import Transitions
 
 
 class RandomNetworkDistillation(IntrinsicReward, nn.Module):
@@ -43,7 +43,7 @@ class RandomNetworkDistillation(IntrinsicReward, nn.Module):
         r_i = ((random_embedding - predicted_embedding) ** 2).mean(-1)
         return r_i
 
-    def _update(self, batch: Transition, aux: AuxiliaryMemoryData, step: int):
+    def _update(self, batch: Transitions, aux: AuxiliaryMemoryData, step: int):
         # Train Predictor Network
         random_embedding = self.target_net(batch.s_1)
         predicted_embedding = self.predictor_net(batch.s_1)
@@ -55,5 +55,5 @@ class RandomNetworkDistillation(IntrinsicReward, nn.Module):
         loss.backward()
         self._optim.step()
 
-    def _reward(self, batch: Transition):
+    def _reward(self, batch: Transitions):
         return self.forward(batch.s_1)

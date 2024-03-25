@@ -48,7 +48,7 @@ class Generator:
         return self._np_rng
 
 
-def global_seed(seed: int, *envs):
+def global_seed(seed: int, *envs) -> Generator:
     """Utility to help set determinism
 
     Args:

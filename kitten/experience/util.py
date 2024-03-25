@@ -9,10 +9,10 @@ from .memory import ReplayBuffer, PrioritizedReplayBuffer
 from .collector import DataCollector, GymCollector
 
 from kitten.dataflow.normalisation import RunningMeanVariance
-from kitten.experience import Transition
+from kitten.experience import Transitions
 
 
-def build_transition_from_list(updates: List, device: str = "cpu") -> Transition:
+def build_transition_from_list(updates: List, device: str = "cpu") -> Transitions:
     """Utility to wrap collector results into a transition"""
     return build_transition_from_update(
         obs=np.array([x[0] for x in updates]),
@@ -27,7 +27,7 @@ def build_transition_from_list(updates: List, device: str = "cpu") -> Transition
 
 def build_transition_from_update(
     obs, action, reward, n_obs, terminated, add_batch: bool = True, device: str = "cpu"
-) -> Transition:
+) -> Transitions:
     """Utility to wrap a single gym update into a transition"""
     obs = torch.tensor(obs, device=device, dtype=torch.float32)
     action = torch.tensor(action, device=device, dtype=torch.float32)
@@ -39,7 +39,7 @@ def build_transition_from_update(
         action = action.unsqueeze(0)
         n_obs = n_obs.unsqueeze(0)
         terminated = terminated.unsqueeze(0)
-    return Transition(obs, action, reward, n_obs, terminated)
+    return Transitions(obs, action, reward, n_obs, terminated)
 
 
 def build_replay_buffer(

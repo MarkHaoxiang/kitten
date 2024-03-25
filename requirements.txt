@@ -1,20 +1,20 @@
+# Typing
+jaxtyping
+
 # Environments
-swig
 gymnasium[all]
 
 # Torch
 torch
-torchvision
-torchaudio
 
 # Algorithms
 pink-noise-rl
 
 # Configurations and Logging
-hydra-core
-wandb
-moviepy
+hydra-core[logging]
+wandb[logging]
+moviepy[logging]
 
 # Util
-pytest
-tqdm
+pytest[development]
+mypy[development]

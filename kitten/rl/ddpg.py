@@ -5,7 +5,7 @@ import torch.nn as nn
 from torch import Tensor
 from torch.nn.modules import Module
 
-from kitten.experience import AuxiliaryMemoryData, Transition
+from kitten.experience import AuxiliaryMemoryData, Transitions
 from kitten.nn import AddTargetNetwork, Actor, Critic
 from kitten.rl import Algorithm, HasCritic
 
@@ -126,7 +126,7 @@ class DeepDeterministicPolicyGradient(Algorithm, HasCritic):
         return loss_value
 
     def update(
-        self, batch: Transition, aux: AuxiliaryMemoryData, step: int
+        self, batch: Transitions, aux: AuxiliaryMemoryData, step: int
     ) -> tuple[float, float]:
         """Runs a DDPG update step
 

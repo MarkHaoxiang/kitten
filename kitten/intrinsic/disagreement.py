@@ -3,7 +3,7 @@ from typing import Callable
 import torch
 from torch import Tensor
 import torch.nn as nn
-from kitten.experience import AuxiliaryMemoryData, Transition
+from kitten.experience import AuxiliaryMemoryData, Transitions
 from kitten.intrinsic.intrinsic import IntrinsicReward
 
 
@@ -53,7 +53,7 @@ class Disagreement(IntrinsicReward):
             return self.feature_net(s)
         return s
 
-    def _update(self, batch: Transition, aux: AuxiliaryMemoryData, step: int):
+    def _update(self, batch: Transitions, aux: AuxiliaryMemoryData, step: int):
         self._optim.zero_grad()
         phi_0 = self._featurise(batch.s_0)
         pred_phi_1 = self._forward_models(phi_0, batch.a)
@@ -78,7 +78,7 @@ class Disagreement(IntrinsicReward):
         loss.backward()
         self._optim.step()
 
-    def _reward(self, batch: Transition):
+    def _reward(self, batch: Transitions):
         phi_0 = self._featurise(batch.s_0)
         pred_phi_1 = self._forward_models(phi_0, batch.a)
         r_i = torch.mean(torch.var(pred_phi_1, dim=0), dim=-1)

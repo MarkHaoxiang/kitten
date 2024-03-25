@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 from torch import Tensor
 
-from kitten.experience import AuxiliaryMemoryData, Transition
+from kitten.experience import AuxiliaryMemoryData, Transitions
 from kitten.rl import Algorithm, HasCritic
 
 from kitten.nn import AddTargetNetwork, Critic
@@ -57,7 +57,7 @@ class DQN(Algorithm, HasCritic):
             y = r + target_max * self._gamma
         return y - x
 
-    def update(self, batch: Transition, aux: AuxiliaryMemoryData, step: int):
+    def update(self, batch: Transitions, aux: AuxiliaryMemoryData, step: int):
         if step % self._update_frequency == 0:
             self._optim.zero_grad()
             loss = torch.mean((self.td_error(*batch) * aux.weights) ** 2)

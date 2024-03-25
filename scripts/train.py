@@ -6,7 +6,7 @@ import torch
 from tqdm import tqdm
 
 from kitten.rl import HasCritic
-from kitten.experience import Transition
+from kitten.experience import Transitions
 from kitten.experience.util import (
     build_collector,
     build_replay_buffer,
@@ -94,11 +94,11 @@ def train(cfg: DictConfig) -> None:
         )
         # RL Update
         batch, aux = memory.sample(cfg.train.minibatch_size)
-        batch = Transition(*batch)
+        batch = Transitions(*batch)
         # Intrinsic Update
         r_t, _, _ = intrinsic.reward(batch)
         intrinsic.update(batch, aux, step=step)
-        batch = Transition(batch.s_0, batch.a, r_t, batch.s_1, batch.d)
+        batch = Transitions(batch.s_0, batch.a, r_t, batch.s_1, batch.d)
         # Algorithm Update
         algorithm.update(batch, aux, step=step)
         # Epoch Logging

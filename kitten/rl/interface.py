@@ -3,7 +3,7 @@ from abc import ABC, abstractmethod
 import numpy as np
 from torch import Tensor
 
-from kitten.experience import AuxiliaryMemoryData, Transition
+from kitten.experience import AuxiliaryMemoryData, Transitions
 from kitten.nn import Critic
 from kitten.logging import Loggable
 
@@ -13,7 +13,7 @@ class Algorithm(Loggable, ABC):
     """Interface for RL Policy Improvement Algorithms"""
 
     @abstractmethod
-    def update(self, batch: Transition, aux: AuxiliaryMemoryData, step: int) -> None:
+    def update(self, batch: Transitions, aux: AuxiliaryMemoryData, step: int) -> None:
         """Policy improvement update
 
         Args:

@@ -7,7 +7,7 @@ from torch import Tensor
 import torch.nn as nn
 import gymnasium as gym
 
-from kitten.experience import Transition
+from kitten.experience import Transitions
 from kitten.rl import Algorithm
 from kitten.rl.qt_opt import cross_entropy_method
 from kitten.experience import AuxiliaryMemoryData
@@ -15,7 +15,7 @@ from kitten.nn import Critic, AddTargetNetwork
 
 
 class QTOptCats(Algorithm):
-    """QtOpt with Ensembles"""
+    """QtOpt with Ensembles and other modifications"""
 
     def __init__(
         self,
@@ -107,7 +107,7 @@ class QTOptCats(Algorithm):
     def reset_critic(self):
         self._chosen_critic = random.randint(0, self._ensemble_number - 1)
 
-    def _critic_update(self, batch: Transition, aux: AuxiliaryMemoryData):
+    def _critic_update(self, batch: Transitions, aux: AuxiliaryMemoryData):
         x = [critic.q(batch.s_0, batch.a).squeeze() for critic in self.critics]
         with torch.no_grad():
             # Implement a variant of Clipped Double-Q Learning
@@ -137,7 +137,7 @@ class QTOptCats(Algorithm):
 
         return loss_value
 
-    def update(self, batch: Transition, aux: AuxiliaryMemoryData, step: int):
+    def update(self, batch: Transitions, aux: AuxiliaryMemoryData, step: int):
         if step % self._update_frequency == 0:
             self.loss_critic_value = self._critic_update(batch, aux)
             for critic in self.critics:

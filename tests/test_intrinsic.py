@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 
 from kitten.intrinsic.icm import IntrinsicCuriosityModule
-from kitten.experience import Transition, AuxiliaryMemoryData
+from kitten.experience import Transitions, AuxiliaryMemoryData
 
 DEVICE = "cpu"
 torch.manual_seed(0)
@@ -81,4 +81,4 @@ class TestIntrinsicCuriosityModule:
 
         # Loss
         aux = AuxiliaryMemoryData(torch.ones(batch_size), None, None)
-        icm.update(Transition(s_0, a, None, s_1, None), aux, step=0)
+        icm.update(Transitions(s_0, a, None, s_1, None), aux, step=0)

@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from torch import Tensor
-from kitten.experience import AuxiliaryMemoryData, Transition
+from kitten.experience import AuxiliaryMemoryData, Transitions
 
 from kitten.nn import Actor, Critic, AddTargetNetwork
 from kitten.rl.ddpg import DeepDeterministicPolicyGradient
@@ -125,7 +125,7 @@ class TwinDelayedDeepDeterministicPolicyGradient(DeepDeterministicPolicyGradient
         return loss_value
 
     def update(
-        self, batch: Transition, aux: AuxiliaryMemoryData, step: int
+        self, batch: Transitions, aux: AuxiliaryMemoryData, step: int
     ) -> tuple[float, float]:
         """Runs a DDPG update step
 

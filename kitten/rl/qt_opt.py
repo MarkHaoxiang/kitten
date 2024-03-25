@@ -4,7 +4,7 @@ import torch
 from torch import Tensor
 import torch.nn as nn
 
-from kitten.experience import AuxiliaryMemoryData, Transition
+from kitten.experience import AuxiliaryMemoryData, Transitions
 from kitten.rl import Algorithm, HasCritic
 from kitten.nn import Critic, AddTargetNetwork
 
@@ -155,7 +155,7 @@ class QTOpt(Algorithm, HasCritic):
             y = r + target_max * self._gamma
         return y - x
 
-    def _critic_update(self, batch: Transition, aux: AuxiliaryMemoryData):
+    def _critic_update(self, batch: Transitions, aux: AuxiliaryMemoryData):
         x_1 = self._critic_1.q(batch.s_0, batch.a).squeeze()
         x_2 = self._critic_2.q(batch.s_0, batch.a).squeeze()
         with torch.no_grad():
@@ -184,7 +184,7 @@ class QTOpt(Algorithm, HasCritic):
 
         return loss_value
 
-    def update(self, batch: Transition, aux: AuxiliaryMemoryData, step: int):
+    def update(self, batch: Transitions, aux: AuxiliaryMemoryData, step: int):
         if step % self._update_frequency == 0:
             self.loss_critic_value = self._critic_update(batch, aux)
             self._critic_1.update_target_network(tau=self._tau)
