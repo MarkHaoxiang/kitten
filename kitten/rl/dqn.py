@@ -9,9 +9,8 @@ from torch import Tensor
 from kitten.experience import AuxiliaryMemoryData, Transitions
 from kitten.rl import Algorithm
 from kitten.nn import HasCritic, AddTargetNetwork, ClassicalDiscreteCritic
-from kitten.common.typing import (
-    Log
-)
+from kitten.common.typing import Log
+
 
 class DQN(Algorithm, HasCritic):
     """Implements DQN
@@ -55,7 +54,7 @@ class DQN(Algorithm, HasCritic):
     def td_error(self, s_0: Tensor, a: Tensor, r: Tensor, s_1: Tensor, d: Tensor):
         """Returns TD difference for a transition"""
         # TODO: This doesn't work well with multiple batch sizes
-        x = self._critic.q(s_0)[torch.arange(len(s_0)), a]
+        x = self._critic.net.q(s_0)[torch.arange(len(s_0)), a]
         with torch.no_grad():
             target_max = (~d) * torch.max(self.critic.target.q(s_1), dim=1).values
             y = r + target_max * self._gamma

@@ -10,14 +10,80 @@ from jaxtyping import Float32
 
 from kitten.dataflow.normalisation import RunningMeanVariance
 from kitten.experience import Transitions
-from kitten.common.typing import (
-    Device,
-    ActType
-)
+from kitten.common.typing import Device, ActType, Shape, Log
 from .memory import ReplayBuffer, PrioritizedReplayBuffer
 from .collector import DataCollector, GymCollector
+from .interface import AuxiliaryMemoryData, Memory
 
-def build_transition_from_list(updates: list[tuple[Any, Any, Any, Any, Any]], device: Device = "cpu") -> Transitions:
+
+class TransitionReplayBuffer(
+    Memory[tuple[Any, ...], tuple[Transitions, AuxiliaryMemoryData]]
+):
+    def __init__(self, rb: ReplayBuffer) -> None:
+        super().__init__()
+        self._rb = rb
+
+    def append(self, data: tuple[Any, ...], **kwargs) -> int:
+        return self._rb.append(data, **kwargs)
+
+    def sample(self, n: int, **kwargs):
+        batch, aux = self._rb.sample(n)
+        batch = Transitions(*batch)
+        return batch, aux
+
+    def get_log(self) -> Log:
+        return self._rb.get_log()
+
+    def __len__(self):
+        return len(self._rb)
+
+    @property
+    def rb(self) -> ReplayBuffer:
+        return self._rb
+
+    @staticmethod
+    def shape(env: Env[Any, Any], enable_termination: bool = True) -> tuple[Shape, ...]:
+        obs_space, act_space = env.observation_space, env.action_space
+        if obs_space.shape is None or act_space.shape is None:
+            raise ValueError("Invalid space does not have a shape")
+        if enable_termination:
+            return (obs_space.shape, act_space.shape, (), obs_space.shape, (), ())
+        else:
+            return (
+                obs_space.shape,
+                act_space.shape,
+                (),
+                obs_space.shape,
+                (),
+            )
+
+    @staticmethod
+    def dtype(
+        env: Env[Any, Any], enable_termination: bool = True
+    ) -> tuple[torch.dtype, ...]:
+        discrete = isinstance(env.action_space, Discrete)
+        if enable_termination:
+            return (
+                torch.float32,
+                torch.int if discrete else torch.float32,
+                torch.float32,
+                torch.float32,
+                torch.bool,
+                torch.bool,
+            )
+        else:
+            return (
+                torch.float32,
+                torch.int if discrete else torch.float32,
+                torch.float32,
+                torch.float32,
+                torch.bool,
+            )
+
+
+def build_transition_from_list(
+    updates: list[tuple[Any, Any, Any, Any, Any]], device: Device = "cpu"
+) -> Transitions:
     """Utility to wrap collector results into a transition"""
     return build_transition_from_update(
         obs=np.array([x[0] for x in updates]),
@@ -49,6 +115,7 @@ def build_transition_from_update(
         obs = obs.unsqueeze(0)
         action = action.unsqueeze(0)
         n_obs = n_obs.unsqueeze(0)
+        reward = reward.unsqueeze(0)
         terminated = terminated.unsqueeze(0)
     return Transitions(obs, action, reward, n_obs, terminated)
 
@@ -61,7 +128,9 @@ def build_replay_buffer(
     error_fn: Callable[[tuple[Tensor, ...]], NDArray[Any]] | None = None,
     device: Device = "cpu",
     **kwargs,
-) -> ReplayBuffer:
+) -> tuple[
+    TransitionReplayBuffer, RunningMeanVariance[Float32[torch.Tensor, "..."]] | None
+]:
     """Creates a replay buffer for env
 
     Args:
@@ -72,7 +141,6 @@ def build_replay_buffer(
     Returns:
         Replay Buffer: A replay buffer designed to hold tuples (State, Action, Reward, Next State, Done)
     """
-    discrete = isinstance(env.action_space, Discrete)
     if normalise_observation:
         rmv = RunningMeanVariance[Float32[torch.Tensor, "..."]]()
         _normalise_observation = [rmv, None, None, rmv, None]
@@ -85,49 +153,35 @@ def build_replay_buffer(
         raise ValueError("Invalid space")
 
     if type == "experience_replay":
-        return ReplayBuffer(
-            capacity=capacity,
-            shape=(
-                observation_space.shape,
-                action_space.shape,
-                (),
-                observation_space.shape,
-                (),
+        return (
+            TransitionReplayBuffer(
+                ReplayBuffer(
+                    capacity=capacity,
+                    shape=TransitionReplayBuffer.shape(env, False),
+                    dtype=TransitionReplayBuffer.dtype(env, False),
+                    transforms=_normalise_observation,
+                    device=device,
+                    **kwargs,
+                )
             ),
-            dtype=(
-                torch.float32,
-                torch.int if discrete else torch.float32,
-                torch.float32,
-                torch.float32,
-                torch.bool,
-            ),
-            transforms=_normalise_observation,
-            device=device,
-            **kwargs,
+            rmv,
         )
     elif type == "prioritized_experience_replay":
         if error_fn is None:
             raise ValueError("Provide an error function for priority calculation")
-        return PrioritizedReplayBuffer(
-            error_fn=error_fn,
-            capacity=capacity,
-            shape=(
-                observation_space.shape,
-                action_space.shape,
-                (),
-                observation_space.shape,
-                (),
+        return (
+            TransitionReplayBuffer(
+                PrioritizedReplayBuffer(
+                    error_fn=error_fn,
+                    capacity=capacity,
+                    shape=TransitionReplayBuffer.shape(env, False),
+                    dtype=TransitionReplayBuffer.dtype(env, False),
+                    transforms=_normalise_observation,
+                    device=device,
+                    **kwargs,
+                )
             ),
-            dtype=(
-                torch.float32,
-                torch.int if discrete else torch.float32,
-                torch.float32,
-                torch.float32,
-                torch.bool,
-            ),
-            transforms=_normalise_observation,
-            device=device,
-            **kwargs,
+            rmv,
         )
     raise NotImplementedError("Replay buffer type not supported")
 

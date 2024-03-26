@@ -17,12 +17,17 @@ from kitten.nn import Critic, AddTargetNetwork
 
 
 @dataclass
-class NextStateValueMixin:
-    v_1: Float[Tensor, "*batch"] | None = None
+class ResetValueMixin:
+    v_1: Float[Tensor, "..."]  # Value of taking a reset
+    reset_value_mixin_enable: bool = False  # Enable
 
 
+# For now, uses Mixins.
+# The ideal type would be to wait until intersections are implemented
+# This would be equivalent to Rust-like traits
+# https://github.com/python/typing/issues/213
 @dataclass
-class NextStateValueOverloadAux(NextStateValueMixin, AuxiliaryMemoryData):
+class ResetValueOverloadAux(ResetValueMixin, AuxiliaryMemoryData):
     pass
 
 
@@ -84,11 +89,11 @@ class QTOptCats(Algorithm):
 
     @property
     def critic(self):
-        return self.critics[self._chosen_critic]
+        return self.critics[self._chosen_critic].net
 
     def mu_var(self, s: Tensor, a: Tensor):
         """Calculates expectation and epistemic uncertainty of a state-action pair"""
-        q = np.array([critic.q(s, a) for critic in self.critics])
+        q = np.array([critic.net.q(s, a) for critic in self.critics])
         mu, var = q.mean(), q.var()
         return mu, var
 
@@ -117,8 +122,8 @@ class QTOptCats(Algorithm):
     def reset_critic(self):
         self._chosen_critic = random.randint(0, self._ensemble_number - 1)
 
-    def _critic_update(self, batch: Transitions, aux: AuxiliaryMemoryData):
-        x = [critic.q(batch.s_0, batch.a).squeeze() for critic in self.critics]
+    def _critic_update(self, batch: Transitions, aux: ResetValueOverloadAux):
+        x = [critic.net.q(batch.s_0, batch.a).squeeze() for critic in self.critics]
         with torch.no_grad():
             # Implement a variant of Clipped Double-Q Learning
             # Randomly sample two networks
@@ -127,10 +132,10 @@ class QTOptCats(Algorithm):
             a_2 = self.policy_fn(batch.s_1, critic=sampled_critics[1].target)
             target_max_1 = sampled_critics[0].target.q(batch.s_1, a_1).squeeze()
             target_max_2 = sampled_critics[1].target.q(batch.s_1, a_2).squeeze()
-            y = (
-                batch.r
-                + (~batch.d) * torch.minimum(target_max_1, target_max_2) * self._gamma
-            )
+            y_1 = torch.minimum(target_max_1, target_max_2)
+            if aux.reset_value_mixin_enable:
+                y_1 = torch.where(batch._t, aux.v_1, y_1)
+            y = batch.r + (~batch.d) * y_1 * self._gamma
 
         losses = []
         for x_i in x:
@@ -147,7 +152,7 @@ class QTOptCats(Algorithm):
 
         return loss_value
 
-    def update(self, batch: Transitions, aux: NextStateValueOverloadAux, step: int):
+    def update(self, batch: Transitions, aux: ResetValueOverloadAux, step: int):
         if step % self._update_frequency == 0:
             self.loss_critic_value = self._critic_update(batch, aux)
             for critic in self.critics:

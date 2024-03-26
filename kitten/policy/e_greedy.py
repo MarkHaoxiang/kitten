@@ -9,6 +9,7 @@ from kitten.policy import Policy
 from kitten.common.typing import Device
 from .interface import PolicyFn
 
+
 class EpsilonGreedyPolicy(Policy):
     def __init__(
         self,

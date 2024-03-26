@@ -197,9 +197,7 @@ class CatsExperiment:
         """
         self.reset_env()
         policy = self.collector.policy
-        self.collector.set_policy(
-            Policy(lambda _: self.env.action_space.sample(), transform_obs=False)
-        )
+        self.collector.set_policy(Policy(lambda _: self.env.action_space.sample()))
         results = []
         for i in range(n):
             obs, action, reward, n_obs, terminated, truncated = self.collector.collect(

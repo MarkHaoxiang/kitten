@@ -5,6 +5,8 @@ import types
 IN = TypeVar("IN")
 OUT = TypeVar("OUT")
 T = TypeVar("T")
+
+
 class Transform(Generic[IN, OUT], ABC):
     """General data transformations
 
@@ -101,6 +103,6 @@ class Transform(Generic[IN, OUT], ABC):
             raise ValueError(f"{f} is not a valid function target")
 
 
-class Identity(Generic[T], Transform[T,T]):
+class Identity(Generic[T], Transform[T, T]):
     def transform(self, data: T, *args, **kwargs) -> T:
         return data

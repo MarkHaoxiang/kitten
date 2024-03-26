@@ -25,9 +25,7 @@ from kitten.rl import Algorithm
 from kitten.rl.ddpg import DeepDeterministicPolicyGradient
 from kitten.rl.td3 import TwinDelayedDeepDeterministicPolicyGradient
 from kitten.rl.qt_opt import QTOpt
-from kitten.common.typing import (
-    Device
-)
+from kitten.common.typing import Device
 
 from .rng import Generator
 
@@ -268,7 +266,7 @@ def build_rnd(
     encoding_size: int,
     lr: float = 1e-3,
     device: Device = "cpu",
-    **kwargs
+    **kwargs,
 ):
     assert isinstance(env.observation_space, gym.spaces.Box)
     obs_size = env.observation_space.shape[0]
@@ -292,7 +290,7 @@ def build_disagreement(
     encoding_size: int,
     lr: float = 1e-3,
     device: Device = "cpu",
-    **kwargs
+    **kwargs,
 ) -> Disagreement:
     assert isinstance(env.observation_space, gym.spaces.Box)
     assert isinstance(env.action_space, gym.spaces.Box)

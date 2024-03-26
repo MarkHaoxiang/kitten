@@ -6,13 +6,16 @@ from numpy.typing import NDArray
 import torch
 from torch import Tensor
 
-from kitten.logging import Loggable
 from kitten.dataflow import Transform
 from kitten.experience import AuxiliaryMemoryData
 from kitten.common.typing import Device, Shape
 
+from .interface import Memory
 
-class ReplayBuffer(Loggable):
+
+class ReplayBuffer(
+    Memory[tuple[Any, ...], tuple[tuple[Any, ...], AuxiliaryMemoryData]]
+):
     """Store history of episode transitions"""
 
     def __init__(
@@ -20,7 +23,9 @@ class ReplayBuffer(Loggable):
         capacity: int,
         shape: Sequence[Shape],
         dtype: torch.dtype | Sequence[torch.dtype] = torch.float32,
-        transforms: Transform[Any, Any] | Sequence[Transform[Any, Any] | None] | None = None,
+        transforms: (
+            Transform[Any, Any] | Sequence[Transform[Any, Any] | None] | None
+        ) = None,
         device: Device = "cpu",
         **kwargs,
     ) -> None:
@@ -60,7 +65,7 @@ class ReplayBuffer(Loggable):
         self._append_index = 0  # Position of next tensor to be inserted
         self._full = False  # Bookmark to check if storage has looped around
 
-    def append(self, inputs: tuple[Any, ...], **kwargs) -> int:
+    def append(self, data: tuple[Any, ...], **kwargs) -> int:
         """Add a transition experience to the buffer
 
         Args:
@@ -69,8 +74,8 @@ class ReplayBuffer(Loggable):
         Returns:
             (int): Number of inserted elements.
         """
-        inputs = self._append_preprocess(inputs)
-        n_insert_unclipped = len(inputs[0])
+        data = self._append_preprocess(data)
+        n_insert_unclipped = len(data[0])
         n_insert = min(n_insert_unclipped, self.capacity)
         # Update Random IDs
         random_ids = torch.rand(n_insert, device=self.device)
@@ -87,7 +92,7 @@ class ReplayBuffer(Loggable):
             ]
         # Update Data
         for i in range(self.N):
-            x = inputs[i]
+            x = data[i]
             if len(x) != n_insert_unclipped:
                 raise ValueError(
                     f"Input is jagged, expected batch of {n_insert_unclipped} but got {len(x)}"
@@ -129,7 +134,7 @@ class ReplayBuffer(Loggable):
             res.append(x)
         return res
 
-    def sample(self, n: int) -> tuple[tuple[Tensor, ...], AuxiliaryMemoryData]:
+    def sample(self, n: int, **kwargs):
         """Sample from the replay buffer
 
         Args:
@@ -193,7 +198,9 @@ class PrioritizedReplayBuffer(ReplayBuffer):
         alpha: float = 0.6,
         beta_0: float = 0.4,
         dtype: torch.dtype | Sequence[torch.dtype] = torch.float32,
-        transforms: Transform[Any, Any] | Sequence[Transform[Any, Any] | None] | None = None,
+        transforms: (
+            Transform[Any, Any] | Sequence[Transform[Any, Any] | None] | None
+        ) = None,
         beta_annealing_steps: int = 10000,
         device: Device = "cpu",
     ) -> None:
@@ -218,7 +225,7 @@ class PrioritizedReplayBuffer(ReplayBuffer):
         # Logging
         self.mean_batch_error = 0
 
-    def append(self, inputs: tuple[Any, ...], update: bool = True, **kwargs) -> int:
+    def append(self, data: tuple[Any, ...], update: bool = True, **kwargs) -> int:
         """Add transitions to the replay buffer
 
         Args:
@@ -226,7 +233,7 @@ class PrioritizedReplayBuffer(ReplayBuffer):
             update (bool, optional): Update annealing step. Defaults to True.
         """
         initial_append_index = self._append_index
-        n_insert = super().append(inputs)
+        n_insert = super().append(data)
         if update:
             self.timestep = min(self.beta_annealing_steps, self.timestep + n_insert)
         for i in range(initial_append_index, initial_append_index + n_insert):
@@ -234,7 +241,7 @@ class PrioritizedReplayBuffer(ReplayBuffer):
             self._sift_up(self._maximum_priority, j)
         return n_insert
 
-    def sample(self, n: int) -> tuple[tuple[Tensor, ...], AuxiliaryMemoryData]:
+    def sample(self, n: int, **kwargs):
         # Invariant checks
         if n > len(self):
             raise ValueError(

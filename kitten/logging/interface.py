@@ -1,6 +1,7 @@
 from abc import ABC
 from kitten.common.typing import Log, ModuleNamePairs
 
+
 class Loggable(ABC):
     """Interface signalling a module which can be logged"""
 

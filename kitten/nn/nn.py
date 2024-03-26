@@ -11,12 +11,14 @@ import torch.nn as nn
 
 from kitten.policy.interface import PolicyFn
 
+
 class Value(ABC, nn.Module):
     """Analogous to V networks"""
 
     @abstractmethod
     def v(self, s: Tensor) -> Tensor:
         raise NotImplementedError
+
 
 class HasValue(ABC):
     """Reinforcement Learning Algorithm with a Value Module"""
@@ -25,6 +27,7 @@ class HasValue(ABC):
     @abstractmethod
     def value(self) -> Value:
         raise NotImplementedError
+
 
 class Critic(ABC, nn.Module):
     """Analogous to the Q Network"""
@@ -42,12 +45,15 @@ class Critic(ABC, nn.Module):
         """
         raise NotImplementedError
 
+
 class HasCritic(ABC):
     """Reinforcement Learning Algorithm with a Critic Module"""
+
     @property
     @abstractmethod
     def critic(self) -> Critic:
         raise NotImplementedError
+
 
 class CriticPolicyPair(Critic, Value):
     def __init__(self, critic: Critic, policy_fn: PolicyFn) -> None:
@@ -56,10 +62,11 @@ class CriticPolicyPair(Critic, Value):
         self._policy_fn = policy_fn
 
     def q(self, s: Tensor, a: Tensor) -> Tensor:
-        return self._critic.q(s,a)
+        return self._critic.q(s, a)
 
     def v(self, s: Tensor) -> Tensor:
         return self._critic.q(s, self._policy_fn(s))
+
 
 class Actor(ABC, nn.Module):
     """Analogous to Pi Network"""
@@ -83,7 +90,12 @@ class Actor(ABC, nn.Module):
 class ClassicalBoxCritic(Critic):
     """Critic for continuous low-dimensionality gym environments"""
 
-    def __init__(self, env: Env[NDArray[Any], NDArray[Any]], net: nn.Module | None = None, features: int = 128):
+    def __init__(
+        self,
+        env: Env[NDArray[Any], NDArray[Any]],
+        net: nn.Module | None = None,
+        features: int = 128,
+    ):
         super().__init__()
         assert isinstance(env.action_space, gym.spaces.Box)
         assert isinstance(env.observation_space, gym.spaces.Box)
@@ -113,7 +125,12 @@ class ClassicalBoxCritic(Critic):
 class ClassicalDiscreteCritic(Critic):
     """Critic for discrete low-dimensionality gym environments"""
 
-    def __init__(self, env: Env[NDArray[Any], np.int64], net: nn.Module | None = None, features: int = 128):
+    def __init__(
+        self,
+        env: Env[NDArray[Any], np.int64],
+        net: nn.Module | None = None,
+        features: int = 128,
+    ):
         super().__init__()
         assert isinstance(env.action_space, gym.spaces.Discrete)
         assert isinstance(env.observation_space, gym.spaces.Box)
@@ -144,7 +161,12 @@ class ClassicalDiscreteCritic(Critic):
 class ClassicalBoxActor(Actor):
     """Actor for continuous low-dimensionality gym environments"""
 
-    def __init__(self, env: Env[NDArray[Any], NDArray[Any]], net: nn.Module | None = None, features: int = 128):
+    def __init__(
+        self,
+        env: Env[NDArray[Any], NDArray[Any]],
+        net: nn.Module | None = None,
+        features: int = 128,
+    ):
         super().__init__()
         assert isinstance(env.action_space, gym.spaces.Box)
         assert isinstance(env.observation_space, gym.spaces.Box)

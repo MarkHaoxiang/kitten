@@ -1,11 +1,29 @@
+from abc import ABC, abstractmethod
 from collections.abc import Iterator
 from dataclasses import dataclass
+from typing import TypeVar, Generic
 
 from torch import Tensor
 from jaxtyping import Bool, Float, Shaped, Integer, jaxtyped
 from typeguard import typechecked as typechecker
 
+from kitten.logging import Loggable
 from kitten.common.typing import Shape, shape_annotation
+
+InDataType = TypeVar("InDataType")
+OutDataType = TypeVar("OutDataType")
+
+
+class Memory(Loggable, Generic[InDataType, OutDataType], ABC):
+    """Abstract storage object storing history"""
+
+    @abstractmethod
+    def append(self, data: InDataType, **kwargs) -> int:
+        raise NotImplementedError
+
+    @abstractmethod
+    def sample(self, n: int, **kwargs) -> OutDataType:
+        raise NotImplementedError
 
 
 class Transitions:
@@ -17,7 +35,7 @@ class Transitions:
     # TODO: Write tests
     """
 
-    @jaxtyped(typechecker=typechecker) # type: ignore[misc]
+    @jaxtyped(typechecker=typechecker)  # type: ignore[misc]
     def __init__(
         self,
         s_0: Float[Tensor, "..."],
@@ -83,11 +101,11 @@ class Transitions:
         return self._r
 
     @property
-    def d(self) -> Float[Tensor, "{self._batch_annotation}"]:
+    def d(self) -> Bool[Tensor, "{self._batch_annotation}"]:
         return self._d
 
     @property
-    def t(self) -> Float[Tensor, "{self._batch_annotation}"]:
+    def t(self) -> Bool[Tensor, "{self._batch_annotation}"]:
         return self._d
 
     def __iter__(self) -> Iterator[Tensor]:

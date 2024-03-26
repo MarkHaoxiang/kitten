@@ -13,6 +13,7 @@ log = logger.log
 
 # KittenLogger
 import importlib.util
+
 has_wandb = importlib.util.find_spec("wandb") is not None
 has_omegaconf = importlib.util.find_spec("omegaconf") is not None
 if has_wandb and has_omegaconf:
@@ -215,5 +216,3 @@ class KittenLogger:
     def clear(self):
         """Deletes associated files"""
         shutil.rmtree(self.path)
-
-

@@ -14,7 +14,7 @@ class Policy:
     def __init__(
         self,
         fn: PolicyFn,
-        device: Device ="cpu",
+        device: Device = "cpu",
     ):
         """Policy API to pass into data collection pipeline
 

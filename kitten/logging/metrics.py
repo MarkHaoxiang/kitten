@@ -10,11 +10,7 @@ from gymnasium.spaces import Box
 from gymnasium.wrappers.record_video import RecordVideo
 
 from kitten.policy import Policy
-from kitten.common.typing import (
-    Log,
-    ObsType,
-    ActType
-)
+from kitten.common.typing import Log, ObsType, ActType
 from kitten.nn import HasValue
 
 from .logger import log
@@ -28,7 +24,7 @@ class KittenEvaluator(Loggable):
         self,
         env: Env[Any, Any],
         policy: Policy | None = None,
-        video = False,
+        video=False,
         saved_reset_states: int = 10,
         evaluation_repeats: int = 10,
         device: str = "cpu",
@@ -127,6 +123,7 @@ class KittenEvaluator(Loggable):
     def __setstate__(self, state):
         vars(self).update(state)
 
+
 # TODO: Messy. Type policy properly.
 @no_type_check
 def policy_wrapper(policy: Callable, env):
@@ -137,13 +134,13 @@ def policy_wrapper(policy: Callable, env):
         if action.shape == () and isinstance(env.action_space, Box):
             action = np.expand_dims(action, 0)
         return action
+
     return pi
 
+
 def evaluate(
-        env: Env[ObsType, ActType],
-        policy: Callable[[ObsType], ActType],
-        repeat: int = 1
-    ) -> tuple[float, float, float]:
+    env: Env[ObsType, ActType], policy: Callable[[ObsType], ActType], repeat: int = 1
+) -> tuple[float, float, float]:
     """Evaluates an episode
 
     Args:
@@ -173,9 +170,10 @@ def evaluate(
     episode_length = episode_length / repeat
     return total_reward, maximum_reward, episode_length
 
+
 class EstimatedValue(Loggable):
-    """The estimated value of the reset distribution
-    """
+    """The estimated value of the reset distribution"""
+
     def __init__(self, target: Any, evaluator: KittenEvaluator) -> None:
         super().__init__()
         self._target: None | HasValue = None
@@ -188,9 +186,7 @@ class EstimatedValue(Loggable):
     def get_log(self) -> Log:
         if self._target is not None:
             return {
-                "critic_value": self._target.value.v(
-                    self._evaluator.saved_reset_states
-                )
+                "critic_value": self._target.value.v(self._evaluator.saved_reset_states)
                 .mean()
                 .item()
             }

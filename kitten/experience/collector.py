@@ -9,15 +9,13 @@ import torch
 from kitten.experience.memory import ReplayBuffer
 from kitten.logging import Loggable
 from kitten.policy import Policy
-from kitten.common.typing import (
-    Device,
-    ObsType,
-    ActType
-)
+from kitten.common.typing import Device, ObsType, ActType
 
 
 class DataCollector(Loggable, ABC):
-    def __init__(self, policy: Policy, env: gym.Env[Any, Any], memory: ReplayBuffer | None):
+    def __init__(
+        self, policy: Policy, env: gym.Env[Any, Any], memory: ReplayBuffer | None
+    ):
         """Constructs a data collector
 
         Args:
@@ -91,8 +89,9 @@ class GymCollector(Generic[ActType], DataCollector):
         action = self.policy(obs, *args, **kwargs)
         if isinstance(action, torch.Tensor):
             action = action.cpu().detach().numpy()
-        if isinstance(self.env.action_space, gym.spaces.Box)\
-            and isinstance(action, np.ndarray):
+        if isinstance(self.env.action_space, gym.spaces.Box) and isinstance(
+            action, np.ndarray
+        ):
             action = action.clip(self.env.action_space.low, self.env.action_space.high)
         return action
 
@@ -119,7 +118,9 @@ class GymCollector(Generic[ActType], DataCollector):
                 if not self.memory is None and append_memory:
                     self.memory.append(transition_tuple, update=not early_start)
                 # Add Truncation info back in
-                result.append((obs, action, float(reward), n_obs, terminated, truncated))
+                result.append(
+                    (obs, action, float(reward), n_obs, terminated, truncated)
+                )
                 # Reset
                 if terminated or truncated:
                     n_obs, _ = self.env.reset()
@@ -130,7 +131,9 @@ class GymCollector(Generic[ActType], DataCollector):
             self.obs = obs
             return result
 
-    def early_start(self, n: int, dry_run: bool = False) -> list[tuple[NDArray[Any], ActType, float, NDArray[Any], bool, bool]]:
+    def early_start(
+        self, n: int, dry_run: bool = False
+    ) -> list[tuple[NDArray[Any], ActType, float, NDArray[Any], bool, bool]]:
         """Runs the environment for a certain number of steps using a random policy.
 
         For example, to fill the replay buffer or initialise normalisations.
@@ -144,9 +147,7 @@ class GymCollector(Generic[ActType], DataCollector):
         """
         # Set random policy
         policy = self.policy
-        self.set_policy(
-            Policy(lambda _: self.env.action_space.sample())
-        )
+        self.set_policy(Policy(lambda _: self.env.action_space.sample()))
         # Run
         if dry_run:
             self.collect(n, append_memory=False, early_start=True)

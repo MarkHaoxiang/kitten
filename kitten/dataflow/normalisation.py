@@ -5,6 +5,8 @@ import torch
 from kitten.dataflow.interface import Transform
 
 T = TypeVar("T", bound=torch.Tensor | Number)
+
+
 class RunningMeanVariance(Generic[T], Transform[T, T]):
     """https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance"""
 

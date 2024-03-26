@@ -18,3 +18,4 @@ moviepy[logging]
 # Util
 pytest[development]
 mypy[development]
+black[development]
