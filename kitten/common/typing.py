@@ -10,7 +10,6 @@ Shape: TypeAlias = tuple[int, ...]
 def shape_annotation(shape: Shape) -> str:
     return " ".join(map(str, shape))
 
-
 Device: TypeAlias = str | torch.device
 
 # Logging

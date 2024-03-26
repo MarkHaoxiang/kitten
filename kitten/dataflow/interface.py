@@ -1,9 +1,11 @@
 from abc import ABC, abstractmethod
-from typing import Any, Callable
+from typing import Any, Callable, TypeVar, Generic
 import types
 
-
-class Transform(Callable, ABC):
+IN = TypeVar("IN")
+OUT = TypeVar("OUT")
+T = TypeVar("T")
+class Transform(Generic[IN, OUT], ABC):
     """General data transformations
 
     A wrapper around a function with utilities to bind other functions and methods
@@ -29,14 +31,14 @@ class Transform(Callable, ABC):
     def __init__(self):
         self._enabled = True
 
-    def __call__(self, data: Any, *args, **kwargs) -> Any:
+    def __call__(self, data: IN, *args, **kwargs) -> IN | OUT:
         if not self._enabled:
             return data
         else:
             return self.transform(data, *args, **kwargs)
 
     @abstractmethod
-    def transform(self, data: Any, *args, **kwargs) -> Any:
+    def transform(self, data: IN, *args, **kwargs) -> OUT:
         """Applies a transformation on data
 
         Args:
@@ -56,16 +58,17 @@ class Transform(Callable, ABC):
 
     def prepend(
         self,
-        f: types.FunctionType | types.MethodType,
+        f: Callable[[OUT], T],
         bind_method_type: bool = True,
-    ):
+    ) -> Callable[[IN], T]:
         """A function continuation"""
         if isinstance(f, types.MethodType) and bind_method_type:
 
-            def g(_, *args, **kwargs):
+            def _g(_, *args, **kwargs):
                 return self(f(*args, **kwargs))
 
-            f.__self__.__setattr__(f.__name__, types.MethodType(g, f.__self__))
+            f.__self__.__setattr__(f.__name__, types.MethodType(_g, f.__self__))
+            return f.__self__.__getattribute__(f.__name__)
         elif isinstance(f, types.FunctionType) or isinstance(f, types.MethodType):
 
             def g(*args, **kwargs):
@@ -77,16 +80,16 @@ class Transform(Callable, ABC):
 
     def append(
         self,
-        f: types.FunctionType | types.MethodType,
+        f: Callable[[T], IN],
         bind_method_type: bool = True,
-    ):
+    ) -> Callable[[T], OUT]:
         """A function continuation"""
         if isinstance(f, types.MethodType) and bind_method_type:
 
-            def g(_, *args, **kwargs):
+            def _g(_, *args, **kwargs):
                 return f(self(*args, **kwargs))
 
-            f.__self__.__setattr__(f.__name__, types.MethodType(g, f.__self__))
+            f.__self__.__setattr__(f.__name__, types.MethodType(_g, f.__self__))
             return f.__self__.__getattribute__(f.__name__)
         elif isinstance(f, types.FunctionType) or isinstance(f, types.MethodType):
 
@@ -98,6 +101,6 @@ class Transform(Callable, ABC):
             raise ValueError(f"{f} is not a valid function target")
 
 
-class Identity(Transform):
-    def transform(self, data: Any, *args, **kwargs) -> Any:
+class Identity(Generic[T], Transform[T,T]):
+    def transform(self, data: T, *args, **kwargs) -> T:
         return data

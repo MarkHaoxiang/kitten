@@ -6,6 +6,8 @@ from kitten.experience import AuxiliaryMemoryData, Transitions
 from kitten.nn import Actor, Critic, AddTargetNetwork
 from kitten.rl.ddpg import DeepDeterministicPolicyGradient
 
+from kitten.common.typing import Device
+
 
 class TwinDelayedDeepDeterministicPolicyGradient(DeepDeterministicPolicyGradient):
     """TD3
@@ -29,7 +31,7 @@ class TwinDelayedDeepDeterministicPolicyGradient(DeepDeterministicPolicyGradient
         target_noise_clip: float = 0.2,
         critic_update_frequency: int = 1,
         policy_update_frequency: int = 2,
-        device: str = "cpu",
+        device: Device = "cpu",
         **kwargs,
     ):
         """TD3

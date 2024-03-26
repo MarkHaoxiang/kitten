@@ -1,7 +1,12 @@
+# type: ignore
+
+from typing import Any
+
 import gymnasium as gym
 from gymnasium import Env
 from gymnasium.spaces import Box, Discrete
 import numpy as np
+from numpy.typing import NDArray
 import torch
 import torch.nn as nn
 
@@ -20,6 +25,9 @@ from kitten.rl import Algorithm
 from kitten.rl.ddpg import DeepDeterministicPolicyGradient
 from kitten.rl.td3 import TwinDelayedDeepDeterministicPolicyGradient
 from kitten.rl.qt_opt import QTOpt
+from kitten.common.typing import (
+    Device
+)
 
 from .rng import Generator
 
@@ -57,7 +65,7 @@ def build_env(
     return env
 
 
-def build_rl(env: gym.Env, algorithm_configuration, device: str) -> Algorithm:
+def build_rl(env: gym.Env, algorithm_configuration, device: Device) -> Algorithm:
     """Utility to construct a RL algorithm"""
     if algorithm_configuration.type == "ddpg":
         assert isinstance(env.action_space, gym.spaces.Box)
@@ -201,7 +209,7 @@ def build_critic(env: Env, features: int = 128) -> Critic:
 
 
 def build_intrinsic(
-    env, intrinsic_configuration, device: str = "cpu"
+    env, intrinsic_configuration, device: Device = "cpu"
 ) -> IntrinsicReward:
     if intrinsic_configuration.type == "icm":
         return build_icm(env=env, device=device, **intrinsic_configuration)
@@ -213,9 +221,9 @@ def build_intrinsic(
 
 
 def build_icm(
-    env: Env,
+    env: Env[NDArray[Any], NDArray[Any]],
     encoding_size: int,
-    device: str,
+    device: Device,
     clip_grad_norm: float | None = 1.0,
     **kwargs,
 ):
@@ -256,7 +264,11 @@ def build_icm(
 
 
 def build_rnd(
-    env: Env, encoding_size: int, lr: float = 1e-3, device: str = "cpu", **kwargs
+    env: Env[NDArray[Any], Any],
+    encoding_size: int,
+    lr: float = 1e-3,
+    device: Device = "cpu",
+    **kwargs
 ):
     assert isinstance(env.observation_space, gym.spaces.Box)
     obs_size = env.observation_space.shape[0]
@@ -276,8 +288,12 @@ def build_rnd(
 
 
 def build_disagreement(
-    env: Env, encoding_size: int, lr: float = 1e-3, device: str = "cpu", **kwargs
-):
+    env: Env[NDArray[Any], NDArray[Any]],
+    encoding_size: int,
+    lr: float = 1e-3,
+    device: Device = "cpu",
+    **kwargs
+) -> Disagreement:
     assert isinstance(env.observation_space, gym.spaces.Box)
     assert isinstance(env.action_space, gym.spaces.Box)
     obs_size = env.observation_space.shape[0]

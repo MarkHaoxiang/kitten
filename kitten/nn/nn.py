@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-import copy
 from typing import Callable
 
 import gymnasium as gym
@@ -8,6 +7,22 @@ import torch
 from torch import Tensor
 import torch.nn as nn
 
+from kitten.policy.interface import PolicyFn
+
+class Value(ABC, nn.Module):
+    """Analogous to V networks"""
+
+    @abstractmethod
+    def v(self, s: Tensor) -> Tensor:
+        raise NotImplementedError
+
+class HasValue(ABC):
+    """Reinforcement Learning Algorithm with a Value Module"""
+
+    @property
+    @abstractmethod
+    def value(self) -> Value:
+        raise NotImplementedError
 
 class Critic(ABC, nn.Module):
     """Analogous to the Q Network"""
@@ -25,16 +40,25 @@ class Critic(ABC, nn.Module):
         """
         raise NotImplementedError
 
-
-class Value(ABC, nn.Module):
-    """Analogous to V networks"""
-
+class HasCritic(ABC):
+    """Reinforcement Learning Algorithm with a Critic Module"""
+    @property
     @abstractmethod
-    def v(self, s: Tensor) -> Tensor:
+    def critic(self) -> Critic:
         raise NotImplementedError
 
+class CriticPolicyPair(Critic, Value):
+    def __init__(self, critic: Critic, policy_fn: PolicyFn) -> None:
+        super().__init__()
+        self._critic = critic
+        self._policy_fn = policy_fn
 
-# TODO: Generator for Value from Critic and Actor
+    def q(self, s: Tensor, a: Tensor) -> Tensor:
+        return self._critic.q(s,a)
+
+    def v(self, s: Tensor) -> Tensor:
+        return self._critic.q(s, self._policy_fn(s))
+
 class Actor(ABC, nn.Module):
     """Analogous to Pi Network"""
 

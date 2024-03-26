@@ -4,8 +4,6 @@ from omegaconf import DictConfig
 import hydra
 import torch
 from tqdm import tqdm
-
-from kitten.rl import HasCritic
 from kitten.experience import Transitions
 from kitten.experience.util import (
     build_collector,
@@ -15,7 +13,7 @@ from kitten.experience.util import (
 from kitten.policy import ColoredNoisePolicy
 from kitten.common import global_seed
 from kitten.common.util import build_env, build_rl, build_intrinsic
-from kitten.logging import KittenEvaluator, KittenLogger, CriticValue
+from kitten.logging import KittenEvaluator, KittenLogger, EstimatedValue
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -67,8 +65,7 @@ def train(cfg: DictConfig) -> None:
             (memory, "memory"),
         ]
     )
-    if isinstance(algorithm, HasCritic):  # TODO: This should be an utility
-        logger.register_provider(CriticValue(algorithm, evaluator), "train")
+    logger.register_provider(EstimatedValue(algorithm, evaluator), "train")
 
     # Training Loop
     # Early start intialisation

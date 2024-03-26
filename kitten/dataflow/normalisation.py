@@ -1,10 +1,11 @@
-from typing import Any, Optional
+from typing import Any, Optional, Generic, TypeVar
+from numbers import Number
 
 import torch
 from kitten.dataflow.interface import Transform
 
-
-class RunningMeanVariance(Transform):
+T = TypeVar("T", bound=torch.Tensor | Number)
+class RunningMeanVariance(Generic[T], Transform[T, T]):
     """https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance"""
 
     def __init__(self) -> None:

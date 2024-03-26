@@ -1,10 +1,9 @@
-from typing import Callable, List
+from typing import Callable
 
 import torch
 import numpy as np
 from gymnasium import Env
 from gymnasium.spaces.discrete import Discrete
-from gymnasium.spaces.box import Box
 
 from .memory import ReplayBuffer, PrioritizedReplayBuffer
 from .collector import DataCollector, GymCollector
@@ -14,7 +13,7 @@ from kitten.experience import Transitions
 from kitten.common.typing import Device
 
 
-def build_transition_from_list(updates: List, device: Device = "cpu") -> Transitions:
+def build_transition_from_list(updates: list, device: Device = "cpu") -> Transitions:
     """Utility to wrap collector results into a transition"""
     return build_transition_from_update(
         obs=np.array([x[0] for x in updates]),

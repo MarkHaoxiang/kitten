@@ -1,16 +1,21 @@
-from typing import Any, Callable
+from typing import Any, Callable, TypeAlias
 
 import numpy as np
+from numpy.typing import NDArray
 import torch
 from torch import Tensor
+
+from kitten.common.typing import Device
+
+PolicyFn: TypeAlias = Callable[[Tensor | NDArray[Any]], Tensor]
 
 
 class Policy:
     def __init__(
         self,
-        fn: Callable[[Tensor | np.ndarray], Tensor],
+        fn: PolicyFn,
         transform_obs: bool = True,
-        device="cpu",
+        device: Device ="cpu",
     ):
         """Policy API to pass into data collection pipeline
 

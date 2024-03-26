@@ -1,14 +1,14 @@
+from numpy.typing import NDArray
 from numpy import ndarray
 
 import torch
 import torch.nn as nn
 from torch import Tensor
-from torch.nn.modules import Module
 
 from kitten.experience import AuxiliaryMemoryData, Transitions
-from kitten.nn import AddTargetNetwork, Actor, Critic
-from kitten.rl import Algorithm, HasCritic
-from kitten.common.typing import Log, ModuleNamePairs
+from kitten.nn import AddTargetNetwork, Actor, Critic, HasCritic
+from kitten.rl import Algorithm
+from kitten.common.typing import Log, ModuleNamePairs, Device
 
 
 class DeepDeterministicPolicyGradient(Algorithm, HasCritic):
@@ -26,7 +26,7 @@ class DeepDeterministicPolicyGradient(Algorithm, HasCritic):
         tau: float = 0.005,
         clip_grad_norm: float | None = 1,
         update_frequency: int = 1,
-        device: str = "cpu",
+        device: Device = "cpu",
         **kwargs,
     ):
         """DDPG
@@ -152,10 +152,10 @@ class DeepDeterministicPolicyGradient(Algorithm, HasCritic):
             )
         return self._loss_critic_value, self._loss_actor_value
 
-    def policy_fn(self, s: Tensor | ndarray) -> Tensor:
+    def policy_fn(self, s: Tensor | NDArray) -> Tensor:
         if isinstance(s, ndarray):
             s = torch.tensor(s, device=self.device, dtype=torch.float32)
-        return self._actor.a(s)
+        return self._actor.net.a(s)
 
     def get_log(self) -> Log:
         return {

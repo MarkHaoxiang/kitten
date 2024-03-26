@@ -35,12 +35,3 @@ class Algorithm(Loggable, ABC):
             Tensor: Action.
         """
         raise NotImplementedError
-
-
-class HasCritic(ABC):
-    """Reinforcement Learning Algorithm with a Critic Module"""
-
-    @property
-    @abstractmethod
-    def critic(self) -> Critic:
-        raise NotImplementedError

@@ -5,8 +5,10 @@ from torch import Tensor
 import torch.nn as nn
 
 from kitten.experience import AuxiliaryMemoryData, Transitions
-from kitten.rl import Algorithm, HasCritic
-from kitten.nn import Critic, AddTargetNetwork
+from kitten.rl import Algorithm
+from kitten.nn import Critic, HasCritic, AddTargetNetwork
+
+from kitten.common.typing import Device
 
 
 def cross_entropy_method(
@@ -16,7 +18,7 @@ def cross_entropy_method(
     n: int = 64,
     m: int = 6,
     n_iterations: int = 2,
-    device: str = "cpu",
+    device: Device = "cpu",
 ) -> torch.Tensor:
     """Sampling method to find action for a Q function on continuous spaces
 
@@ -88,7 +90,7 @@ class QTOpt(Algorithm, HasCritic):
         cem_n_iterations: int = 2,
         clip_grad_norm: float | None = 1.0,
         update_frequency: int = 1,
-        device: str = "cpu",
+        device: Device = "cpu",
         **kwargs,
     ) -> None:
         super().__init__()

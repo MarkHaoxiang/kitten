@@ -4,10 +4,9 @@ import torch.nn as nn
 from torch import Tensor
 
 from kitten.experience import AuxiliaryMemoryData, Transitions
-from kitten.rl import Algorithm, HasCritic
-
-from kitten.nn import AddTargetNetwork, ClassicalDiscreteCritic
-
+from kitten.rl import Algorithm
+from kitten.nn import HasCritic, AddTargetNetwork, ClassicalDiscreteCritic
+from kitten.common.typing import Log
 
 class DQN(Algorithm, HasCritic):
     """Implements DQN
@@ -74,7 +73,7 @@ class DQN(Algorithm, HasCritic):
             s = torch.tensor(s, device=self.device, dtype=torch.float32)
         return torch.argmax(self.critic.q(s=s, a=None), dim=-1)
 
-    def get_log(self) -> dict:
+    def get_log(self) -> Log:
         return {"critic_loss": self._loss_critic_value}
 
     def get_models(self) -> list[tuple[nn.Module, str]]:

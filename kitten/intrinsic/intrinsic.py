@@ -1,7 +1,6 @@
 from abc import ABC, abstractmethod
 
 import torch
-from torch import Tensor
 
 from kitten.experience import AuxiliaryMemoryData, Transitions
 from kitten.logging import Loggable
