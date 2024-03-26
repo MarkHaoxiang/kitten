@@ -143,9 +143,9 @@ def build_replay_buffer(
     """
     if normalise_observation:
         rmv = RunningMeanVariance[Float32[torch.Tensor, "..."]]()
-        _normalise_observation = [rmv, None, None, rmv, None]
+        _normalise_observation = [rmv, None, None, rmv, None, None]
     else:
-        _normalise_observation = [None, None, None, None, None]
+        _normalise_observation = [None, None, None, None, None, None]
 
     observation_space = env.observation_space
     action_space = env.action_space
@@ -157,8 +157,8 @@ def build_replay_buffer(
             TransitionReplayBuffer(
                 ReplayBuffer(
                     capacity=capacity,
-                    shape=TransitionReplayBuffer.shape(env, False),
-                    dtype=TransitionReplayBuffer.dtype(env, False),
+                    shape=TransitionReplayBuffer.shape(env),
+                    dtype=TransitionReplayBuffer.dtype(env),
                     transforms=_normalise_observation,
                     device=device,
                     **kwargs,
@@ -174,8 +174,8 @@ def build_replay_buffer(
                 PrioritizedReplayBuffer(
                     error_fn=error_fn,
                     capacity=capacity,
-                    shape=TransitionReplayBuffer.shape(env, False),
-                    dtype=TransitionReplayBuffer.dtype(env, False),
+                    shape=TransitionReplayBuffer.shape(env),
+                    dtype=TransitionReplayBuffer.dtype(env),
                     transforms=_normalise_observation,
                     device=device,
                     **kwargs,

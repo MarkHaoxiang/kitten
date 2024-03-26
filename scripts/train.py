@@ -44,7 +44,7 @@ def train(cfg: DictConfig) -> None:
     memory, rmv = build_replay_buffer(env, device=DEVICE, **cfg.memory)
     if rmv is not None:
         policy.fn = rmv.append(policy.fn, bind_method_type=False)
-    collector = build_collector(policy, env, memory.rb, device=DEVICE)
+    collector = build_collector(policy, env, memory, device=DEVICE)
 
     # Logging and Evaluation
     logger = KittenLogger(
