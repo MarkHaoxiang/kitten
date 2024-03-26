@@ -26,7 +26,7 @@ def visualise_memory(experiment: CatsExperiment):
     """Visualise state space for given environmentss"""
 
     env = experiment.env
-    memory = experiment.memory
+    memory = experiment.memory.rb
 
     fig, ax = plt.subplots()
     ax.set_title("State Space Coverage")

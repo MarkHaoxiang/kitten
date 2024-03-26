@@ -3,12 +3,20 @@ import torch.nn as nn
 from torch import Tensor
 
 from kitten.experience import AuxiliaryMemoryData, Transitions
-from kitten.nn import AddTargetNetwork, Actor, Critic, HasCritic
+from kitten.nn import (
+    AddTargetNetwork,
+    Actor,
+    Critic,
+    Value,
+    HasCritic,
+    HasValue,
+    CriticPolicyPair,
+)
 from kitten.rl import Algorithm
 from kitten.common.typing import Log, ModuleNamePairs, Device
 
 
-class DeepDeterministicPolicyGradient(Algorithm, HasCritic):
+class DeepDeterministicPolicyGradient(Algorithm, HasCritic, HasValue):
     """Implements DDPG
 
     Lillicrap et al. Continuous Control with Deep Reinforcement Learning. 2015.
@@ -39,7 +47,7 @@ class DeepDeterministicPolicyGradient(Algorithm, HasCritic):
         """
         self._actor = AddTargetNetwork[Actor](actor_network, device=device)
         self._critic = AddTargetNetwork[Critic](critic_network, device=device)
-        self.device = device
+        self._device = device
 
         self._gamma = gamma
         self._optim_actor = torch.optim.Adam(params=self._actor.net.parameters(), lr=lr)
@@ -56,6 +64,10 @@ class DeepDeterministicPolicyGradient(Algorithm, HasCritic):
     @property
     def critic(self) -> Critic:
         return self._critic.net
+
+    @property
+    def value(self) -> Value:
+        return CriticPolicyPair(self.critic, self.policy_fn)
 
     def _critic_update(self, batch: Transitions, aux: AuxiliaryMemoryData) -> float:
         """Runs a critic update

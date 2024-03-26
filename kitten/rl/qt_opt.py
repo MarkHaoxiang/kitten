@@ -6,7 +6,7 @@ import torch.nn as nn
 
 from kitten.experience import AuxiliaryMemoryData, Transitions
 from kitten.rl import Algorithm
-from kitten.nn import Critic, HasCritic, AddTargetNetwork
+from kitten.nn import Critic, HasCritic, CriticPolicyPair, HasValue, AddTargetNetwork
 
 from kitten.common.typing import Device
 
@@ -68,7 +68,7 @@ def cross_entropy_method(
     return mu
 
 
-class QTOpt(Algorithm, HasCritic):
+class QTOpt(Algorithm, HasCritic, HasValue):
     """Q-learning for continuous actions with Cross-Entropy Maximisation
 
     With clipped Double DQN
@@ -200,5 +200,9 @@ class QTOpt(Algorithm, HasCritic):
         return [(self._critic_1.net, "critic"), (self._critic_2.net, "critic_2")]
 
     @property
-    def critic(self) -> Critic:
+    def critic(self):
         return self._critic_1.net
+
+    @property
+    def value(self):
+        return CriticPolicyPair(self.critic, self.policy_fn)

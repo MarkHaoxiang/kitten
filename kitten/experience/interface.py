@@ -27,7 +27,7 @@ class Memory(Loggable, Generic[InDataType, OutDataType], ABC):
 
 
 class Transitions:
-    """Represents base Markov Chain Transitions gathered as experinece
+    """Represents base Markov Chain Transitions gathered as experience
 
     # TODO: Support dictionary based observations and actions
     #   - We probably want to generalise out the interface for transitions to allow objects

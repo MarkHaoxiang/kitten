@@ -95,7 +95,7 @@ class TwinDelayedDeepDeterministicPolicyGradient(DeepDeterministicPolicyGradient
             # ====================
             a_1 += (
                 torch.clamp(
-                    torch.normal(0, self.target_noise, a_1.shape, device=self.device),
+                    torch.normal(0, self.target_noise, a_1.shape, device=self._device),
                     min=-self.target_noise_clip,
                     max=self.target_noise_clip,
                 )

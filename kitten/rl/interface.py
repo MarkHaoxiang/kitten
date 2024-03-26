@@ -1,11 +1,9 @@
 from abc import ABC, abstractmethod
 from typing import Any
 
-import numpy as np
 from torch import Tensor
 
 from kitten.experience import AuxiliaryMemoryData, Transitions
-from kitten.nn import Critic
 from kitten.logging import Loggable
 
 

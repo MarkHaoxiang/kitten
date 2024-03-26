@@ -9,8 +9,9 @@ from tqdm import tqdm
 from omegaconf import DictConfig
 
 # Kitten
+from kitten.experience import Transitions
 from kitten.experience.util import (
-    Transitions,
+    build_replay_buffer,
     build_transition_from_update,
     build_transition_from_list,
 )
@@ -22,7 +23,7 @@ from kitten.common.util import *
 from kitten.dataflow.normalisation import RunningMeanVariance
 
 # Cats
-from .rl import QTOptCats
+from .rl import QTOptCats, ResetValueOverloadAux
 from .env import *
 
 
@@ -141,31 +142,12 @@ class CatsExperiment:
         )
 
     def _build_data(self):
-        rmv = RunningMeanVariance()
-        self.normalise_observation = rmv
-        normalise_observation = [rmv, None, None, rmv, None, None]
-        self.memory = ReplayBuffer(
+        self.memory, self.normalise_observation = build_replay_buffer(
+            self.env,
             capacity=self.cfg.total_frames,
-            shape=(
-                self.env.observation_space.shape,
-                self.env.action_space.shape,
-                (),
-                self.env.observation_space.shape,
-                (),
-                (),  # Adds Truncation
-            ),
-            dtype=(
-                torch.float32,
-                torch.torch.float32,
-                torch.float32,
-                torch.float32,
-                torch.bool,
-                torch.bool,
-            ),
-            transforms=normalise_observation,
+            normalise_observation=True,
             device=self.device,
         )
-
         # Remove automatic memory addition for more control
         self.collector = GymCollector(self.policy, self.env, device=self.device)
         self.policy.fn = self.normalise_observation.append(
@@ -307,7 +289,7 @@ class CatsExperiment:
                 self._reset()
 
             # Updates
-            data, aux = self.memory.sample(self.cfg.train.minibatch_size)
+            data, aux = self.memory.rb.sample(self.cfg.train.minibatch_size)
             batch = Transitions(*data[:5])
             batch_death = batch.d
             batch_truncated = data[-1]
@@ -349,6 +331,13 @@ class CatsExperiment:
                     )
 
             batch = Transitions(batch.s_0, batch.a, r_i, s_1, batch.d)
+            aux = ResetValueOverloadAux(
+                weights=aux.weights,
+                random=aux.random,
+                indices=aux.indices,
+                v_1=0,
+                reset_value_mixin_enable=False,
+            )
             self.algorithm.update(batch, aux, step=step)
 
             # Log

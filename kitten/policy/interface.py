@@ -23,9 +23,12 @@ class Policy:
             transform_obs (bool): Transform observations into tensors.
             normalise_obs (Optional[RunningMeanVariance]): Normalise incoming observations
         """
-        self.fn = fn
+        self._fn = fn
         self._evaluate = False
         self.device = device
+
+    def fn(self, obs: Tensor):
+        return self._fn(obs)
 
     def __call__(self, obs: Tensor | NDArray[Any], *args, **kwargs) -> Any:
         """Actions from observations

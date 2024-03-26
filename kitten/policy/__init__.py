@@ -8,6 +8,6 @@ if is_pink_installed:
     from .colored_noise import ColoredNoisePolicy
 else:
 
-    class ColoredNoisePolicy:  # type: ignore[no-redef]
+    class ColoredNoisePolicy(Policy):  # type: ignore[no-redef]
         def __init__(self) -> None:
             raise NotImplementedError("Dependency pink-noise-rl required")

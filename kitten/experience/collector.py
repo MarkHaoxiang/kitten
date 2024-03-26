@@ -113,7 +113,14 @@ class GymCollector(Generic[ActType], DataCollector):
                 action = self._policy(obs, *args, **kwargs)
                 # Step
                 n_obs, reward, terminated, truncated, _ = self.env.step(action)
-                transition_tuple = (obs, action, float(reward), n_obs, terminated, truncated)
+                transition_tuple = (
+                    obs,
+                    action,
+                    float(reward),
+                    n_obs,
+                    terminated,
+                    truncated,
+                )
                 # Store buffer
                 result.append(transition_tuple)
                 if not self.memory is None and append_memory:

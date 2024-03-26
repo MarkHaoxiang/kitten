@@ -42,8 +42,7 @@ def train(cfg: DictConfig) -> None:
 
     # Data pipeline
     memory, rmv = build_replay_buffer(env, device=DEVICE, **cfg.memory)
-    if rmv is not None:
-        policy.fn = rmv.append(policy.fn, bind_method_type=False)
+    if rmv is not None: rmv.append(policy.fn)
     collector = build_collector(policy, env, memory, device=DEVICE)
 
     # Logging and Evaluation
@@ -72,18 +71,16 @@ def train(cfg: DictConfig) -> None:
         collector.early_start(cfg.train.initial_collection_size), device=DEVICE
     )
     intrinsic.initialise(batch)
-    (rmv.add_tensor_batch(batch.s_1) if cfg.memory.normalise_observation else None)
+    if rmv is not None:
+        rmv.add_tensor_batch(batch.s_1)
     # Main Loop
     pbar = tqdm(
         total=cfg.train.total_frames // cfg.log.frames_per_epoch, file=sys.stdout
     )
     for step in range(1, cfg.train.total_frames + 1):
         collected = build_transition_from_list(collector.collect(n=1), device=DEVICE)
-        (
+        if rmv is not None:
             rmv.add_tensor_batch(collected.s_1)
-            if cfg.memory.normalise_observation
-            else None
-        )
         # RL Update
         batch, aux = memory.sample(cfg.train.minibatch_size)
         # Intrinsic Update
