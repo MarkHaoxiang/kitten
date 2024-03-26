@@ -2,6 +2,7 @@ from typing import Any, Sequence, Callable
 from numbers import Number
 
 import numpy as np
+from numpy.typing import NDArray
 import torch
 from torch import Tensor
 
@@ -19,7 +20,7 @@ class ReplayBuffer(Loggable):
         capacity: int,
         shape: Sequence[Shape],
         dtype: torch.dtype | Sequence[torch.dtype] = torch.float32,
-        transforms: Transform | Sequence[Transform | None] | None = None,
+        transforms: Transform[Any, Any] | Sequence[Transform[Any, Any] | None] | None = None,
         device: Device = "cpu",
         **kwargs,
     ) -> None:
@@ -185,14 +186,14 @@ class PrioritizedReplayBuffer(ReplayBuffer):
 
     def __init__(
         self,
-        error_fn: Callable,
+        error_fn: Callable[[tuple[Tensor, ...]], NDArray[Any]],
         capacity: int,
         shape: Sequence[Shape],
         epsilon: float = 0.1,
         alpha: float = 0.6,
         beta_0: float = 0.4,
         dtype: torch.dtype | Sequence[torch.dtype] = torch.float32,
-        transforms: Transform | Sequence[Transform | None] | None = None,
+        transforms: Transform[Any, Any] | Sequence[Transform[Any, Any] | None] | None = None,
         beta_annealing_steps: int = 10000,
         device: Device = "cpu",
     ) -> None:
@@ -298,7 +299,7 @@ class PrioritizedReplayBuffer(ReplayBuffer):
             index = (index - 1) // 2
             self.sum_tree[index] += change
 
-    def _get(self, value: np.ndarray) -> np.ndarray:
+    def _get(self, value: NDArray[Any]) -> NDArray[Any]:
         if np.any(value > self.sum_tree[0]):
             raise ValueError("Value out of priority range")
         result = np.zeros(value.shape[0], dtype=int)

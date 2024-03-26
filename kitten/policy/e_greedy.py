@@ -1,19 +1,21 @@
-from typing import Callable
+from typing import Any, Callable
 
 from gymnasium.spaces import Space
 import numpy as np
 from torch import Tensor
+from numpy.typing import NDArray
 
 from kitten.policy import Policy
-
+from kitten.common.typing import Device
+from .interface import PolicyFn
 
 class EpsilonGreedyPolicy(Policy):
     def __init__(
         self,
-        fn: Callable[[Tensor | np.ndarray], Tensor],
-        action_space: Space,
+        fn: PolicyFn,
+        action_space: Space[Any],
         rng: np.random.Generator | None = None,
-        device: str = "cpu",
+        device: Device = "cpu",
     ):
         """Epsilon Greedy Exploration
 
@@ -30,7 +32,7 @@ class EpsilonGreedyPolicy(Policy):
             self._rng = rng
         self._action_space = action_space
 
-    def __call__(self, obs: Tensor | np.ndarray, epsilon: float = 0.1):
+    def __call__(self, obs: Tensor | NDArray[Any], epsilon: float = 0.1):
         x = super().__call__(obs)
         if self.train:
             if self._rng.random() <= epsilon:

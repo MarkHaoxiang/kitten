@@ -15,7 +15,7 @@ class Disagreement(IntrinsicReward):
 
     def __init__(
         self,
-        build_forward_head: Callable,
+        build_forward_head: Callable[[], nn.Module],
         feature_net: nn.Module | None = None,
         ensemble_number: int = 5,
         lr: float = 1e-3,

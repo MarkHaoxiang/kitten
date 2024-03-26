@@ -1,18 +1,23 @@
 from abc import ABC, abstractmethod
-from typing import Any
+from typing import Any, Generic
 
 import gymnasium as gym
 import numpy as np
+from numpy.typing import NDArray
 import torch
 
 from kitten.experience.memory import ReplayBuffer
 from kitten.logging import Loggable
 from kitten.policy import Policy
-from kitten.common.typing import Device
+from kitten.common.typing import (
+    Device,
+    ObsType,
+    ActType
+)
 
 
 class DataCollector(Loggable, ABC):
-    def __init__(self, policy: Policy, env: gym.Env, memory: ReplayBuffer | None):
+    def __init__(self, policy: Policy, env: gym.Env[Any, Any], memory: ReplayBuffer | None):
         """Constructs a data collector
 
         Args:
@@ -58,13 +63,13 @@ class DataCollector(Loggable, ABC):
         return {}
 
 
-class GymCollector(DataCollector):
+class GymCollector(Generic[ActType], DataCollector):
     """Gymnasium environment data collector"""
 
     def __init__(
         self,
         policy: Policy,
-        env: gym.Env,
+        env: gym.Env[NDArray[Any], ActType],
         memory: ReplayBuffer | None = None,
         device: Device = "cpu",
     ):
@@ -74,7 +79,7 @@ class GymCollector(DataCollector):
         self.frame = 0
         super().__init__(policy, env, memory)
 
-    def _policy(self, obs: np.ndarray, *args, **kwargs) -> np.ndarray:
+    def _policy(self, obs: NDArray[Any], *args, **kwargs) -> ActType:
         """Obtain action from observations
 
         Args:
@@ -86,7 +91,8 @@ class GymCollector(DataCollector):
         action = self.policy(obs, *args, **kwargs)
         if isinstance(action, torch.Tensor):
             action = action.cpu().detach().numpy()
-        if isinstance(self.env.action_space, gym.spaces.Box):
+        if isinstance(self.env.action_space, gym.spaces.Box)\
+            and isinstance(action, np.ndarray):
             action = action.clip(self.env.action_space.low, self.env.action_space.high)
         return action
 
@@ -97,7 +103,7 @@ class GymCollector(DataCollector):
         early_start: bool = False,
         *args,
         **kwargs,
-    ) -> list[Any]:
+    ) -> list[tuple[NDArray[Any], ActType, float, NDArray[Any], bool, bool]]:
         if not early_start:
             self.frame += n
         with torch.no_grad():
@@ -113,7 +119,7 @@ class GymCollector(DataCollector):
                 if not self.memory is None and append_memory:
                     self.memory.append(transition_tuple, update=not early_start)
                 # Add Truncation info back in
-                result.append((obs, action, reward, n_obs, terminated, truncated))
+                result.append((obs, action, float(reward), n_obs, terminated, truncated))
                 # Reset
                 if terminated or truncated:
                     n_obs, _ = self.env.reset()
@@ -124,7 +130,7 @@ class GymCollector(DataCollector):
             self.obs = obs
             return result
 
-    def early_start(self, n: int, dry_run: bool = False) -> list:
+    def early_start(self, n: int, dry_run: bool = False) -> list[tuple[NDArray[Any], ActType, float, NDArray[Any], bool, bool]]:
         """Runs the environment for a certain number of steps using a random policy.
 
         For example, to fill the replay buffer or initialise normalisations.
@@ -139,7 +145,7 @@ class GymCollector(DataCollector):
         # Set random policy
         policy = self.policy
         self.set_policy(
-            Policy(lambda _: self.env.action_space.sample(), transform_obs=False)
+            Policy(lambda _: self.env.action_space.sample())
         )
         # Run
         if dry_run:

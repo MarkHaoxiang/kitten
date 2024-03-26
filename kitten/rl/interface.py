@@ -24,7 +24,7 @@ class Algorithm(Loggable, ABC):
         """
         raise NotImplementedError
 
-    def policy_fn(self, s: Tensor | np.ndarray) -> Tensor:
+    def policy_fn(self, s: Tensor) -> Tensor:
         """A function that takes an observation and returns an action
 
         Args:

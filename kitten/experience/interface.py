@@ -17,7 +17,7 @@ class Transitions:
     # TODO: Write tests
     """
 
-    @jaxtyped(typechecker=typechecker)
+    @jaxtyped(typechecker=typechecker) # type: ignore[misc]
     def __init__(
         self,
         s_0: Float[Tensor, "..."],

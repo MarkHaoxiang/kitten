@@ -126,9 +126,7 @@ class QTOpt(Algorithm, HasCritic):
 
         self.loss_critic_value = 0
 
-    def policy_fn(self, s: Tensor | ndarray, critic: Critic | None = None) -> Tensor:
-        if isinstance(s, ndarray):
-            s = torch.tensor(s, device=self.device)
+    def policy_fn(self, s: Tensor, critic: Critic | None = None) -> Tensor:
         if critic is None:
             policy_critic = self._critic_1.net
         squeeze = False

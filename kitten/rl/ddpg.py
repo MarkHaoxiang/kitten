@@ -1,6 +1,3 @@
-from numpy.typing import NDArray
-from numpy import ndarray
-
 import torch
 import torch.nn as nn
 from torch import Tensor
@@ -152,9 +149,7 @@ class DeepDeterministicPolicyGradient(Algorithm, HasCritic):
             )
         return self._loss_critic_value, self._loss_actor_value
 
-    def policy_fn(self, s: Tensor | NDArray) -> Tensor:
-        if isinstance(s, ndarray):
-            s = torch.tensor(s, device=self.device, dtype=torch.float32)
+    def policy_fn(self, s: Tensor) -> Tensor:
         return self._actor.net.a(s)
 
     def get_log(self) -> Log:

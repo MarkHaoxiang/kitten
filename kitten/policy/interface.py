@@ -7,14 +7,13 @@ from torch import Tensor
 
 from kitten.common.typing import Device
 
-PolicyFn: TypeAlias = Callable[[Tensor | NDArray[Any]], Tensor]
+PolicyFn: TypeAlias = Callable[[Tensor], Tensor]
 
 
 class Policy:
     def __init__(
         self,
         fn: PolicyFn,
-        transform_obs: bool = True,
         device: Device ="cpu",
     ):
         """Policy API to pass into data collection pipeline
@@ -26,10 +25,9 @@ class Policy:
         """
         self.fn = fn
         self._evaluate = False
-        self._transform_obs = transform_obs
         self.device = device
 
-    def __call__(self, obs: Tensor | np.ndarray, *args, **kwargs) -> Any:
+    def __call__(self, obs: Tensor | NDArray[Any], *args, **kwargs) -> Any:
         """Actions from observations
 
         Args:
@@ -38,9 +36,8 @@ class Policy:
         Returns:
             Any: actions.
         """
-        if self._transform_obs:
+        if not isinstance(obs, torch.Tensor):
             obs = torch.tensor(obs, device=self.device, dtype=torch.float32)
-
         return self.fn(obs)
 
     def reset(self) -> None:

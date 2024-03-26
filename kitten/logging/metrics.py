@@ -1,7 +1,7 @@
 import copy
 import math
 from logging import WARNING
-from typing import Any, Callable
+from typing import Any, Callable, no_type_check
 
 import torch
 import numpy as np
@@ -10,7 +10,11 @@ from gymnasium.spaces import Box
 from gymnasium.wrappers.record_video import RecordVideo
 
 from kitten.policy import Policy
-from kitten.common.typing import Log
+from kitten.common.typing import (
+    Log,
+    ObsType,
+    ActType
+)
 from kitten.nn import HasValue
 
 from .logger import log
@@ -22,7 +26,7 @@ class KittenEvaluator(Loggable):
 
     def __init__(
         self,
-        env: Env,
+        env: Env[Any, Any],
         policy: Policy | None = None,
         video = False,
         saved_reset_states: int = 10,
@@ -98,7 +102,7 @@ class KittenEvaluator(Loggable):
 
         policy.enable_evaluation()
         reward, maximum_reward, episode_length = evaluate(
-            self.env, policy=policy, repeat=repeats
+            self.env, policy=policy_wrapper(policy, self.env), repeat=repeats
         )
         policy.disable_evaluation()
 
@@ -123,8 +127,23 @@ class KittenEvaluator(Loggable):
     def __setstate__(self, state):
         vars(self).update(state)
 
+# TODO: Messy. Type policy properly.
+@no_type_check
+def policy_wrapper(policy: Callable, env):
+    def pi(obs):
+        action = policy(obs)
+        if isinstance(action, torch.Tensor):
+            action = action.cpu().numpy()
+        if action.shape == () and isinstance(env.action_space, Box):
+            action = np.expand_dims(action, 0)
+        return action
+    return pi
 
-def evaluate(env: Env, policy: Callable, repeat: int = 1) -> tuple[float, float, float]:
+def evaluate(
+        env: Env[ObsType, ActType],
+        policy: Callable[[ObsType], ActType],
+        repeat: int = 1
+    ) -> tuple[float, float, float]:
     """Evaluates an episode
 
     Args:
@@ -145,10 +164,6 @@ def evaluate(env: Env, policy: Callable, repeat: int = 1) -> tuple[float, float,
             while not terminated and not truncated:
                 episode_length += 1
                 action = policy(obs)
-                if isinstance(action, torch.Tensor):
-                    action = action.cpu().numpy()
-                if action.shape == () and isinstance(env.action_space, Box):
-                    action = np.expand_dims(action, 0)
                 obs, reward, terminated, truncated, _ = env.step(action)
                 total_reward += float(reward)
                 episode_reward += float(reward)

@@ -1,4 +1,4 @@
-from typing import Any, TypeAlias
+from typing import Any, TypeAlias, TypeVar
 
 import torch
 import torch.nn as nn
@@ -11,6 +11,8 @@ def shape_annotation(shape: Shape) -> str:
     return " ".join(map(str, shape))
 
 Device: TypeAlias = str | torch.device
+ObsType = TypeVar("ObsType")
+ActType = TypeVar("ActType")
 
 # Logging
 Log: TypeAlias = dict[str, Any]

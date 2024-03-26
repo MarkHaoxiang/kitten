@@ -7,7 +7,6 @@ import numpy as np
 import torch
 from tqdm import tqdm
 from omegaconf import DictConfig
-import gymnasium as gym
 
 # Kitten
 from kitten.experience.util import (

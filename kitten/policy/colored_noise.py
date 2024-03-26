@@ -1,5 +1,6 @@
 from typing import Any, Callable
 
+from numpy.typing import NDArray
 import gymnasium as gym
 from gymnasium.spaces import Space
 import pink  # type: ignore[import-untyped]
@@ -9,15 +10,16 @@ from torch import Tensor
 
 from kitten.policy import Policy
 from kitten.common import Generator
+from .interface import PolicyFn
 
 
 class ColoredNoisePolicy(Policy):
     def __init__(
         self,
-        fn: Callable[[Tensor | np.ndarray], Tensor],
-        action_space: Space,
+        fn: PolicyFn,
+        action_space: Space[Any],
         episode_length: int | None = None,
-        scale: float | np.ndarray | torch.Tensor = 1.0,
+        scale: float | NDArray[Any] | torch.Tensor = 1.0,
         beta: float = 1,
         rng: Generator | np.random.Generator | None = None,
         device: str = "cpu",
@@ -53,7 +55,7 @@ class ColoredNoisePolicy(Policy):
         self._device = device
         self.scale = torch.tensor(scale, device=self._device)
 
-    def __call__(self, obs: Tensor | np.ndarray) -> Any:
+    def __call__(self, obs: Tensor | NDArray[Any]) -> Any:
         action = super().__call__(obs)
         if self.train:
             noise = self._noise.sample(1)

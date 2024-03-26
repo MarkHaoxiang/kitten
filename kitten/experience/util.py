@@ -1,19 +1,23 @@
-from typing import Callable
+from typing import Any, Callable
 
 import torch
+from torch import Tensor
 import numpy as np
+from numpy.typing import NDArray
 from gymnasium import Env
 from gymnasium.spaces.discrete import Discrete
-
-from .memory import ReplayBuffer, PrioritizedReplayBuffer
-from .collector import DataCollector, GymCollector
+from jaxtyping import Float32
 
 from kitten.dataflow.normalisation import RunningMeanVariance
 from kitten.experience import Transitions
-from kitten.common.typing import Device
+from kitten.common.typing import (
+    Device,
+    ActType
+)
+from .memory import ReplayBuffer, PrioritizedReplayBuffer
+from .collector import DataCollector, GymCollector
 
-
-def build_transition_from_list(updates: list, device: Device = "cpu") -> Transitions:
+def build_transition_from_list(updates: list[tuple[Any, Any, Any, Any, Any]], device: Device = "cpu") -> Transitions:
     """Utility to wrap collector results into a transition"""
     return build_transition_from_update(
         obs=np.array([x[0] for x in updates]),
@@ -50,11 +54,11 @@ def build_transition_from_update(
 
 
 def build_replay_buffer(
-    env: Env,
+    env: Env[NDArray[Any], ActType],
     capacity: int = 10000,
     type="experience_replay",
     normalise_observation: bool = False,
-    error_fn: Callable | None = None,
+    error_fn: Callable[[tuple[Tensor, ...]], NDArray[Any]] | None = None,
     device: Device = "cpu",
     **kwargs,
 ) -> ReplayBuffer:
@@ -70,7 +74,7 @@ def build_replay_buffer(
     """
     discrete = isinstance(env.action_space, Discrete)
     if normalise_observation:
-        rmv = RunningMeanVariance()
+        rmv = RunningMeanVariance[Float32[torch.Tensor, "..."]]()
         _normalise_observation = [rmv, None, None, rmv, None]
     else:
         _normalise_observation = [None, None, None, None, None]
@@ -130,7 +134,7 @@ def build_replay_buffer(
 
 def build_collector(
     policy,
-    env: Env,
+    env: Env[NDArray[Any], ActType],
     memory: ReplayBuffer | None = None,
     device: Device = "cpu",
 ) -> DataCollector:

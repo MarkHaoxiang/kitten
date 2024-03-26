@@ -1,4 +1,7 @@
+from typing import Any
+
 from numpy import ndarray
+from numpy.typing import NDArray
 import torch
 import torch.nn as nn
 from torch import Tensor
@@ -6,7 +9,9 @@ from torch import Tensor
 from kitten.experience import AuxiliaryMemoryData, Transitions
 from kitten.rl import Algorithm
 from kitten.nn import HasCritic, AddTargetNetwork, ClassicalDiscreteCritic
-from kitten.common.typing import Log
+from kitten.common.typing import (
+    Log
+)
 
 class DQN(Algorithm, HasCritic):
     """Implements DQN
@@ -68,9 +73,7 @@ class DQN(Algorithm, HasCritic):
 
         return self._loss_critic_value
 
-    def policy_fn(self, s: Tensor | ndarray) -> Tensor:
-        if isinstance(s, ndarray):
-            s = torch.tensor(s, device=self.device, dtype=torch.float32)
+    def policy_fn(self, s: Tensor) -> Tensor:
         return torch.argmax(self.critic.q(s=s, a=None), dim=-1)
 
     def get_log(self) -> Log:

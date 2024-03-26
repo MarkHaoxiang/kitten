@@ -1,6 +1,8 @@
 from abc import ABC, abstractmethod
-from typing import Callable
+from typing import Any
 
+import numpy as np
+from numpy.typing import NDArray
 import gymnasium as gym
 from gymnasium import Env
 import torch
@@ -74,14 +76,14 @@ class Actor(ABC, nn.Module):
         """
         raise NotImplementedError
 
-    def to_policy_fn(self) -> Callable:
+    def to_policy_fn(self) -> PolicyFn:
         return lambda s: self(s)
 
 
 class ClassicalBoxCritic(Critic):
     """Critic for continuous low-dimensionality gym environments"""
 
-    def __init__(self, env: Env, net: nn.Module | None = None, features: int = 128):
+    def __init__(self, env: Env[NDArray[Any], NDArray[Any]], net: nn.Module | None = None, features: int = 128):
         super().__init__()
         assert isinstance(env.action_space, gym.spaces.Box)
         assert isinstance(env.observation_space, gym.spaces.Box)
@@ -111,7 +113,7 @@ class ClassicalBoxCritic(Critic):
 class ClassicalDiscreteCritic(Critic):
     """Critic for discrete low-dimensionality gym environments"""
 
-    def __init__(self, env: Env, net: nn.Module | None = None, features: int = 128):
+    def __init__(self, env: Env[NDArray[Any], np.int64], net: nn.Module | None = None, features: int = 128):
         super().__init__()
         assert isinstance(env.action_space, gym.spaces.Discrete)
         assert isinstance(env.observation_space, gym.spaces.Box)
@@ -142,7 +144,7 @@ class ClassicalDiscreteCritic(Critic):
 class ClassicalBoxActor(Actor):
     """Actor for continuous low-dimensionality gym environments"""
 
-    def __init__(self, env: Env, net: nn.Module | None = None, features: int = 128):
+    def __init__(self, env: Env[NDArray[Any], NDArray[Any]], net: nn.Module | None = None, features: int = 128):
         super().__init__()
         assert isinstance(env.action_space, gym.spaces.Box)
         assert isinstance(env.observation_space, gym.spaces.Box)
