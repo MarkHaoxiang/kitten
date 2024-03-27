@@ -15,12 +15,10 @@ from kitten.experience.util import (
     build_transition_from_update,
     build_transition_from_list,
 )
-from kitten.experience.memory import ReplayBuffer
 from kitten.experience.collector import GymCollector
 from kitten.policy import ColoredNoisePolicy, Policy
 from kitten.common import *
 from kitten.common.util import *
-from kitten.dataflow.normalisation import RunningMeanVariance
 
 # Cats
 from .rl import QTOptCats, ResetValueOverloadAux
@@ -159,9 +157,7 @@ class CatsExperiment:
 
     def V(self, s) -> torch.Tensor:
         """Calculates the value function for states s"""
-        target_action = self.algorithm.policy_fn(s)
-        V = self.algorithm.critic.target.q(s, target_action)
-        return V
+        return self.algorithm.value.v(s)
 
     def reset_env(self):
         """Manual reset of the environment"""
@@ -272,8 +268,6 @@ class CatsExperiment:
             obs, action, reward, n_obs, terminated, truncated = self.collector.collect(
                 n=1
             )[-1]
-            # TODO: If resets are controllable, n_obs should be stored in RB for Policy, but not intrinsic
-            # Or should it be stored for intrinsic?
             self._update_memory(obs, action, reward, n_obs, terminated, truncated)
             self.normalise_observation.add_tensor_batch(
                 torch.tensor(n_obs, device=self.device).unsqueeze(0)
@@ -289,55 +283,64 @@ class CatsExperiment:
                 self._reset()
 
             # Updates
-            data, aux = self.memory.rb.sample(self.cfg.train.minibatch_size)
-            batch = Transitions(*data[:5])
-            batch_death = batch.d
-            batch_truncated = data[-1]
+            batch, aux = self.memory.sample(self.cfg.train.minibatch_size)
 
             # Death is not the end - disabled termination
             if self.death_is_not_the_end:
-                batch = Transitions(
-                    batch.s_0,
-                    batch.a,
-                    batch.r,
-                    batch.s_1,
-                    torch.zeros(batch.d.shape, device=self.device).bool(),
-                )
-
+                batch.d = torch.zeros_like(batch.d, device=self.device).bool()
             # Intrinsic Reward Calculation
             r_t, r_e, r_i = self.intrinsic.reward(batch)
+            batch.r = r_i
             self.intrinsic.update(batch, aux, step=step)
 
             # RL Update
-            # Update batch
-            s_1 = batch.s_1
-            # Question: Should policy learn the value of resetting?
-            if self.enable_reset_sampling:
-                indices = torch.randint(
-                    0, len(self.reset_distribution), (len(s_1),), device=self.device
-                )
-                reset_sample = self.reset_distribution[indices]
-                if self.reset_as_an_action:
-                    s_1 = torch.where(
-                        input=reset_sample,
-                        other=s_1,
-                        condition=batch_truncated.unsqueeze(-1),
-                    )
-                if self.death_is_not_the_end:
-                    s_1 = torch.where(
-                        input=reset_sample,
-                        other=s_1,
-                        condition=batch_death.unsqueeze(-1),
-                    )
-
-            batch = Transitions(batch.s_0, batch.a, r_i, s_1, batch.d)
             aux = ResetValueOverloadAux(
                 weights=aux.weights,
                 random=aux.random,
                 indices=aux.indices,
-                v_1=0,
+                v_1=torch.ones_like(batch.r, device=self.device),
+                reset_value_mixin_select= torch.zeros_like(batch.t, device=self.device).bool(),
                 reset_value_mixin_enable=False,
             )
+            # Update batch
+            s_1 = batch.s_1
+            # Question: Should policy learn the value of resetting?
+            if self.enable_reset_sampling:
+                # indices = torch.randint(
+                #     0, len(self.reset_distribution), (len(s_1),), device=self.device
+                # )
+                # reset_sample = self.reset_distribution[indices]
+
+                # if self.reset_as_an_action:
+                #     s_1 = torch.where(
+                #         input=reset_sample,
+                #         other=s_1,
+                #         condition=batch.t.unsqueeze(-1),
+                #     )
+                # if self.death_is_not_the_end:
+                #     s_1 = torch.where(
+                #         input=reset_sample,
+                #         other=s_1,
+                #         condition=batch_death.unsqueeze(-1),
+                #     )
+
+                if self.reset_as_an_action:
+                    reset_sample = self.reset_distribution
+                    critics = random.sample(self.algorithm.critics, 2)
+                    a_1 = self.algorithm.policy_fn(reset_sample, critic=critics[0].target)
+                    a_2 = self.algorithm.policy_fn(reset_sample, critic=critics[1].target)
+                    target_max_1 = critics[0].target.q(reset_sample, a_1).squeeze()
+                    target_max_2 = critics[1].target.q(reset_sample, a_2).squeeze()
+                    reset_value = torch.minimum(target_max_1, target_max_2).mean().item()
+                    aux.v_1 = aux.v_1 * reset_value
+                    select = batch.t
+                    if self.death_is_not_the_end:
+                        select = torch.logical_or(batch.t, batch.d)
+                    aux.reset_value_mixin_select = select
+                    aux.reset_value_mixin_enable = True
+
+
+            batch.s_1 = s_1
             self.algorithm.update(batch, aux, step=step)
 
             # Log

@@ -7,19 +7,20 @@ import torch
 from torch import Tensor
 import torch.nn as nn
 import gymnasium as gym
-from jaxtyping import Float
+from jaxtyping import Float, Bool
 
 from kitten.experience import Transitions
 from kitten.rl import Algorithm
 from kitten.rl.qt_opt import cross_entropy_method
 from kitten.experience import AuxiliaryMemoryData
-from kitten.nn import Critic, AddTargetNetwork
+from kitten.nn import Critic, AddTargetNetwork, HasCritic, HasValue, CriticPolicyPair
 
 
 @dataclass
 class ResetValueMixin:
-    v_1: Float[Tensor, "..."]  # Value of taking a reset
-    reset_value_mixin_enable: bool = False  # Enable
+    v_1: Float[Tensor, "..."]                       # Value of taking a reset
+    reset_value_mixin_select: Bool[Tensor, "..."]   # Which values to override
+    reset_value_mixin_enable: bool = False          # Enable
 
 
 # For now, uses Mixins.
@@ -31,7 +32,7 @@ class ResetValueOverloadAux(ResetValueMixin, AuxiliaryMemoryData):
     pass
 
 
-class QTOptCats(Algorithm):
+class QTOptCats(Algorithm, HasCritic, HasValue):
     """QtOpt with Ensembles and other modifications"""
 
     def __init__(
@@ -91,6 +92,10 @@ class QTOptCats(Algorithm):
     def critic(self):
         return self.critics[self._chosen_critic].net
 
+    @property
+    def value(self):
+        return CriticPolicyPair(self.critic, self.policy_fn)
+
     def mu_var(self, s: Tensor, a: Tensor):
         """Calculates expectation and epistemic uncertainty of a state-action pair"""
         q = np.array([critic.net.q(s, a) for critic in self.critics])
@@ -134,7 +139,11 @@ class QTOptCats(Algorithm):
             target_max_2 = sampled_critics[1].target.q(batch.s_1, a_2).squeeze()
             y_1 = torch.minimum(target_max_1, target_max_2)
             if aux.reset_value_mixin_enable:
-                y_1 = torch.where(batch._t, aux.v_1, y_1)
+                y_1 = torch.where(
+                    input=aux.v_1,
+                    other=y_1,
+                    condition=aux.reset_value_mixin_select
+                )
             y = batch.r + (~batch.d) * y_1 * self._gamma
 
         losses = []
