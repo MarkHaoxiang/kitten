@@ -106,7 +106,7 @@ class Transitions:
 
     @property
     def t(self) -> Bool[Tensor, "{self._batch_annotation}"]:
-        return self._d
+        return self._t
 
     def __iter__(self) -> Iterator[Tensor]:
         return iter((self.s_0, self.a, self.r, self.s_1, self.t))
