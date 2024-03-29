@@ -96,10 +96,13 @@ class QTOptCats(Algorithm, HasCritic, HasValue):
     def value(self):
         return CriticPolicyPair(self.critic, self.policy_fn)
 
-    def mu_var(self, s: Tensor, a: Tensor):
+    def mu_var(self, s: Tensor, a: Tensor | None = None):
         """Calculates expectation and epistemic uncertainty of a state-action pair"""
-        q = np.array([critic.net.q(s, a) for critic in self.critics])
-        mu, var = q.mean(), q.var()
+        with torch.no_grad():
+            if a is None:
+                a = self.policy_fn(s)
+            q = np.array([critic.net.q(s, a).cpu() for critic in self.critics])
+        mu, var = q.mean(axis=0), q.var(axis=0)
         return mu, var
 
     def policy_fn(self, s: Tensor | np.ndarray, critic: Critic | None = None) -> Tensor:

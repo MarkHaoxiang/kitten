@@ -88,7 +88,7 @@ class CatsExperiment:
 
     def _teleport_initialisation(self):
         self.teleport_targets_observations = []
-        self.teleport_targets_saves = []
+        self.teleport_targets_saves: list[Env] = []
         self.current_index = 0
         self.teleport_index = 0
 
@@ -199,25 +199,33 @@ class CatsExperiment:
         self.teleport_targets_saves.append(self.state)
         self.current_index += 1
 
-    def _teleport_selection(self, V: torch.Tensor):
+    def _teleport_selection(self) -> int:
         """Given the values of teleport targets, select a goal"""
-        if self.teleport_strategy == "e_greedy":
-            teleport_index = torch.argmax(V).item()
-            if self.np_rng.random() <= self.teleport_strategy_parameters:
-                teleport_index = 0
-        elif self.teleport_strategy == "thompson":
-            V = V**self.teleport_strategy_parameters
-            p = V / V.sum()
-            pt = self.np_rng.random()
-            pc = 0
-            for i, pi in enumerate(p):
-                pc += pi
-                if pc >= pt or i == len(p) - 1:
-                    teleport_index = i
-                    break
-        else:
-            raise ValueError(f"Unknown teleport strategy {self.teleport_strategy}")
-
+        # Calculate Value Estimates Within Buffer
+        s = torch.tensor(
+            self.teleport_targets_observations[: self.current_index],
+            dtype=torch.float32,
+            device=self.device,
+        )
+        V = self.V(s)
+        with torch.no_grad():
+            # Select Teleport Index
+            if self.teleport_strategy == "e_greedy":
+                teleport_index = torch.argmax(V).item()
+                if self.np_rng.random() <= self.teleport_strategy_parameters:
+                    teleport_index = 0
+            elif self.teleport_strategy == "thompson":
+                V = V**self.teleport_strategy_parameters
+                p = V / V.sum()
+                pt = self.np_rng.random()
+                pc = 0
+                for i, pi in enumerate(p):
+                    pc += pi
+                    if pc >= pt or i == len(p) - 1:
+                        teleport_index = i
+                        break
+            else:
+                raise ValueError(f"Unknown teleport strategy {self.teleport_strategy}")
         return teleport_index
 
     def _reset(self):
@@ -225,16 +233,10 @@ class CatsExperiment:
             self.reset_env()
         else:
             # Call Teleportation
-            V = self.V(
-                torch.tensor(
-                    self.teleport_targets_observations[: self.current_index],
-                    dtype=torch.float32,
-                    device=self.device,
-                )
-            )
-            with torch.no_grad():
-                self.teleport_index = self._teleport_selection(V)
+            self.teleport_index = self._teleport_selection()
             # TODO: Selecting Resets
+
+            log_past_index = self.current_index
 
             self.current_index = self.teleport_index
             self.collector.env = self.teleport_targets_saves[self.teleport_index]
@@ -249,9 +251,10 @@ class CatsExperiment:
                 : self.teleport_index + 1
             ]
             self.state = copy.deepcopy(self.collector.env)
+            self.collector.env.reset_current_step()
 
             # Logging
-            self.log["teleport_targets_index"].append(self.teleport_index)
+            self.log["teleport_targets_index"].append(( log_past_index, self.teleport_index))
             self.log["teleport_targets_observations"].append(self.collector.obs)
 
     # ==============================
@@ -274,9 +277,9 @@ class CatsExperiment:
             )
 
             # Teleport
-            if not self.teleport_strategy is None:
+            if self.teleport_strategy is not None:
                 self._teleport_update(obs)
-            if truncated:
+            elif truncated:
                 self.current_index = 0
 
             if terminated or truncated and self.current_index > 0:
@@ -325,7 +328,7 @@ class CatsExperiment:
                 #     )
 
                 if self.reset_as_an_action:
-                    reset_sample = self.reset_distribution
+                    reset_sample = self.reset_distribution.to(torch.float32)
                     critics = random.sample(self.algorithm.critics, 2)
                     a_1 = self.algorithm.policy_fn(reset_sample, critic=critics[0].target)
                     a_2 = self.algorithm.policy_fn(reset_sample, critic=critics[1].target)
