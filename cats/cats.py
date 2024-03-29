@@ -1,6 +1,6 @@
 # Std
 import copy
-from typing import Any, Optional, Tuple
+from typing import Any
 
 # Training
 import numpy as np
@@ -23,6 +23,7 @@ from kitten.common.util import *
 # Cats
 from .rl import QTOptCats, ResetValueOverloadAux
 from .env import *
+from .teleport import *
 
 
 class CatsExperiment:
@@ -32,12 +33,12 @@ class CatsExperiment:
         self,
         cfg: DictConfig,
         collection_steps: int,
-        max_episode_steps: Optional[int] = None,
+        max_episode_steps: int | None = None,
         death_is_not_the_end: bool = True,
         fixed_reset: bool = True,
         enable_policy_sampling: bool = True,
-        reset_as_an_action: Optional[int] = None,
-        teleport_strategy: Optional[Tuple[str, Any]] = None,
+        reset_as_an_action: int | None = None,
+        teleport_strategy: tuple[str, Any] | None = None,
         environment_action_noise: float = 0,
         enable_reset_sampling: bool = True,
         seed: int = 0,
@@ -82,7 +83,24 @@ class CatsExperiment:
             "newly_collected_intrinsic_reward": 0,
             "total_collected_extrinsic_reward": 0,
         }
-        if not self.teleport_strategy is None:
+        if self.teleport_strategy is not None:
+            match self.teleport_strategy:
+                case "e_greedy":
+                    self.teleport_strategy = EpsilonGreedyTeleport(
+                        self.algorithm, self.rng, self.teleport_strategy_parameters
+                    )
+                case "thompson":
+                    self.teleport_strategy = ThompsonTeleport(
+                        self.algorithm, self.rng, self.teleport_strategy_parameters
+                    )
+                case "ucb":
+                    self.teleport_strategy = UCBTeleport(
+                        self.algorithm, self.teleport_strategy_parameters
+                    )
+                case _:
+                    raise ValueError(
+                        f"Unknown Teleport Strategy {self.teleport_strategy}"
+                    )
             self.log["teleport_targets_index"] = []
             self.log["teleport_targets_observations"] = []
 
@@ -199,41 +217,15 @@ class CatsExperiment:
         self.teleport_targets_saves.append(self.state)
         self.current_index += 1
 
-    def _teleport_selection(self) -> int:
-        """Given the values of teleport targets, select a goal"""
-        # Calculate Value Estimates Within Buffer
-        s = torch.tensor(
-            self.teleport_targets_observations[: self.current_index],
-            dtype=torch.float32,
-            device=self.device,
-        )
-        V = self.V(s)
-        with torch.no_grad():
-            # Select Teleport Index
-            if self.teleport_strategy == "e_greedy":
-                teleport_index = torch.argmax(V).item()
-                if self.np_rng.random() <= self.teleport_strategy_parameters:
-                    teleport_index = 0
-            elif self.teleport_strategy == "thompson":
-                V = V**self.teleport_strategy_parameters
-                p = V / V.sum()
-                pt = self.np_rng.random()
-                pc = 0
-                for i, pi in enumerate(p):
-                    pc += pi
-                    if pc >= pt or i == len(p) - 1:
-                        teleport_index = i
-                        break
-            else:
-                raise ValueError(f"Unknown teleport strategy {self.teleport_strategy}")
-        return teleport_index
-
     def _reset(self):
-        if self.teleport_strategy is None:
-            self.reset_env()
-        else:
+        if isinstance(self.teleport_strategy, TeleportStrategy):
             # Call Teleportation
-            self.teleport_index = self._teleport_selection()
+            s = torch.tensor(
+                self.teleport_targets_observations[: self.current_index],
+                dtype=torch.float32,
+                device=self.device,
+            )
+            self.teleport_index = self.teleport_strategy.select(s)
             # TODO: Selecting Resets
 
             log_past_index = self.current_index
@@ -258,6 +250,8 @@ class CatsExperiment:
                 (log_past_index, self.teleport_index)
             )
             self.log["teleport_targets_observations"].append(self.collector.obs)
+        else:
+            self.reset_env()
 
     # ==============================
 
