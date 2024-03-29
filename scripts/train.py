@@ -42,7 +42,8 @@ def train(cfg: DictConfig) -> None:
 
     # Data pipeline
     memory, rmv = build_replay_buffer(env, device=DEVICE, **cfg.memory)
-    if rmv is not None: rmv.append(policy.fn)
+    if rmv is not None:
+        rmv.append(policy.fn)
     collector = build_collector(policy, env, memory, device=DEVICE)
 
     # Logging and Evaluation

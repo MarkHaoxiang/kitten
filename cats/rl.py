@@ -18,9 +18,9 @@ from kitten.nn import Critic, AddTargetNetwork, HasCritic, HasValue, CriticPolic
 
 @dataclass
 class ResetValueMixin:
-    v_1: Float[Tensor, "..."]                       # Value of taking a reset
-    reset_value_mixin_select: Bool[Tensor, "..."]   # Which values to override
-    reset_value_mixin_enable: bool = False          # Enable
+    v_1: Float[Tensor, "..."]  # Value of taking a reset
+    reset_value_mixin_select: Bool[Tensor, "..."]  # Which values to override
+    reset_value_mixin_enable: bool = False  # Enable
 
 
 # For now, uses Mixins.
@@ -143,9 +143,7 @@ class QTOptCats(Algorithm, HasCritic, HasValue):
             y_1 = torch.minimum(target_max_1, target_max_2)
             if aux.reset_value_mixin_enable:
                 y_1 = torch.where(
-                    input=aux.v_1,
-                    other=y_1,
-                    condition=aux.reset_value_mixin_select
+                    input=aux.v_1, other=y_1, condition=aux.reset_value_mixin_select
                 )
             y = batch.r + (~batch.d) * y_1 * self._gamma
 

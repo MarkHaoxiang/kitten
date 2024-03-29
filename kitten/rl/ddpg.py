@@ -8,6 +8,7 @@ from kitten.nn import (
     Actor,
     Critic,
     Value,
+    HasActor,
     HasCritic,
     HasValue,
     CriticPolicyPair,
@@ -16,7 +17,9 @@ from kitten.rl import Algorithm
 from kitten.common.typing import Log, ModuleNamePairs, Device
 
 
-class DeepDeterministicPolicyGradient(Algorithm, HasCritic, HasValue):
+class DeepDeterministicPolicyGradient(
+    Algorithm[AuxiliaryMemoryData], HasActor, HasCritic, HasValue
+):
     """Implements DDPG
 
     Lillicrap et al. Continuous Control with Deep Reinforcement Learning. 2015.
@@ -62,6 +65,10 @@ class DeepDeterministicPolicyGradient(Algorithm, HasCritic, HasValue):
         self._loss_actor_value: float = 0.0
 
     @property
+    def actor(self) -> Actor:
+        return self._actor.net
+
+    @property
     def critic(self) -> Critic:
         return self._critic.net
 
@@ -75,7 +82,9 @@ class DeepDeterministicPolicyGradient(Algorithm, HasCritic, HasValue):
         Args:
             s_0 (Tensor): Observation before action
             a (Tensor): Agent action
-            r (Tensor): Reward (s_0, a) -> (s_1)
+            r (Tensor): Reward (s_0, a) -> (s_1
+        # TRY NOT TO MODIFY: record rewards for plotting purposes
+        writer.add_scalar("charts/learning_rate", optimizer.param_groups[0]["lr"],)
             s_1 (Tensor): Observation after action
             d (Tensor): Dones
             weights (Tensor): Loss importance weighting for off-policy
@@ -100,7 +109,7 @@ class DeepDeterministicPolicyGradient(Algorithm, HasCritic, HasValue):
 
     def td_error(self, s_0: Tensor, a: Tensor, r: Tensor, s_1: Tensor, d: Tensor):
         """Returns TD difference for a transition"""
-        x = self._critic.q(s_0, a).squeeze()
+        x = self._critic.net.q(s_0, a).squeeze()
         with torch.no_grad():
             target_max = (~d) * self._critic.target.q(
                 s_1, self._actor.target.a(s_1)

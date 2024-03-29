@@ -254,7 +254,9 @@ class CatsExperiment:
             self.collector.env.reset_current_step()
 
             # Logging
-            self.log["teleport_targets_index"].append(( log_past_index, self.teleport_index))
+            self.log["teleport_targets_index"].append(
+                (log_past_index, self.teleport_index)
+            )
             self.log["teleport_targets_observations"].append(self.collector.obs)
 
     # ==============================
@@ -302,7 +304,9 @@ class CatsExperiment:
                 random=aux.random,
                 indices=aux.indices,
                 v_1=torch.ones_like(batch.r, device=self.device),
-                reset_value_mixin_select= torch.zeros_like(batch.t, device=self.device).bool(),
+                reset_value_mixin_select=torch.zeros_like(
+                    batch.t, device=self.device
+                ).bool(),
                 reset_value_mixin_enable=False,
             )
             # Update batch
@@ -330,18 +334,23 @@ class CatsExperiment:
                 if self.reset_as_an_action:
                     reset_sample = self.reset_distribution.to(torch.float32)
                     critics = random.sample(self.algorithm.critics, 2)
-                    a_1 = self.algorithm.policy_fn(reset_sample, critic=critics[0].target)
-                    a_2 = self.algorithm.policy_fn(reset_sample, critic=critics[1].target)
+                    a_1 = self.algorithm.policy_fn(
+                        reset_sample, critic=critics[0].target
+                    )
+                    a_2 = self.algorithm.policy_fn(
+                        reset_sample, critic=critics[1].target
+                    )
                     target_max_1 = critics[0].target.q(reset_sample, a_1).squeeze()
                     target_max_2 = critics[1].target.q(reset_sample, a_2).squeeze()
-                    reset_value = torch.minimum(target_max_1, target_max_2).mean().item()
+                    reset_value = (
+                        torch.minimum(target_max_1, target_max_2).mean().item()
+                    )
                     aux.v_1 = aux.v_1 * reset_value
                     select = batch.t
                     if self.death_is_not_the_end:
                         select = torch.logical_or(batch.t, batch.d)
                     aux.reset_value_mixin_select = select
                     aux.reset_value_mixin_enable = True
-
 
             batch.s_1 = s_1
             self.algorithm.update(batch, aux, step=step)

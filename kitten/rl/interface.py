@@ -1,18 +1,21 @@
 from abc import ABC, abstractmethod
-from typing import Any
+from typing import Any, Generic, TypeVar
 
 from torch import Tensor
 
-from kitten.experience import AuxiliaryMemoryData, Transitions
+from kitten.experience import AuxiliaryData, Transitions
 from kitten.logging import Loggable
 
 
 # This file contains a set of interfaces commonly used in RL
-class Algorithm(Loggable, ABC):
+Aux = TypeVar("Aux", bound=AuxiliaryData)
+
+
+class Algorithm(Loggable, Generic[Aux], ABC):
     """Interface for RL Policy Improvement Algorithms"""
 
     @abstractmethod
-    def update(self, batch: Transitions, aux: AuxiliaryMemoryData, step: int) -> Any:
+    def update(self, batch: Transitions, aux: Aux, step: int) -> Any:
         """Policy improvement update
 
         Args:

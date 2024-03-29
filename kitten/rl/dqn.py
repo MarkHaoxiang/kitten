@@ -12,7 +12,7 @@ from kitten.nn import HasCritic, AddTargetNetwork, ClassicalDiscreteCritic
 from kitten.common.typing import Log
 
 
-class DQN(Algorithm, HasCritic):
+class DQN(Algorithm[AuxiliaryMemoryData], HasCritic):
     """Implements DQN
 
     V Mnih, et al. Playing Atari with Deep Reinforcement Learning. 2013.

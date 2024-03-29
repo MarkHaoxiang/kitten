@@ -12,6 +12,37 @@ import torch.nn as nn
 from kitten.policy.interface import PolicyFn
 
 
+class Actor(ABC, nn.Module):
+    """Analogous to Pi Network"""
+
+    @abstractmethod
+    def a(self, s: Tensor) -> Tensor:
+        """Calculates the desired action
+
+        Args:
+            s (Tensor): State.
+
+        Returns:
+            Tensor: Action.
+        """
+        raise NotImplementedError
+
+    def to_policy_fn(self) -> PolicyFn:
+        return lambda s: self(s)
+
+
+class StochasticActor(Actor, nn.Module):
+    def log_prob(self, s: Tensor, a: Tensor) -> Tensor:
+        raise NotImplementedError
+
+
+class HasActor(ABC):
+    @property
+    @abstractmethod
+    def actor(self) -> Actor:
+        raise NotImplementedError
+
+
 class Value(ABC, nn.Module):
     """Analogous to V networks"""
 
@@ -66,25 +97,6 @@ class CriticPolicyPair(Critic, Value):
 
     def v(self, s: Tensor) -> Tensor:
         return self._critic.q(s, self._policy_fn(s))
-
-
-class Actor(ABC, nn.Module):
-    """Analogous to Pi Network"""
-
-    @abstractmethod
-    def a(self, s: Tensor) -> Tensor:
-        """Calculates the desired action
-
-        Args:
-            s (Tensor): State.
-
-        Returns:
-            Tensor: Action.
-        """
-        raise NotImplementedError
-
-    def to_policy_fn(self) -> PolicyFn:
-        return lambda s: self(s)
 
 
 class ClassicalBoxCritic(Critic):

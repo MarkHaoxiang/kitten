@@ -87,31 +87,41 @@ class Transitions:
     @property
     def s_0(self) -> Float[Tensor, "{self._batch_annotation} {self._obs_annotation}"]:
         return self._s_0
-    @jaxtyped(typechecker=typechecker) # type: ignore[misc]
+
+    @jaxtyped(typechecker=typechecker)  # type: ignore[misc]
     @s_0.setter
-    def s_0(self, value: Float[Tensor, "{self._batch_annotation} {self._obs_annotation}"]):
+    def s_0(
+        self, value: Float[Tensor, "{self._batch_annotation} {self._obs_annotation}"]
+    ):
         self._s_0 = value
 
     @property
     def a(self) -> Float[Tensor, "{self._batch_annotation} {self._action_annotation}"]:
         return self._a
-    @jaxtyped(typechecker=typechecker) # type: ignore[misc]
+
+    @jaxtyped(typechecker=typechecker)  # type: ignore[misc]
     @a.setter
-    def a(self, value: Float[Tensor, "{self._batch_annotation} {self._action_annotation}"]):
+    def a(
+        self, value: Float[Tensor, "{self._batch_annotation} {self._action_annotation}"]
+    ):
         self._a = value
 
     @property
     def s_1(self) -> Float[Tensor, "{self._batch_annotation} {self._obs_annotation}"]:
         return self._s_1
-    @jaxtyped(typechecker=typechecker) # type: ignore[misc]
+
+    @jaxtyped(typechecker=typechecker)  # type: ignore[misc]
     @s_1.setter
-    def s_1(self, value: Float[Tensor, "{self._batch_annotation} {self._obs_annotation}"]):
+    def s_1(
+        self, value: Float[Tensor, "{self._batch_annotation} {self._obs_annotation}"]
+    ):
         self._s_1 = value
 
     @property
     def r(self) -> Float[Tensor, "{self._batch_annotation}"]:
         return self._r
-    @jaxtyped(typechecker=typechecker) # type: ignore[misc]
+
+    @jaxtyped(typechecker=typechecker)  # type: ignore[misc]
     @r.setter
     def r(self, value: Float[Tensor, "{self._batch_annotation}"]):
         self._r = value
@@ -119,7 +129,8 @@ class Transitions:
     @property
     def d(self) -> Bool[Tensor, "{self._batch_annotation}"]:
         return self._d
-    @jaxtyped(typechecker=typechecker) # type: ignore[misc]
+
+    @jaxtyped(typechecker=typechecker)  # type: ignore[misc]
     @d.setter
     def d(self, value: Bool[Tensor, "{self._batch_annotation}"]):
         self._d = value
@@ -129,7 +140,8 @@ class Transitions:
         if self._t is None:
             raise ValueError("Truncation has not been provided")
         return self._t
-    @jaxtyped(typechecker=typechecker) # type: ignore[misc]
+
+    @jaxtyped(typechecker=typechecker)  # type: ignore[misc]
     @t.setter
     def t(self, value: Bool[Tensor, "{self._batch_annotation}"]):
         self._t = value
@@ -137,10 +149,25 @@ class Transitions:
     def __iter__(self) -> Iterator[Tensor]:
         return iter((self.s_0, self.a, self.r, self.s_1, self.t))
 
+    def __getitem__(self, key):
+        return Transitions(
+            self.s_0[key],
+            self.a[key],
+            self.r[key],
+            self.s_1[key],
+            self.d[key],
+            None if self._t is None else self.t[key],
+        )
+
+
+@dataclass
+class AuxiliaryData:
+    pass
+
 
 @jaxtyped(typechecker=typechecker)
 @dataclass()
-class AuxiliaryMemoryData:
+class AuxiliaryMemoryData(AuxiliaryData):
     weights: Float[Tensor, "*batch"]
     random: Float[Tensor, "*batch"]
     indices: Integer[Tensor, "*batch"]

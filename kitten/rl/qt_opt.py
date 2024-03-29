@@ -68,7 +68,7 @@ def cross_entropy_method(
     return mu
 
 
-class QTOpt(Algorithm, HasCritic, HasValue):
+class QTOpt(Algorithm[AuxiliaryMemoryData], HasCritic, HasValue):
     """Q-learning for continuous actions with Cross-Entropy Maximisation
 
     With clipped Double DQN
