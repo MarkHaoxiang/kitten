@@ -82,6 +82,7 @@ class CatsExperiment:
             "total_intrinsic_reward": 0,
             "newly_collected_intrinsic_reward": 0,
             "total_collected_extrinsic_reward": 0,
+            "truncation_steps": [],
         }
         if self.teleport_strategy is not None:
             match self.teleport_strategy:
@@ -215,7 +216,6 @@ class CatsExperiment:
         self.state = copy.deepcopy(self.collector.env)
         self.teleport_targets_observations.append(obs)
         self.teleport_targets_saves.append(self.state)
-        self.current_index += 1
 
     def _reset(self):
         if isinstance(self.teleport_strategy, TeleportStrategy):
@@ -227,7 +227,6 @@ class CatsExperiment:
             )
             self.teleport_index = self.teleport_strategy.select(s)
             # TODO: Selecting Resets
-
             log_past_index = self.current_index
 
             self.current_index = self.teleport_index
@@ -273,13 +272,15 @@ class CatsExperiment:
             )
 
             # Teleport
+            self.current_index += 1
             if self.teleport_strategy is not None:
                 self._teleport_update(obs)
-            elif truncated:
-                self.current_index = 0
 
-            if terminated or truncated and self.current_index > 0:
+            if terminated or truncated:
+                if truncated:
+                    self.log["truncation_steps"].append(self.current_index)
                 self._reset()
+                self.current_index = 0
 
             # Updates
             batch, aux = self.memory.sample(self.cfg.train.minibatch_size)
@@ -307,24 +308,6 @@ class CatsExperiment:
             s_1 = batch.s_1
             # Question: Should policy learn the value of resetting?
             if self.enable_reset_sampling:
-                # indices = torch.randint(
-                #     0, len(self.reset_distribution), (len(s_1),), device=self.device
-                # )
-                # reset_sample = self.reset_distribution[indices]
-
-                # if self.reset_as_an_action:
-                #     s_1 = torch.where(
-                #         input=reset_sample,
-                #         other=s_1,
-                #         condition=batch.t.unsqueeze(-1),
-                #     )
-                # if self.death_is_not_the_end:
-                #     s_1 = torch.where(
-                #         input=reset_sample,
-                #         other=s_1,
-                #         condition=batch_death.unsqueeze(-1),
-                #     )
-
                 if self.reset_as_an_action:
                     reset_sample = self.reset_distribution.to(torch.float32)
                     critics = random.sample(self.algorithm.critics, 2)
