@@ -30,7 +30,8 @@ class Transform(Generic[IN, OUT], ABC):
     #TODO: Add ability to skip transformations after composition
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
+        super().__init__()
         self._enabled = True
 
     def __call__(self, data: IN, *args, **kwargs) -> IN | OUT:

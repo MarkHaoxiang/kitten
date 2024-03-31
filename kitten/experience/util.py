@@ -10,7 +10,7 @@ from jaxtyping import Float32
 
 from kitten.dataflow.normalisation import RunningMeanVariance
 from kitten.experience import Transitions
-from kitten.common.typing import Device, ActType, Shape, Log
+from kitten.common.typing import ActType, ObsType, Device, Shape, Log
 from .memory import ReplayBuffer, PrioritizedReplayBuffer
 from .collector import DataCollector, GymCollector
 from .interface import AuxiliaryMemoryData, Memory

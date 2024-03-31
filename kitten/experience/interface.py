@@ -10,8 +10,8 @@ from typeguard import typechecked as typechecker
 from kitten.logging import Loggable
 from kitten.common.typing import Shape, shape_annotation
 
-InDataType = TypeVar("InDataType")
-OutDataType = TypeVar("OutDataType")
+InDataType = TypeVar("InDataType", contravariant=True)
+OutDataType = TypeVar("OutDataType", covariant=True)
 
 
 class Memory(Loggable, Generic[InDataType, OutDataType], ABC):

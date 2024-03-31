@@ -40,7 +40,6 @@ class CatsExperiment:
         reset_as_an_action: int | None = None,
         teleport_strategy: tuple[str, Any] | None = None,
         environment_action_noise: float = 0,
-        enable_reset_sampling: bool = True,
         seed: int = 0,
         device: str = "cpu",
     ):
@@ -56,7 +55,6 @@ class CatsExperiment:
         self.death_is_not_the_end = death_is_not_the_end
         self.environment_action_noise = environment_action_noise
         self.reset_as_an_action = reset_as_an_action
-        self.enable_reset_sampling = enable_reset_sampling
         if teleport_strategy is None:
             self.teleport_strategy = None
         else:
@@ -71,11 +69,10 @@ class CatsExperiment:
         self._teleport_initialisation()
         self.np_rng = np.random.default_rng(self.cfg.seed)
 
-        if self.enable_reset_sampling:
-            self.reset_distribution = [self.reset_env() for _ in range(1024)]
-            self.reset_distribution = torch.tensor(
-                np.array(self.reset_distribution), device=self.device
-            )
+        self.reset_distribution = [self.reset_env() for _ in range(1024)]
+        self.reset_distribution = torch.tensor(
+            np.array(self.reset_distribution), device=self.device
+        )
 
         # Logging
         self.log = {
@@ -307,27 +304,26 @@ class CatsExperiment:
             # Update batch
             s_1 = batch.s_1
             # Question: Should policy learn the value of resetting?
-            if self.enable_reset_sampling:
-                if self.reset_as_an_action:
-                    reset_sample = self.reset_distribution.to(torch.float32)
-                    critics = random.sample(self.algorithm.critics, 2)
-                    a_1 = self.algorithm.policy_fn(
-                        reset_sample, critic=critics[0].target
-                    )
-                    a_2 = self.algorithm.policy_fn(
-                        reset_sample, critic=critics[1].target
-                    )
-                    target_max_1 = critics[0].target.q(reset_sample, a_1).squeeze()
-                    target_max_2 = critics[1].target.q(reset_sample, a_2).squeeze()
-                    reset_value = (
-                        torch.minimum(target_max_1, target_max_2).mean().item()
-                    )
-                    aux.v_1 = aux.v_1 * reset_value
-                    select = batch.t
-                    if self.death_is_not_the_end:
-                        select = torch.logical_or(batch.t, batch.d)
-                    aux.reset_value_mixin_select = select
-                    aux.reset_value_mixin_enable = True
+            if self.reset_as_an_action:
+                reset_sample = self.reset_distribution.to(torch.float32)
+                critics = random.sample(self.algorithm.critics, 2)
+                a_1 = self.algorithm.policy_fn(
+                    reset_sample, critic=critics[0].target
+                )
+                a_2 = self.algorithm.policy_fn(
+                    reset_sample, critic=critics[1].target
+                )
+                target_max_1 = critics[0].target.q(reset_sample, a_1).squeeze()
+                target_max_2 = critics[1].target.q(reset_sample, a_2).squeeze()
+                reset_value = (
+                    torch.minimum(target_max_1, target_max_2).mean().item()
+                )
+                aux.v_1 = aux.v_1 * reset_value
+                select = batch.t
+                if self.death_is_not_the_end:
+                    select = torch.logical_or(batch.t, batch.d)
+                aux.reset_value_mixin_select = select
+                aux.reset_value_mixin_enable = True
 
             batch.s_1 = s_1
             self.algorithm.update(batch, aux, step=step)

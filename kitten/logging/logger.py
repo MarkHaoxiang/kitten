@@ -20,7 +20,7 @@ if has_wandb and has_omegaconf:
     import wandb
     from omegaconf import OmegaConf, DictConfig
 
-from kitten.common.typing import ModuleNamePairs
+from kitten.common.typing import ModuleNamePairs, Log
 from .interface import Loggable
 
 
@@ -200,7 +200,7 @@ class KittenLogger:
     def video_path(self) -> str:
         return join(self.path, "video")
 
-    def log(self, kwargs):
+    def log(self, kwargs) -> None:
         """Logging a metric
 
         Args:

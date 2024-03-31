@@ -1,20 +1,24 @@
 from abc import ABC, abstractmethod
-from typing import Any, Generic
+from typing import Any, Generic, TypeVar
 
 import gymnasium as gym
 import numpy as np
 from numpy.typing import NDArray
 import torch
+from torch import Tensor
 
 from kitten.experience.memory import ReplayBuffer
 from kitten.logging import Loggable
 from kitten.policy import Policy
-from kitten.common.typing import Device, ObsType, ActType
+from kitten.common.typing import Device, ActType
 
 
 class DataCollector(Loggable, ABC):
     def __init__(
-        self, policy: Policy, env: gym.Env[Any, Any], memory: ReplayBuffer | None
+        self,
+        policy: Policy,
+        env: gym.Env[NDArray[Any], ActType],
+        memory: ReplayBuffer | None,
     ):
         """Constructs a data collector
 

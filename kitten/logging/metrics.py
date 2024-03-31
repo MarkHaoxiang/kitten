@@ -124,9 +124,9 @@ class KittenEvaluator(Loggable):
         vars(self).update(state)
 
 
-# TODO: Messy. Type policy properly.
-@no_type_check
-def policy_wrapper(policy: Callable, env):
+def policy_wrapper(
+    policy: Callable[[ObsType], Any], env: Env[ObsType, ActType]
+) -> Callable[[ObsType], ActType]:
     def pi(obs):
         action = policy(obs)
         if isinstance(action, torch.Tensor):

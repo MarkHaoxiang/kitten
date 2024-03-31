@@ -1,5 +1,4 @@
-from typing import Any, Sequence, Callable
-from numbers import Number
+from typing import Any, Sequence, Callable, TypeVar, Generic, TypeAlias
 
 import numpy as np
 from numpy.typing import NDArray
@@ -8,15 +7,21 @@ from torch import Tensor
 
 from kitten.dataflow import Transform
 from kitten.experience import AuxiliaryMemoryData
-from kitten.common.typing import Device, Shape
+from kitten.common.typing import Device, Shape, Log, TorchCompatible
 
 from .interface import Memory
 
+TensorReplayBufferOut: TypeAlias = tuple[tuple[Tensor, ...], AuxiliaryMemoryData]
+InDataType = TypeVar(
+    "InDataType", bound=tuple[TorchCompatible, ...], contravariant=True
+)
+
 
 class ReplayBuffer(
-    Memory[tuple[Any, ...], tuple[tuple[Any, ...], AuxiliaryMemoryData]]
+    Generic[InDataType],
+    Memory[InDataType | tuple[NDArray[Any] | Tensor, ...], TensorReplayBufferOut],
 ):
-    """Store history of episode transitions"""
+    """A replay buffer backed by a Torch tensor"""
 
     def __init__(
         self,
@@ -65,7 +70,9 @@ class ReplayBuffer(
         self._append_index = 0  # Position of next tensor to be inserted
         self._full = False  # Bookmark to check if storage has looped around
 
-    def append(self, data: tuple[Any, ...], **kwargs) -> int:
+    def append(
+        self, data: InDataType | tuple[NDArray[Any] | Tensor, ...], **kwargs
+    ) -> int:
         """Add a transition experience to the buffer
 
         Args:
@@ -74,8 +81,8 @@ class ReplayBuffer(
         Returns:
             (int): Number of inserted elements.
         """
-        data = self._append_preprocess(data)
-        n_insert_unclipped = len(data[0])
+        processed_data = self._append_preprocess(data)
+        n_insert_unclipped = len(processed_data[0])
         n_insert = min(n_insert_unclipped, self.capacity)
         # Update Random IDs
         random_ids = torch.rand(n_insert, device=self.device)
@@ -92,7 +99,7 @@ class ReplayBuffer(
             ]
         # Update Data
         for i in range(self.N):
-            x = data[i]
+            x = processed_data[i]
             if len(x) != n_insert_unclipped:
                 raise ValueError(
                     f"Input is jagged, expected batch of {n_insert_unclipped} but got {len(x)}"
@@ -118,7 +125,9 @@ class ReplayBuffer(
         self._append_index = self._append_index % self.capacity
         return n_insert
 
-    def _append_preprocess(self, inputs: tuple[Any, ...]):
+    def _append_preprocess(
+        self, inputs: InDataType | tuple[NDArray[Any] | Tensor, ...]
+    ) -> list[Tensor]:
         """Utility to transform new transitions into expected format before entry"""
         res = []
         for i in range(self.N):
@@ -134,7 +143,7 @@ class ReplayBuffer(
             res.append(x)
         return res
 
-    def sample(self, n: int, **kwargs):
+    def sample(self, n: int, **kwargs) -> TensorReplayBufferOut:
         """Sample from the replay buffer
 
         Args:
@@ -157,7 +166,7 @@ class ReplayBuffer(
             ),
         )
 
-    def get_log(self):
+    def get_log(self) -> Log:
         """Returns logging info.
 
         Returns:
@@ -168,7 +177,7 @@ class ReplayBuffer(
     def __len__(self):
         return self.capacity if self._full else self._append_index
 
-    def _fetch_storage(self, indices, transforms: bool = True):
+    def _fetch_storage(self, indices, transforms: bool = True) -> tuple[Tensor, ...]:
         if not (isinstance(indices, torch.Tensor) or isinstance(indices, int)):
             indices = torch.tensor(indices, device=self.device)
         results = [self.storage[i][indices] for i in range(self.N)]
@@ -182,7 +191,7 @@ class ReplayBuffer(
         return tuple(results)
 
 
-class PrioritizedReplayBuffer(ReplayBuffer):
+class PrioritizedReplayBuffer(Generic[InDataType], ReplayBuffer[InDataType]):
     """Implements a replay buffer with proportional based priorized sampling
 
     Uses an internal sum tree structure
@@ -225,7 +234,12 @@ class PrioritizedReplayBuffer(ReplayBuffer):
         # Logging
         self.mean_batch_error = 0
 
-    def append(self, data: tuple[Any, ...], update: bool = True, **kwargs) -> int:
+    def append(
+        self,
+        data: InDataType | tuple[NDArray[Any] | Tensor, ...],
+        update: bool = True,
+        **kwargs,
+    ) -> int:
         """Add transitions to the replay buffer
 
         Args:
@@ -288,7 +302,7 @@ class PrioritizedReplayBuffer(ReplayBuffer):
         # Transform indices to result tuples
         return (results, AuxiliaryMemoryData(w, self._random[selection], selection))
 
-    def _calculate_priority(self, error):
+    def _calculate_priority(self, error: NDArray[Any]) -> NDArray[Any]:
         return (error + self.epsilon) ** self.alpha
 
     def _sift_up(self, value: float, i: int) -> None:
@@ -317,7 +331,7 @@ class PrioritizedReplayBuffer(ReplayBuffer):
             value -= (~choice) * left
         return result - self.sum_tree_offset
 
-    def get_log(self):
+    def get_log(self) -> Log:
         log = super().get_log()
         log["total_priority"] = self.sum_tree[0]
         log["maximum_priority"] = self._maximum_priority
