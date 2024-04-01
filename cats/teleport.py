@@ -60,6 +60,7 @@ class ThompsonTeleport(TeleportStrategy):
         v = self._algorithm.value.v(s)
         with torch.no_grad():
             p = (v**self._a).cpu().numpy()
+        p = p.squeeze() / p.sum()
         return self._rng.numpy.choice(len(v), p=p)
 
 
@@ -122,7 +123,17 @@ class LatestEpisodeTeleportMemory(TeleportMemory):
         )
 
     def select(self, tid: int) -> tuple[gym.Env, NDArray[Any]]:
-        self.episode_step = tid
+        self.episode_step = tid+1
         self.teleport_target_observations = self.teleport_target_observations[:tid+1]
         self.teleport_target_saves = self.teleport_target_saves[:tid+1]
         return copy.deepcopy(self.teleport_target_saves[tid]), self.teleport_target_observations[tid]
+    
+class FIFOTeleportMemory(TeleportMemory):
+    def __init__(self, env: gym.Env, capacity: int = 1024, device: str = "cpu") -> None:
+        super().__init__()
+        self.teleport_target_observations = ReplayBuffer(
+            capacity=capacity, 
+            shape=(env.observation_space.shape, ),
+            dtype=(torch.float32, ),
+            device=device
+        )

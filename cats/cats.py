@@ -103,10 +103,7 @@ class CatsExperiment:
             self.log["teleport_targets_observations"] = []
 
     def _teleport_initialisation(self):
-        self.teleport_targets_observations = []
-        self.teleport_targets_saves: list[Env] = []
-        self.current_index = 0
-        self.teleport_index = 0
+        self.teleport_memory = LatestEpisodeTeleportMemory(device=self.device)
 
     def _build_intrinsic(self):
         self.intrinsic = build_intrinsic(
@@ -209,41 +206,26 @@ class CatsExperiment:
     # ==============================
     # Key Algorithm: Teleportation
     # ==============================
-    def _teleport_update(self, obs):
-        self.state = copy.deepcopy(self.collector.env)
-        self.teleport_targets_observations.append(obs)
-        self.teleport_targets_saves.append(self.state)
-
     def _reset(self):
         if isinstance(self.teleport_strategy, TeleportStrategy):
             # Call Teleportation
-            s = torch.tensor(
-                self.teleport_targets_observations[: self.current_index],
-                dtype=torch.float32,
-                device=self.device,
-            )
-            self.teleport_index = self.teleport_strategy.select(s)
+            s = self.teleport_memory.targets()
+            s = self.normalise_observation.transform(s)
+            tid = self.teleport_strategy.select(s)
             # TODO: Selecting Resets
-            log_past_index = self.current_index
+            log_past_index = self.teleport_memory.episode_step
 
-            self.current_index = self.teleport_index
-            self.collector.env = self.teleport_targets_saves[self.teleport_index]
-            self.collector.obs = self.teleport_targets_observations[self.teleport_index]
+            env, obs = self.teleport_memory.select(tid)
+            self.collector.env = env
+            self.collector.obs = obs
             self.collector.env.np_random = np.random.default_rng(
                 self.np_rng.integers(65536)
             )
-            self.teleport_targets_observations = self.teleport_targets_observations[
-                : self.teleport_index + 1
-            ]
-            self.teleport_targets_saves = self.teleport_targets_saves[
-                : self.teleport_index + 1
-            ]
-            self.state = copy.deepcopy(self.collector.env)
             self.collector.env.reset_current_step()
 
             # Logging
             self.log["teleport_targets_index"].append(
-                (log_past_index, self.teleport_index)
+                (log_past_index, tid)
             )
             self.log["teleport_targets_observations"].append(self.collector.obs)
         else:
@@ -269,15 +251,12 @@ class CatsExperiment:
             )
 
             # Teleport
-            self.current_index += 1
-            if self.teleport_strategy is not None:
-                self._teleport_update(obs)
+            self.teleport_memory.update(env=self.collector.env, obs=obs)
 
             if terminated or truncated:
                 if truncated:
-                    self.log["truncation_steps"].append(self.current_index)
+                    self.log["truncation_steps"].append(self.teleport_memory.episode_step)
                 self._reset()
-                self.current_index = 0
 
             # Updates
             batch, aux = self.memory.sample(self.cfg.train.minibatch_size)
@@ -306,6 +285,7 @@ class CatsExperiment:
             # Question: Should policy learn the value of resetting?
             if self.reset_as_an_action:
                 reset_sample = self.reset_distribution.to(torch.float32)
+                reset_sample = self.normalise_observation.transform(reset_sample)
                 critics = random.sample(self.algorithm.critics, 2)
                 a_1 = self.algorithm.policy_fn(
                     reset_sample, critic=critics[0].target
