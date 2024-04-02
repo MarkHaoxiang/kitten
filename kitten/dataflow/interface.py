@@ -61,9 +61,9 @@ class Transform(Generic[IN, OUT], ABC):
 
     def prepend(
         self,
-        f: Callable[[OUT], T],
+        f: Callable[[T], IN],
         bind_method_type: bool = True,
-    ) -> Callable[[IN], T]:
+    ) -> Callable[[T], OUT]:
         """A function continuation"""
         if isinstance(f, types.MethodType) and bind_method_type:
 
@@ -83,14 +83,14 @@ class Transform(Generic[IN, OUT], ABC):
 
     def append(
         self,
-        f: Callable[[T], IN],
+        f: Callable[[OUT], T],
         bind_method_type: bool = True,
-    ) -> Callable[[T], OUT]:
+    ) -> Callable[[IN], T]:
         """A function continuation"""
         if isinstance(f, types.MethodType) and bind_method_type:
 
-            def _g(_, *args, **kwargs):
-                return f(self(*args, **kwargs))
+            def _g(_, data: IN, *args, **kwargs) -> T:
+                return f(self(data, *args, **kwargs))
 
             f.__self__.__setattr__(f.__name__, types.MethodType(_g, f.__self__))
             return f.__self__.__getattribute__(f.__name__)

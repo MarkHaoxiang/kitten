@@ -18,6 +18,7 @@ from kitten.experience.util import (
 from kitten.experience.collector import GymCollector
 from kitten.policy import ColoredNoisePolicy, Policy
 from kitten.common import *
+from kitten.common.typing import Device
 from kitten.common.util import *
 
 # Cats
@@ -38,11 +39,11 @@ class CatsExperiment:
         death_is_not_the_end: bool = True,
         fixed_reset: bool = True,
         enable_policy_sampling: bool = True,
-        reset_as_an_action: int | None = None,
+        reset_as_an_action: float | None = None,
         teleport_strategy: tuple[str, Any] | None = None,
         environment_action_noise: float = 0,
         seed: int = 0,
-        device: str = "cpu",
+        device: Device = "cpu",
     ):
         # Parameters
         self.cfg = copy.deepcopy(cfg)
@@ -110,6 +111,7 @@ class CatsExperiment:
         self.teleport_memory = LatestEpisodeTeleportMemory(
             self.rng.build_generator(), device=self.device
         )
+        self.normalise_observation.prepend(self.teleport_memory.targets)
 
     def _build_intrinsic(self):
         self.intrinsic = build_intrinsic(
@@ -129,10 +131,8 @@ class CatsExperiment:
                 self.env, noise=self.environment_action_noise
             )
         # Reset as an action
-        if not self.reset_as_an_action is None:
-            self.env = ResetActionWrapper(
-                self.env, check_frequency=self.reset_as_an_action
-            )
+        if self.reset_as_an_action is not None:
+            self.env = ResetActionWrapper(self.env, penalty=self.reset_as_an_action)
         self.rng = global_seed(self.cfg.seed, self.env)
 
     def _build_policy(self):
@@ -215,7 +215,6 @@ class CatsExperiment:
     def _reset(self):
         if isinstance(self.teleport_strategy, TeleportStrategy):
             s = self.teleport_memory.targets()
-            s = self.normalise_observation.transform(s)
             tid = self.teleport_strategy.select(s)
             self.log["teleport_targets_index"].append(
                 (self.teleport_memory.episode_step, tid)
@@ -263,7 +262,6 @@ class CatsExperiment:
                 batch.d = torch.zeros_like(batch.d, device=self.device).bool()
             # Intrinsic Reward Calculation
             r_t, r_e, r_i = self.intrinsic.reward(batch)
-            batch.r = r_i
             self.intrinsic.update(batch, aux, step=step)
 
             # RL Update
@@ -280,7 +278,7 @@ class CatsExperiment:
             # Update batch
             s_1 = batch.s_1
             # Question: Should policy learn the value of resetting?
-            if self.reset_as_an_action:
+            if self.reset_as_an_action is not None:
                 reset_sample = self.reset_distribution.to(torch.float32)
                 reset_sample = self.normalise_observation.transform(reset_sample)
                 critics = random.sample(self.algorithm.critics, 2)
@@ -296,7 +294,12 @@ class CatsExperiment:
                 aux.reset_value_mixin_select = select
                 aux.reset_value_mixin_enable = True
 
+                # Since we don't consider extrinsic rewards (for now)
+                # Manually add the penalty to intrinsic rewards
+                r_i = r_i - batch.t * self.reset_as_an_action
+
             batch.s_1 = s_1
+            batch.r = r_i
             self.algorithm.update(batch, aux, step=step)
 
             # Log
