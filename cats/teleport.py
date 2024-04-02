@@ -154,18 +154,8 @@ class LatestEpisodeTeleportMemory(TeleportMemory):
             self.teleport_target_observations[tid],
         )
         # Update Collector State
-        collector.env = env
-        collector.obs = obs
-        seed = int(self.rng.numpy.integers(65535))
-        collector.env.np_random = np.random.default_rng(seed)
-        try:
-            collector.env.reset_current_step()
-        except:
-            log(
-                WARNING,
-                "Attempting to reset env step counter, but not available. Is the env a ResetActionWrapper?",
-            )
-
+        collector.env, collector.obs = env, obs
+        collector.env.np_random = self.rng.build_generator().numpy 
         return env, obs
 
 
