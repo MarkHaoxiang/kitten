@@ -79,6 +79,9 @@ class RunningMeanVariance(Generic[T], Transform[T, T]):
     def std(self):
         return self.var**0.5
 
+    def __str__(self) -> str:
+        return f"Mean {str(self.mean)} | Std {str(self.std)}"
+
     def transform(
         self, data: Any, normalise_mean: bool = True, normalise_std: bool = True
     ) -> Any:

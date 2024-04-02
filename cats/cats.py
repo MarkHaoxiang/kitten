@@ -23,6 +23,7 @@ from kitten.common.util import *
 # Cats
 from .rl import QTOptCats, ResetValueOverloadAux
 from .env import *
+from .reset import *
 from .teleport import *
 
 
