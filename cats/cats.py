@@ -43,6 +43,7 @@ class CatsExperiment:
         teleport_strategy: tuple[str, Any] | None = None,
         environment_action_noise: float = 0,
         seed: int = 0,
+        deprecated_testing_flag: bool = False,
         device: Device = "cpu",
     ):
         # Parameters
@@ -57,6 +58,7 @@ class CatsExperiment:
         self.death_is_not_the_end = death_is_not_the_end
         self.environment_action_noise = environment_action_noise
         self.reset_as_an_action = reset_as_an_action
+        self.deprecated_testing_flag = deprecated_testing_flag  # Utility to compare different versions of algorithms for bug testing
         if teleport_strategy is None:
             self.teleport_strategy = None
         else:
@@ -132,7 +134,9 @@ class CatsExperiment:
             )
         # Reset as an action
         if self.reset_as_an_action is not None:
-            self.env = ResetActionWrapper(self.env, penalty=self.reset_as_an_action)
+            self.env = ResetActionWrapper(
+                self.env, penalty=self.reset_as_an_action, deterministic=True
+            )
         self.rng = global_seed(self.cfg.seed, self.env)
 
     def _build_policy(self):
@@ -182,7 +186,7 @@ class CatsExperiment:
         """Manual reset of the environment"""
         if self.enable_policy_sampling:
             self.algorithm.reset_critic()
-        o, _ = self.collector.env.reset()
+        o, _ = Deprecatedchcheck_frequency = self.collector.env.reset()
         self.collector.obs = o
         return o
 

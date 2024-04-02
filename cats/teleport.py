@@ -155,7 +155,7 @@ class LatestEpisodeTeleportMemory(TeleportMemory):
         )
         # Update Collector State
         collector.env, collector.obs = env, obs
-        collector.env.np_random = self.rng.build_generator().numpy 
+        collector.env.np_random = self.rng.build_generator().numpy
         return env, obs
 
 
