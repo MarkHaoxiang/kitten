@@ -20,6 +20,15 @@ class Generator:
         self._np_rng = np_rng
         self._torch_rng = torch_rng
 
+    def build_seed(self) -> int:
+        return int(self.numpy.integers(0, 2**32 - 1))
+
+    def build_generator(self) -> Generator:
+        np_rng = self._np_rng.spawn(1)[0]
+        torch_rng = torch.Generator(device=self._torch_rng.device)
+        torch_rng.manual_seed(self.build_seed())
+        return Generator(np_rng=np_rng, torch_rng=torch_rng)
+
     def __getstate__(self):
         result = copy.copy(vars(self))
         result["_torch_rng"] = self._torch_rng.get_state()

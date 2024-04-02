@@ -10,6 +10,7 @@ from kitten.common.typing import ObsType, ActType, Device
 
 PolicyFn: TypeAlias = Callable[[Tensor], Tensor]
 
+
 # TODO: Policy needs to be rewritten with generics to support wider range of environments
 class _Policy(Generic[ObsType, ActType]):
     def __init__(self) -> None:
@@ -27,7 +28,7 @@ class _Policy(Generic[ObsType, ActType]):
             Any: actions.
         """
         raise NotImplementedError
-    
+
     def reset(self) -> None:
         """Called on episode reset"""
         pass
@@ -58,7 +59,8 @@ class _Policy(Generic[ObsType, ActType]):
         """
         return not self._evaluate
 
-class Policy():
+
+class Policy:
     def __init__(
         self,
         fn: PolicyFn,

@@ -67,11 +67,12 @@ class CatsExperiment:
         self._build_data()
         self._build_intrinsic()
         self._teleport_initialisation()
-        self.np_rng = np.random.default_rng(self.cfg.seed)
 
-        self.reset_distribution = [self.reset_env() for _ in range(1024)]
+        self.reset_distribution = np.array(
+            [self.reset_env() for _ in range(1 if self.fixed_reset else 1024)]
+        )
         self.reset_distribution = torch.tensor(
-            np.array(self.reset_distribution), device=self.device
+            self.reset_distribution, device=self.device
         )
 
         # Logging
@@ -81,15 +82,17 @@ class CatsExperiment:
             "total_collected_extrinsic_reward": 0,
             "truncation_steps": [],
         }
+
+        teleport_rng = self.rng.build_generator()
         if self.teleport_strategy is not None:
             match self.teleport_strategy:
                 case "e_greedy":
                     self.teleport_strategy = EpsilonGreedyTeleport(
-                        self.algorithm, self.rng, self.teleport_strategy_parameters
+                        self.algorithm, teleport_rng, self.teleport_strategy_parameters
                     )
                 case "thompson":
                     self.teleport_strategy = ThompsonTeleport(
-                        self.algorithm, self.rng, self.teleport_strategy_parameters
+                        self.algorithm, teleport_rng, self.teleport_strategy_parameters
                     )
                 case "ucb":
                     self.teleport_strategy = UCBTeleport(
@@ -103,7 +106,9 @@ class CatsExperiment:
             self.log["teleport_targets_observations"] = []
 
     def _teleport_initialisation(self):
-        self.teleport_memory = LatestEpisodeTeleportMemory(device=self.device)
+        self.teleport_memory = LatestEpisodeTeleportMemory(
+            self.rng.build_generator(), device=self.device
+        )
 
     def _build_intrinsic(self):
         self.intrinsic = build_intrinsic(
@@ -139,15 +144,15 @@ class CatsExperiment:
             device=self.device,
             **self.cfg.algorithm,
         )
-        if isinstance(self.env.spec.max_episode_steps, int):
-            cycle = self.env.spec.max_episode_steps
-        else:
-            cycle = 1000
         self.policy = ColoredNoisePolicy(
             self.algorithm.policy_fn,
             self.env.action_space,
-            cycle,
-            rng=self.rng,
+            (
+                int(self.env.spec.max_episode_steps)
+                if isinstance(self.env.spec.max_episode_steps, int)
+                else 1000
+            ),
+            rng=self.rng.build_generator(),
             device=self.device,
             **self.cfg.noise,
         )
@@ -208,25 +213,13 @@ class CatsExperiment:
     # ==============================
     def _reset(self):
         if isinstance(self.teleport_strategy, TeleportStrategy):
-            # Call Teleportation
             s = self.teleport_memory.targets()
             s = self.normalise_observation.transform(s)
             tid = self.teleport_strategy.select(s)
-            # TODO: Selecting Resets
-            log_past_index = self.teleport_memory.episode_step
-
-            env, obs = self.teleport_memory.select(tid)
-            self.collector.env = env
-            self.collector.obs = obs
-            self.collector.env.np_random = np.random.default_rng(
-                self.np_rng.integers(65536)
-            )
-            self.collector.env.reset_current_step()
-
-            # Logging
             self.log["teleport_targets_index"].append(
-                (log_past_index, tid)
+                (self.teleport_memory.episode_step, tid)
             )
+            self.teleport_memory.select(tid, self.collector)
             self.log["teleport_targets_observations"].append(self.collector.obs)
         else:
             self.reset_env()
@@ -238,6 +231,7 @@ class CatsExperiment:
         # Initialisation
         self.early_start(self.cfg.train.initial_collection_size)
         self.reset_env()
+        self.teleport_memory.state = self.env
 
         # Main Loop
         for step in tqdm(range(1, self.cfg.train.total_frames + 1)):
@@ -255,7 +249,9 @@ class CatsExperiment:
 
             if terminated or truncated:
                 if truncated:
-                    self.log["truncation_steps"].append(self.teleport_memory.episode_step)
+                    self.log["truncation_steps"].append(
+                        self.teleport_memory.episode_step
+                    )
                 self._reset()
 
             # Updates
@@ -287,17 +283,11 @@ class CatsExperiment:
                 reset_sample = self.reset_distribution.to(torch.float32)
                 reset_sample = self.normalise_observation.transform(reset_sample)
                 critics = random.sample(self.algorithm.critics, 2)
-                a_1 = self.algorithm.policy_fn(
-                    reset_sample, critic=critics[0].target
-                )
-                a_2 = self.algorithm.policy_fn(
-                    reset_sample, critic=critics[1].target
-                )
+                a_1 = self.algorithm.policy_fn(reset_sample, critic=critics[0].target)
+                a_2 = self.algorithm.policy_fn(reset_sample, critic=critics[1].target)
                 target_max_1 = critics[0].target.q(reset_sample, a_1).squeeze()
                 target_max_2 = critics[1].target.q(reset_sample, a_2).squeeze()
-                reset_value = (
-                    torch.minimum(target_max_1, target_max_2).mean().item()
-                )
+                reset_value = torch.minimum(target_max_1, target_max_2).mean().item()
                 aux.v_1 = aux.v_1 * reset_value
                 select = batch.t
                 if self.death_is_not_the_end:

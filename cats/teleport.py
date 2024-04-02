@@ -1,16 +1,21 @@
 from abc import ABC, abstractmethod
 import copy
 from typing import Any
+from logging import WARNING
 
 import numpy as np
 from numpy.typing import NDArray
 import torch
 import gymnasium as gym
 from kitten.common.rng import Generator
+from kitten.common.typing import Device
+from kitten.logging import log
 from kitten.experience.memory import ReplayBuffer
+from kitten.experience.collector import GymCollector
 from kitten.experience.interface import Memory
 
 from cats.rl import QTOptCats
+
 
 class TeleportStrategy(ABC):
     def __init__(self, algorithm: QTOptCats) -> None:
@@ -76,10 +81,26 @@ class UCBTeleport(TeleportStrategy):
         mu, var = self._algorithm.mu_var(s)
         return np.argmax(mu + var * self._c)
 
+
 class TeleportMemory(ABC):
+    def __init__(self, rng: Generator) -> None:
+        super().__init__()
+        self.rng = rng
+        self._state: gym.Env[Any, Any] | None = None
+
+    @property
+    def state(self) -> gym.Env[Any, Any]:
+        if self._state is None:
+            raise ValueError("State not initialised")
+        return self._state
+
+    @state.setter
+    def state(self, value: gym.Env[Any, Any]) -> None:
+        self._state = value
+
     @abstractmethod
     def update(self, env: gym.Env, obs: NDArray[Any]):
-        """ Environment step
+        """Environment step
 
         Args:
             env (gym.Env): Current collector env.
@@ -89,51 +110,73 @@ class TeleportMemory(ABC):
 
     @abstractmethod
     def targets(self):
-        """ List of potential teleportation targets
-        """
+        """List of potential teleportation targets"""
         raise NotImplementedError
 
     @abstractmethod
-    def select(self, tid: int) -> gym.Env:
-        """ Teleport to target tid
+    def select(self, tid: int) -> tuple[gym.Env, NDArray[Any]]:
+        """Teleport to target tid
 
         Returns:
             gym.Env: Teleportation state
         """
         raise NotImplementedError
 
+
 class LatestEpisodeTeleportMemory(TeleportMemory):
-    def __init__(self, device: str = "cpu") -> None:
-        super().__init__()
+    def __init__(self, rng: Generator, device: Device = "cpu") -> None:
+        super().__init__(rng)
         self.teleport_target_observations: list[NDArray[Any]] = []
         self.teleport_target_saves: list[gym.Env] = []
         self.episode_step = 0
-        self.device=device
+        self.device = device
 
     def update(self, env: gym.Env, obs: NDArray[Any]):
-        self.teleport_target_saves.append(copy.deepcopy(env))
+        self.teleport_target_saves.append(self.state)
+        self.state = copy.deepcopy(env)
         self.teleport_target_observations.append(obs)
         self.episode_step += 1
-    
+
     def targets(self):
         return torch.tensor(
-            self.teleport_target_observations[:self.episode_step],
+            self.teleport_target_observations[: self.episode_step],
             dtype=torch.float32,
-            device=self.device
+            device=self.device,
         )
 
-    def select(self, tid: int) -> tuple[gym.Env, NDArray[Any]]:
-        self.episode_step = tid+1
-        self.teleport_target_observations = self.teleport_target_observations[:tid+1]
-        self.teleport_target_saves = self.teleport_target_saves[:tid+1]
-        return copy.deepcopy(self.teleport_target_saves[tid]), self.teleport_target_observations[tid]
-    
+    def select(self, tid: int, collector: GymCollector) -> tuple[gym.Env, NDArray[Any]]:
+        # Update Internal State
+        self.episode_step = tid
+        self.teleport_target_observations = self.teleport_target_observations[: tid + 1]
+        self.teleport_target_saves = self.teleport_target_saves[: tid + 1]
+        env, obs = (
+            copy.deepcopy(self.teleport_target_saves[tid]),
+            self.teleport_target_observations[tid],
+        )
+        # Update Collector State
+        collector.env = env
+        collector.obs = obs
+        seed = int(self.rng.numpy.integers(65535))
+        collector.env.np_random = np.random.default_rng(seed)
+        try:
+            collector.env.reset_current_step()
+        except:
+            log(
+                WARNING,
+                "Attempting to reset env step counter, but not available. Is the env a ResetActionWrapper?",
+            )
+
+        return env, obs
+
+
 class FIFOTeleportMemory(TeleportMemory):
-    def __init__(self, env: gym.Env, capacity: int = 1024, device: str = "cpu") -> None:
+    def __init__(
+        self, env: gym.Env, capacity: int = 1024, device: Device = "cpu"
+    ) -> None:
         super().__init__()
         self.teleport_target_observations = ReplayBuffer(
-            capacity=capacity, 
-            shape=(env.observation_space.shape, ),
-            dtype=(torch.float32, ),
-            device=device
+            capacity=capacity,
+            shape=(env.observation_space.shape,),
+            dtype=(torch.float32,),
+            device=device,
         )

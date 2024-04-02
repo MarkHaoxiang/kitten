@@ -22,6 +22,18 @@ def entropy_memory(memory: ReplayBuffer):
     return -log_likelihoods.mean()
 
 
+def visualise_teleport_targets(experiment: CatsExperiment):
+    fig, ax = plt.subplots()
+    env = experiment.env
+    ax.set_xlim(env.observation_space.low[0], env.observation_space.high[0])
+    ax.set_xlabel("Position")
+    ax.set_ylim(env.observation_space.low[1], env.observation_space.high[1])
+    ax.set_ylabel("Velocity")
+    for x, y in experiment.log["teleport_targets_observations"]:
+        ax.scatter(x, y)
+    return fig, ax
+
+
 def visualise_memory(experiment: CatsExperiment):
     """Visualise state space for given environmentss"""
 

@@ -10,6 +10,7 @@ from torch import Tensor
 
 from kitten.policy import Policy
 from kitten.common import Generator
+from kitten.common.typing import Device
 from .interface import PolicyFn
 
 
@@ -20,9 +21,9 @@ class ColoredNoisePolicy(Policy):
         action_space: Space[Any],
         episode_length: int | None = None,
         scale: float | NDArray[Any] | torch.Tensor = 1.0,
-        beta: float = 1,
+        beta: float = 1.0,
         rng: Generator | np.random.Generator | None = None,
-        device: str = "cpu",
+        device: Device = "cpu",
     ):
         """Pink Noise Exploration
 
