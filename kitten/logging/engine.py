@@ -1,7 +1,9 @@
+from os.path import join
 from abc import ABC, abstractmethod
 import importlib.util
 from typing import Any
 import logging
+import pickle as pkl
 
 from torch import nn
 from kitten.common.typing import Log
@@ -90,5 +92,22 @@ class WandBEngine(LogEngine):
     def close(self) -> None:
         wandb.finish()
 
+class DictEngine(LogEngine):
+    """ Quick and simple -  saves to a list of dictionaries
+    """
+    def __init__(self, cfg: Log[str, Any], path: str, name: str) -> None:
+        super().__init__(cfg, path, name)
+        self.results = []
 
-engine_registry = {"wandb": WandBEngine}
+    def log(self, log: Log[str, Any]) -> None:
+        self.results.append(log)
+
+    def close(self) -> None:
+        # Store Log
+        pkl.dump(self.results, open(join(self._path, "log.pkl"), "wb"))
+        return super().close()
+
+engine_registry = {
+    "wandb": WandBEngine,
+    "dict": DictEngine
+}
