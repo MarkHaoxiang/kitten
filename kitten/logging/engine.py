@@ -92,22 +92,24 @@ class WandBEngine(LogEngine):
     def close(self) -> None:
         wandb.finish()
 
-class DictEngine(LogEngine):
-    """ Quick and simple -  saves to a list of dictionaries
-    """
-    def __init__(self, cfg: Log[str, Any], path: str, name: str) -> None:
-        super().__init__(cfg, path, name)
-        self.results = []
 
-    def log(self, log: Log[str, Any]) -> None:
-        self.results.append(log)
+class DictEngine(LogEngine):
+    """Quick and simple -  saves to a list of dictionaries"""
+
+    def __init__(self, cfg: Log, path: str, name: str) -> None:
+        super().__init__(cfg, path, name)
+        self.results: dict[str, list[Any]] = {}
+
+    def log(self, log: Log) -> None:
+        for k, v in log.items():
+            if k not in self.results:
+                self.results[k] = []
+            self.results[k].append(v)
 
     def close(self) -> None:
         # Store Log
         pkl.dump(self.results, open(join(self._path, "log.pkl"), "wb"))
         return super().close()
 
-engine_registry = {
-    "wandb": WandBEngine,
-    "dict": DictEngine
-}
+
+engine_registry = {"wandb": WandBEngine, "dict": DictEngine}

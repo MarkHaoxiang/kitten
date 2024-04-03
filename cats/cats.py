@@ -9,7 +9,6 @@ from tqdm import tqdm
 from omegaconf import DictConfig
 
 # Kitten
-from kitten.experience import Transitions
 from kitten.experience.util import (
     build_replay_buffer,
     build_transition_from_update,
@@ -20,6 +19,7 @@ from kitten.policy import ColoredNoisePolicy, Policy
 from kitten.common import *
 from kitten.common.typing import Device
 from kitten.common.util import *
+from kitten.logging import DictEngine, KittenLogger, KittenEvaluator
 
 # Cats
 from .rl import QTOptCats, ResetValueOverloadAux
@@ -44,6 +44,7 @@ class CatsExperiment:
         environment_action_noise: float = 0,
         seed: int = 0,
         deprecated_testing_flag: bool = False,
+        logging_path="log",
         device: Device = "cpu",
     ):
         # Parameters
@@ -59,6 +60,7 @@ class CatsExperiment:
         self.environment_action_noise = environment_action_noise
         self.reset_as_an_action = reset_as_an_action
         self.deprecated_testing_flag = deprecated_testing_flag  # Utility to compare different versions of algorithms for bug testing
+        self.logging_path = logging_path
         if teleport_strategy is None:
             self.teleport_strategy = None
         else:
@@ -70,7 +72,8 @@ class CatsExperiment:
         self._build_policy()
         self._build_data()
         self._build_intrinsic()
-        self._teleport_initialisation()
+        self._build_teleport()
+        self._build_logging()
 
         self.reset_distribution = np.array(
             [self.reset_env() for _ in range(1 if self.fixed_reset else 1024)]
@@ -79,14 +82,7 @@ class CatsExperiment:
             self.reset_distribution, device=self.device
         )
 
-        # Logging
-        self.log = {
-            "total_intrinsic_reward": 0,
-            "newly_collected_intrinsic_reward": 0,
-            "total_collected_extrinsic_reward": 0,
-            "truncation_steps": [],
-        }
-
+    def _build_teleport(self):
         teleport_rng = self.rng.build_generator()
         if self.teleport_strategy is not None:
             match self.teleport_strategy:
@@ -106,10 +102,7 @@ class CatsExperiment:
                     raise ValueError(
                         f"Unknown Teleport Strategy {self.teleport_strategy}"
                     )
-            self.log["teleport_targets_index"] = []
-            self.log["teleport_targets_observations"] = []
 
-    def _teleport_initialisation(self):
         self.teleport_memory = LatestEpisodeTeleportMemory(
             self.rng.build_generator(), device=self.device
         )
@@ -178,9 +171,23 @@ class CatsExperiment:
     def _update_memory(self, obs, action, reward, n_obs, terminated, truncated):
         self.memory.append((obs, action, reward, n_obs, terminated, truncated))
 
-    def V(self, s) -> torch.Tensor:
-        """Calculates the value function for states s"""
-        return self.algorithm.value.v(s)
+    def _build_logging(self):
+        self.logger = KittenLogger(
+            self.cfg, algorithm="cats", engine=DictEngine, path=self.logging_path
+        )
+        self.logger.register_providers(
+            [
+                (self.algorithm, "train"),
+                (self.intrinsic, "intrinsic"),
+                (self.collector, "collector"),
+                (self.memory, "memory"),
+            ]
+        )
+        # self.evaluator = KittenEvaluator(
+        #     self.env,
+        #     # TODO: Policy that disables resets
+        # )
+        pass
 
     def reset_env(self):
         """Manual reset of the environment"""
@@ -220,11 +227,13 @@ class CatsExperiment:
         if isinstance(self.teleport_strategy, TeleportStrategy):
             s = self.teleport_memory.targets()
             tid = self.teleport_strategy.select(s)
-            self.log["teleport_targets_index"].append(
-                (self.teleport_memory.episode_step, tid)
-            )
             self.teleport_memory.select(tid, self.collector)
-            self.log["teleport_targets_observations"].append(self.collector.obs)
+            self.logger.log(
+                {
+                    "teleport_targets_index": (self.teleport_memory.episode_step, tid),
+                    "teleport_targets_observations": self.collector.obs,
+                }
+            )
         else:
             self.reset_env()
 
@@ -240,22 +249,16 @@ class CatsExperiment:
         # Main Loop
         for step in tqdm(range(1, self.cfg.train.total_frames + 1)):
             # Collect Data
-            obs, action, reward, n_obs, terminated, truncated = self.collector.collect(
-                n=1
-            )[-1]
-            self._update_memory(obs, action, reward, n_obs, terminated, truncated)
+            s_0_c, a_c, r_c, s_1_c, d_c, t_c = self.collector.collect(n=1)[-1]
+            self._update_memory(s_0_c, a_c, r_c, s_1_c, d_c, t_c)
             self.normalise_observation.add_tensor_batch(
-                torch.tensor(n_obs, device=self.device).unsqueeze(0)
+                torch.tensor(s_1_c, device=self.device).unsqueeze(0)
             )
 
             # Teleport
-            self.teleport_memory.update(env=self.collector.env, obs=obs)
+            self.teleport_memory.update(env=self.collector.env, obs=s_0_c)
 
-            if terminated or truncated:
-                if truncated:
-                    self.log["truncation_steps"].append(
-                        self.teleport_memory.episode_step
-                    )
+            if d_c or t_c:
                 self._reset()
 
             # Updates
@@ -280,7 +283,6 @@ class CatsExperiment:
                 reset_value_mixin_enable=False,
             )
             # Update batch
-            s_1 = batch.s_1
             # Question: Should policy learn the value of resetting?
             if self.reset_as_an_action is not None:
                 reset_sample = self.reset_distribution.to(torch.float32)
@@ -302,15 +304,5 @@ class CatsExperiment:
                 # Manually add the penalty to intrinsic rewards
                 r_i = r_i - batch.t * self.reset_as_an_action
 
-            batch.s_1 = s_1
             batch.r = r_i
             self.algorithm.update(batch, aux, step=step)
-
-            # Log
-            self.log["total_intrinsic_reward"] += r_i.mean().item()
-            self.log["total_collected_extrinsic_reward"] += reward
-            self.log["newly_collected_intrinsic_reward"] += self.intrinsic.reward(
-                build_transition_from_update(
-                    obs, action, reward, n_obs, terminated, device=self.device
-                )
-            )[2].item()

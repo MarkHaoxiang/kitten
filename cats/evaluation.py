@@ -98,7 +98,7 @@ def visualise_experiment_value_estimate(
     states = experiment.normalise_observation.transform(states)
     # V
     ax = axs[0]
-    values = experiment.V(states)
+    values = experiment.algorithm.value.v(states)
     norm = mpl.colors.Normalize(vmin=values.min(), vmax=values.max())
     cmap = cm.viridis
     m = cm.ScalarMappable(norm=norm, cmap=cmap)
