@@ -1,7 +1,7 @@
 import copy
 import math
 from logging import WARNING
-from typing import Any, Callable, no_type_check
+from typing import Any, Callable
 
 import torch
 import numpy as np
@@ -13,7 +13,7 @@ from kitten.policy import Policy
 from kitten.common.typing import Log, ObsType, ActType
 from kitten.nn import HasValue
 
-from .logger import log
+from .engine import log
 from .interface import Loggable
 
 

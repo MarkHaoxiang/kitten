@@ -186,7 +186,7 @@ class CatsExperiment:
         """Manual reset of the environment"""
         if self.enable_policy_sampling:
             self.algorithm.reset_critic()
-        o, _ = Deprecatedchcheck_frequency = self.collector.env.reset()
+        o, _ = self.collector.env.reset()
         self.collector.obs = o
         return o
 

@@ -17,3 +17,7 @@ log:
     video:
       enable: false
       path: 
+  engine:
+    type: wandb
+    project: kitten
+    online: false

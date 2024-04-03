@@ -3,31 +3,40 @@ from os.path import join
 import shutil
 from datetime import datetime
 import time
-import logging
+from typing import Type, TypeVar
 
 import torch
 import torch.nn as nn
 
-logger = logging.Logger(name="KittenLogger")
-log = logger.log
 
 # KittenLogger
 import importlib.util
 
-has_wandb = importlib.util.find_spec("wandb") is not None
 has_omegaconf = importlib.util.find_spec("omegaconf") is not None
-if has_wandb and has_omegaconf:
-    import wandb
+if has_omegaconf:
     from omegaconf import OmegaConf, DictConfig
 
 from kitten.common.typing import ModuleNamePairs, Log
 from .interface import Loggable
+from .engine import LogEngine, WandBEngine
+
+
+Engine = TypeVar("Engine", bound=LogEngine)
+
+# TODO: cfg should have validation and be typed
 
 
 class KittenLogger:
     """Logging tool for reinforcement learning experiments"""
 
-    def __init__(self, cfg: DictConfig, algorithm: str, path: str = "log") -> None:
+    def __init__(
+        self,
+        cfg: DictConfig,
+        algorithm: str,
+        engine: Type[Engine] = WandBEngine,
+        engine_kwargs: dict[str, object] = {},
+        path: str = "log",
+    ) -> None:
         """Logging tool for reinforcement learning experiments.
 
         Wandb centric.
@@ -37,13 +46,12 @@ class KittenLogger:
             algorithm (str): Base RL algorithm
             path (str, optional): Path for saved logs. Defaults to "log".
         """
-        if not has_wandb or not has_omegaconf:
-            raise ImportError("Wandb / Omegaconf not available")
+        if not has_omegaconf:
+            raise ImportError("Omegaconf not available")
 
         self.cfg = cfg
         self.name = self.generate_project_name(cfg.env.name, algorithm)
         self.checkpoint_enable = cfg.log.checkpoint.enable
-        self.wandb_enable = cfg.log.wandb
         self._start_time = time.time()
         self._epoch = 0
         self.models: ModuleNamePairs = []
@@ -56,14 +64,14 @@ class KittenLogger:
         if self.checkpoint_enable:
             os.makedirs(join(self.path, "checkpoint"))
         OmegaConf.save(cfg, join(self.path, "config.yaml"))
-        wandb.init(
-            project="curiosity",
-            name=self.name,
-            config=OmegaConf.to_container(  # type: ignore[arg-type]
+
+        self._engine = engine(
+            cfg=OmegaConf.to_container(  # type: ignore[arg-type]
                 cfg, resolve=True, throw_on_missing=True
             ),
-            dir=self.path,
-            mode="online" if self.wandb_enable else "offline",
+            path=self.path,
+            name=self.name,
+            **engine_kwargs,
         )
 
     def generate_project_name(self, environment: str, algorithm: str) -> str:
@@ -104,17 +112,16 @@ class KittenLogger:
             name = name + ".pt"
         self.models.append((model, name))
         self.checkpoint(model, name)
-        if watch and self.wandb_enable:
-            wandb.watch(
-                model,
-                log="all",
-                log_freq=(
-                    watch_frequency
-                    if not watch_frequency is None
-                    else self.cfg.log.frames_per_epoch
-                ),
-                idx=len(self.models),
-            )
+        self._engine.register_model(
+            model=model,
+            idx=len(self.models),
+            watch=watch,
+            watch_frequency=(
+                watch_frequency
+                if watch_frequency is not None
+                else self.cfg.log.frames_per_epoch
+            ),
+        )
 
     def register_models(self, batch: list[tuple[nn.Module, str]], **kwargs):
         """Register multiple models at once
@@ -200,18 +207,17 @@ class KittenLogger:
     def video_path(self) -> str:
         return join(self.path, "video")
 
-    def log(self, kwargs) -> None:
+    def log(self, log: Log) -> None:
         """Logging a metric
 
         Args:
             kwargs (_type_): Passed to Wandb
         """
-        wandb.log(kwargs)
+        self._engine.log(log)
 
     def close(self):
         """Release resources"""
-        if self.wandb_enable:
-            wandb.finish()
+        self._engine.close()
 
     def clear(self):
         """Deletes associated files"""

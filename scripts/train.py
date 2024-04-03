@@ -13,7 +13,12 @@ from kitten.experience.util import (
 from kitten.policy import ColoredNoisePolicy
 from kitten.common import global_seed
 from kitten.common.util import build_env, build_rl, build_intrinsic
-from kitten.logging import KittenEvaluator, KittenLogger, EstimatedValue
+from kitten.logging import (
+    KittenEvaluator,
+    KittenLogger,
+    EstimatedValue,
+    engine_registry,
+)
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -51,6 +56,8 @@ def train(cfg: DictConfig) -> None:
         cfg,
         cfg.algorithm.type,
         path=hydra.core.hydra_config.HydraConfig.get().runtime.output_dir,
+        engine=engine_registry[cfg.log.engine.type],
+        engine_kwargs={k: v for k, v in cfg.log.engine.items() if k != "type"},
     )
     evaluator = KittenEvaluator(env, policy=policy, device=DEVICE, **cfg.log.evaluation)
     # Register logging and checkpoints
