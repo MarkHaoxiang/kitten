@@ -10,7 +10,7 @@ from gymnasium.spaces import Box
 from gymnasium.wrappers.record_video import RecordVideo
 
 from kitten.policy import Policy
-from kitten.common.typing import Log, ObsType, ActType
+from kitten.common.typing import Log, ObsType, ActType, Device
 from kitten.nn import HasValue
 
 from .engine import log
@@ -27,7 +27,7 @@ class KittenEvaluator(Loggable):
         video=False,
         saved_reset_states: int = 10,
         evaluation_repeats: int = 10,
-        device: str = "cpu",
+        device: Device = "cpu",
     ) -> None:
         """Evaluate Training Runs.
 

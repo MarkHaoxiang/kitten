@@ -33,14 +33,22 @@ class ResetEvaluationPolicy(Policy):
         super().reset()
         self._step_counter = 0
 
+    def enable_evaluation(self) -> None:
+        super().enable_evaluation()
+        self._policy.enable_evaluation()
+    
+    def disable_evaluation(self) -> None:
+        super().disable_evaluation()
+        self._policy.disable_evaluation()
     
     def __call__(self, obs: Tensor | NDArray[Any], *args, **kwargs):
         action = self._policy(obs, *args, **kwargs)
+        self._step_counter += 1
         if self.train:
             return action
         else:
             assert isinstance(self._env.action_space, gym.spaces.Box), "Not yet implemented for non-box action spaces"
-            if self._step_counter >= self._maximum_steps:
+            if self._step_counter > self._maximum_steps:
                 # Truncate
                 action[-1] = 1
             else:

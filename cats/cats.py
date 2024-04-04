@@ -11,7 +11,6 @@ from omegaconf import DictConfig
 # Kitten
 from kitten.experience.util import (
     build_replay_buffer,
-    build_transition_from_update,
     build_transition_from_list,
 )
 from kitten.experience.collector import GymCollector
@@ -26,6 +25,7 @@ from .rl import QTOptCats, ResetValueOverloadAux
 from .env import *
 from .reset import *
 from .teleport import *
+from .logging import *
 
 
 class CatsExperiment:
@@ -175,19 +175,25 @@ class CatsExperiment:
         self.logger = KittenLogger(
             self.cfg, algorithm="cats", engine=DictEngine, path=self.logging_path
         )
+        
+        if self.reset_as_an_action is None:
+            evaluation_policy = self.policy
+        else:
+            evaluation_policy = ResetEvaluationPolicy(self.env, self.policy)
+        self.evaluator = KittenEvaluator(
+            self.env,
+            policy=evaluation_policy
+        )
+
         self.logger.register_providers(
             [
                 (self.algorithm, "train"),
                 (self.intrinsic, "intrinsic"),
                 (self.collector, "collector"),
                 (self.memory, "memory"),
+                (self.evaluator, "evaluation"),
             ]
         )
-        # self.evaluator = KittenEvaluator(
-        #     self.env,
-        #     # TODO: Policy that disables resets
-        # )
-        pass
 
     def reset_env(self):
         """Manual reset of the environment"""
@@ -306,3 +312,8 @@ class CatsExperiment:
 
             batch.r = r_i
             self.algorithm.update(batch, aux, step=step)
+
+            # Evaluation Epoch
+            if step % self.cfg.log.frames_per_epoch:
+                self.evaluator.evaluate(repeats=1)
+                self.logger.epoch()

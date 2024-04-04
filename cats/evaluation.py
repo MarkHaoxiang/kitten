@@ -70,8 +70,9 @@ def visualise_memory(experiment: CatsExperiment):
 
 
 def visualise_experiment_value_estimate(
-    experiment: CatsExperiment, device: str = "cpu"
+    experiment: CatsExperiment
 ):
+    device = experiment.device
     supported_environments = ["MountainCarContinuous-v0"]
     if not experiment.env.unwrapped.spec.id in supported_environments:
         raise ValueError("Environment not supported")
