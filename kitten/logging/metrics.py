@@ -4,9 +4,9 @@ from logging import WARNING
 from typing import Any, Callable
 
 import torch
+from torch import Tensor
 import numpy as np
 from gymnasium import Env
-from gymnasium.spaces import Box
 from gymnasium.wrappers.record_video import RecordVideo
 
 from kitten.policy import Policy
@@ -169,11 +169,13 @@ class EstimatedValue(Loggable):
             self._target = target
             self._evaluator = evaluator
 
+    def estimate_value(self, obs: Tensor) -> float:
+        assert isinstance(self._target, HasValue), "Doesn't have a value function"
+        return self._target.value.v(obs).mean().item()
+
     def get_log(self) -> Log:
-        if self._target is not None:
+        if isinstance(self._target, HasValue):
             return {
-                "critic_value": self._target.value.v(self._evaluator.saved_reset_states)
-                .mean()
-                .item()
+                "critic_value": self.estimate_value(self._evaluator.saved_reset_states)
             }
         return {}

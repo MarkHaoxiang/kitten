@@ -96,7 +96,7 @@ def visualise_experiment_value_estimate(
     states = states.to(device)
     # Observation Normalisation
     states_cpu = states.cpu()
-    states = experiment.normalise_observation.transform(states)
+    states = experiment.rmv.transform(states)
     # V
     ax = axs[0]
     values = experiment.algorithm.value.v(states)

@@ -106,7 +106,7 @@ class CatsExperiment:
         self.teleport_memory = LatestEpisodeTeleportMemory(
             self.rng.build_generator(), device=self.device
         )
-        self.normalise_observation.prepend(self.teleport_memory.targets)
+        self.rmv.prepend(self.teleport_memory.targets)
 
     def _build_intrinsic(self):
         self.intrinsic = build_intrinsic(
@@ -156,7 +156,7 @@ class CatsExperiment:
         )
 
     def _build_data(self):
-        self.memory, self.normalise_observation = build_replay_buffer(
+        self.memory, self.rmv = build_replay_buffer(
             self.env,
             capacity=self.cfg.total_frames,
             normalise_observation=True,
@@ -164,9 +164,7 @@ class CatsExperiment:
         )
         # Remove automatic memory addition for more control
         self.collector = GymCollector(self.policy, self.env, device=self.device)
-        self.policy.fn = self.normalise_observation.append(
-            self.policy.fn, bind_method_type=False
-        )
+        self.rmv.append(self.policy.fn)
 
     def _update_memory(self, obs, action, reward, n_obs, terminated, truncated):
         self.memory.append((obs, action, reward, n_obs, terminated, truncated))
@@ -224,7 +222,7 @@ class CatsExperiment:
         self.collector.policy = policy
         batch = build_transition_from_list(results, device=self.device)
         self.intrinsic.initialise(batch)
-        self.normalise_observation.add_tensor_batch(batch.s_1)
+        self.rmv.add_tensor_batch(batch.s_1)
 
     # ==============================
     # Key Algorithm: Teleportation
@@ -257,7 +255,7 @@ class CatsExperiment:
             # Collect Data
             s_0_c, a_c, r_c, s_1_c, d_c, t_c = self.collector.collect(n=1)[-1]
             self._update_memory(s_0_c, a_c, r_c, s_1_c, d_c, t_c)
-            self.normalise_observation.add_tensor_batch(
+            self.rmv.add_tensor_batch(
                 torch.tensor(s_1_c, device=self.device).unsqueeze(0)
             )
 
@@ -292,7 +290,7 @@ class CatsExperiment:
             # Question: Should policy learn the value of resetting?
             if self.reset_as_an_action is not None:
                 reset_sample = self.reset_distribution.to(torch.float32)
-                reset_sample = self.normalise_observation.transform(reset_sample)
+                reset_sample = self.rmv.transform(reset_sample)
                 critics = random.sample(self.algorithm.critics, 2)
                 a_1 = self.algorithm.policy_fn(reset_sample, critic=critics[0].target)
                 a_2 = self.algorithm.policy_fn(reset_sample, critic=critics[1].target)
@@ -315,5 +313,5 @@ class CatsExperiment:
 
             # Evaluation Epoch
             if step % self.cfg.log.frames_per_epoch == 0:
-                self.evaluator.evaluate(repeats=1)
+                # self.evaluator.evaluate(repeats=1)
                 self.logger.epoch()
