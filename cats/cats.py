@@ -173,15 +173,12 @@ class CatsExperiment:
         self.logger = KittenLogger(
             self.cfg, algorithm="cats", engine=DictEngine, path=self.logging_path
         )
-        
+
         if self.reset_as_an_action is None:
             evaluation_policy = self.policy
         else:
             evaluation_policy = ResetEvaluationPolicy(self.env, self.policy)
-        self.evaluator = KittenEvaluator(
-            self.env,
-            policy=evaluation_policy
-        )
+        self.evaluator = KittenEvaluator(self.env, policy=evaluation_policy)
 
         self.logger.register_providers(
             [
@@ -288,7 +285,7 @@ class CatsExperiment:
             )
             # Update batch
             # Question: Should policy learn the value of resetting?
-            if self.reset_as_an_action is not None:
+            if self.death_is_not_the_end or self.reset_as_an_action is not None:
                 reset_sample = self.reset_distribution.to(torch.float32)
                 reset_sample = self.rmv.transform(reset_sample)
                 critics = random.sample(self.algorithm.critics, 2)
@@ -298,15 +295,16 @@ class CatsExperiment:
                 target_max_2 = critics[1].target.q(reset_sample, a_2).squeeze()
                 reset_value = torch.minimum(target_max_1, target_max_2).mean().item()
                 aux.v_1 = aux.v_1 * reset_value
-                select = batch.t
-                if self.death_is_not_the_end:
+                if self.reset_as_an_action is not None:
                     select = torch.logical_or(batch.t, batch.d)
+                elif self.death_is_not_the_end:
+                    select = batch.d
                 aux.reset_value_mixin_select = select
                 aux.reset_value_mixin_enable = True
-
                 # Since we don't consider extrinsic rewards (for now)
                 # Manually add the penalty to intrinsic rewards
-                r_i = r_i - batch.t * self.reset_as_an_action
+                if self.reset_as_an_action:
+                    r_i = r_i - batch.t * self.reset_as_an_action
 
             batch.r = r_i
             self.algorithm.update(batch, aux, step=step)

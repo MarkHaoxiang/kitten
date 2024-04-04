@@ -6,6 +6,7 @@ from gymnasium import Env
 from gymnasium.spaces import Box
 from kitten.common.typing import ActType, ObsType
 
+
 def policy_wrapper(
     policy: Callable[[ObsType], Any], env: Env[ObsType, ActType]
 ) -> Callable[[ObsType], ActType]:

@@ -69,7 +69,7 @@ def train(cfg: DictConfig) -> None:
             (collector, "collector"),
             (evaluator, "evaluation"),
             (memory, "memory"),
-            (EstimatedValue(algorithm, evaluator), "train"), #TODO: RMV messes this up
+            (EstimatedValue(algorithm, evaluator), "train"),  # TODO: RMV messes this up
         ]
     )
 

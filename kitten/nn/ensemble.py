@@ -7,12 +7,12 @@ import torch.nn as nn
 from kitten.common.rng import Generator
 
 T = TypeVar("T", bound=nn.Module)
+
+
 class Ensemble(nn.Module, Generic[T]):
-    
-    def __init__(self,
-                 build_network: Callable[[], T],
-                 n: int = 5,
-                 rng: Generator | None = None
+
+    def __init__(
+        self, build_network: Callable[[], T], n: int = 5, rng: Generator | None = None
     ) -> None:
         super().__init__()
 
@@ -35,7 +35,7 @@ class Ensemble(nn.Module, Generic[T]):
     @property
     def networks(self) -> nn.ModuleList:
         return self._networks
-    
+
     @property
     def ensemble_numer(self) -> int:
         return self._n

@@ -29,6 +29,7 @@ from kitten.common.typing import Device
 
 from .rng import Generator
 
+
 def build_env(
     name: str,
     normalise_observation: bool = False,

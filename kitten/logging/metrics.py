@@ -124,6 +124,7 @@ class KittenEvaluator(Loggable):
     def __setstate__(self, state):
         vars(self).update(state)
 
+
 def evaluate(
     env: Env[ObsType, ActType], policy: Callable[[ObsType], ActType], repeat: int = 1
 ) -> tuple[float, float, float]:

@@ -6,13 +6,15 @@ import random
 import torch
 import numpy as np
 
+
 class Generator:
     """Encapsulates Torch and Numpy generators to maintain consistent state across different modules"""
 
-    def __init__(self,
-                 np_rng: np.random.Generator | None = None,
-                 torch_rng: torch.Generator | None = None
-        ) -> None:
+    def __init__(
+        self,
+        np_rng: np.random.Generator | None = None,
+        torch_rng: torch.Generator | None = None,
+    ) -> None:
         """Encapsulates Torch and Numpy generators to maintain consistent state across different modules
 
         Args:
@@ -25,7 +27,7 @@ class Generator:
             self._np_rng = np_rng
         if torch_rng is None:
             self._torch_rng = torch.Generator()
-        else: 
+        else:
             self._torch_rng = torch_rng
 
     def build_seed(self) -> int:
