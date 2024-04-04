@@ -1,16 +1,15 @@
 from abc import ABC, abstractmethod
-from typing import Any, Generic, TypeVar
+from typing import Any, Generic
 
 import gymnasium as gym
-import numpy as np
 from numpy.typing import NDArray
 import torch
-from torch import Tensor
 
 from kitten.experience.memory import ReplayBuffer
 from kitten.logging import Loggable
 from kitten.policy import Policy
 from kitten.common.typing import Device, ActType
+from kitten.common.lib import policy_wrapper
 
 
 class DataCollector(Loggable, ABC):
@@ -81,24 +80,6 @@ class GymCollector(Generic[ActType], DataCollector):
         self.frame = 0
         super().__init__(policy, env, memory)
 
-    def _policy(self, obs: NDArray[Any], *args, **kwargs) -> ActType:
-        """Obtain action from observations
-
-        Args:
-            obs (np.ndarray): Gymnasium environment
-
-        Returns:
-            np.ndarray: _description_
-        """
-        action = self.policy(obs, *args, **kwargs)
-        if isinstance(action, torch.Tensor):
-            action = action.cpu().detach().numpy()
-        if isinstance(self.env.action_space, gym.spaces.Box) and isinstance(
-            action, np.ndarray
-        ):
-            action = action.clip(self.env.action_space.low, self.env.action_space.high)
-        return action
-
     def collect(
         self,
         n: int,
@@ -107,6 +88,7 @@ class GymCollector(Generic[ActType], DataCollector):
         *args,
         **kwargs,
     ) -> list[tuple[NDArray[Any], ActType, float, NDArray[Any], bool, bool]]:
+        policy = policy_wrapper(self.policy, self.env)
         if not early_start:
             self.frame += n
         with torch.no_grad():
@@ -114,7 +96,7 @@ class GymCollector(Generic[ActType], DataCollector):
             obs = self.obs
             for _ in range(n):
                 # Calculate actions
-                action = self._policy(obs, *args, **kwargs)
+                action = policy(obs, *args, **kwargs)
                 # Step
                 n_obs, reward, terminated, truncated, _ = self.env.step(action)
                 transition_tuple = (

@@ -69,9 +69,9 @@ def train(cfg: DictConfig) -> None:
             (collector, "collector"),
             (evaluator, "evaluation"),
             (memory, "memory"),
+            (EstimatedValue(algorithm, evaluator), "train"),
         ]
     )
-    logger.register_provider(EstimatedValue(algorithm, evaluator), "train")
 
     # Training Loop
     # Early start intialisation

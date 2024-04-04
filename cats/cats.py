@@ -314,6 +314,6 @@ class CatsExperiment:
             self.algorithm.update(batch, aux, step=step)
 
             # Evaluation Epoch
-            if step % self.cfg.log.frames_per_epoch:
+            if step % self.cfg.log.frames_per_epoch == 0:
                 self.evaluator.evaluate(repeats=1)
                 self.logger.epoch()

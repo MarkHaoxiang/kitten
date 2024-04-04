@@ -11,6 +11,7 @@ from gymnasium.wrappers.record_video import RecordVideo
 
 from kitten.policy import Policy
 from kitten.common.typing import Log, ObsType, ActType, Device
+from kitten.common.lib import policy_wrapper
 from kitten.nn import HasValue
 
 from .engine import log
@@ -122,21 +123,6 @@ class KittenEvaluator(Loggable):
 
     def __setstate__(self, state):
         vars(self).update(state)
-
-
-def policy_wrapper(
-    policy: Callable[[ObsType], Any], env: Env[ObsType, ActType]
-) -> Callable[[ObsType], ActType]:
-    def pi(obs):
-        action = policy(obs)
-        if isinstance(action, torch.Tensor):
-            action = action.cpu().numpy()
-        if action.shape == () and isinstance(env.action_space, Box):
-            action = np.expand_dims(action, 0)
-        return action
-
-    return pi
-
 
 def evaluate(
     env: Env[ObsType, ActType], policy: Callable[[ObsType], ActType], repeat: int = 1
