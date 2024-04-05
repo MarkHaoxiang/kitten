@@ -13,7 +13,7 @@ from sklearn.neighbors import KernelDensity
 from kitten.experience.memory import ReplayBuffer
 from kitten.experience import Transitions
 
-from cats import CatsExperiment
+from ..cats import CatsExperiment
 
 
 def entropy_memory(memory: ReplayBuffer):

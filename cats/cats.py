@@ -234,14 +234,17 @@ class CatsExperiment:
     # Key Algorithm: Teleportation
     # ==============================
     def _reset(self):
+        self.logger.log({
+            "reset_step": self.teleport_memory.episode_step,
+            "reset_obs": self.collector.obs
+        })
         if isinstance(self.teleport_strategy, TeleportStrategy):
-            initial_step = self.teleport_memory.episode_step
             s = self.teleport_memory.targets()
             tid = self.teleport_strategy.select(s)
             self.teleport_memory.select(tid, self.collector)
             self.logger.log(
                 {
-                    "teleport_targets_index": (initial_step, tid),
+                    "teleport_targets_index": tid,
                     "teleport_targets_observations": self.collector.obs,
                 }
             )

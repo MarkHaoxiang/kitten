@@ -84,7 +84,7 @@ class RunningMeanVariance(Generic[T], Transform[T, T]):
 
     def transform(
         self, data: Any, normalise_mean: bool = True, normalise_std: bool = True
-    ) -> Any:
+    ) -> T:
         """Normalisation by statistics recorded in this instance"""
         if normalise_mean:
             data = data - self.mean
