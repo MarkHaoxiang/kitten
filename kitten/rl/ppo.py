@@ -29,6 +29,7 @@ class ProximalPolicyOptimisation(Algorithm[AuxiliaryData], HasActor):
         rng: Generator,
         update_epochs: int = 4,
         minibatch_size: int = 32,
+        clip_ratio: float = 0.1,
         lr: float = 1e-3,
         **kwargs,
     ) -> None:
@@ -36,6 +37,7 @@ class ProximalPolicyOptimisation(Algorithm[AuxiliaryData], HasActor):
         self._advantage_estimation = advantage_estimation
         self._update_epochs = update_epochs
         self._minibatch_size = minibatch_size
+        self._clip_ratio = clip_ratio 
         self._optim = torch.optim.Adam(params=self._actor.parameters(), lr=lr)
         self._rng = rng.numpy
         self._loss = torch.nn.MSELoss()
@@ -52,6 +54,7 @@ class ProximalPolicyOptimisation(Algorithm[AuxiliaryData], HasActor):
         with torch.no_grad():
             log_prob_orig = self._actor.log_prob(batch.s_0, batch.a)
 
+        total_loss = 0
         for _ in range(self._update_epochs):
             indices = np.arange(n)
             self._rng.shuffle(indices, axis=0)
@@ -60,7 +63,19 @@ class ProximalPolicyOptimisation(Algorithm[AuxiliaryData], HasActor):
                     i * self._minibatch_size, min(n, (i + 1) * self._minibatch_size)
                 ]
                 mb = batch[mb_indices]
+                a_hat_mb = a_hat[mb_indices]
+                log_prob_update = self._actor.log_prob(mb.s_0, mb.a)
+                ratio = (log_prob_update / log_prob_orig)
+                actor_loss = -torch.minimum(
+                    ratio * a_hat_mb,
+                    torch.clamp(ratio, 1-self._clip_ratio, 1+self._clip_ratio) * a_hat_mb
+                ).mean()
                 self._optim.zero_grad()
+                total_loss += actor_loss.item()
+                actor_loss.backward()
+                self._optim.step()
+
+        return total_loss
 
     @property
     def actor(self) -> Actor:
