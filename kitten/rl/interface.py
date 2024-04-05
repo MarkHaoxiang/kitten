@@ -6,11 +6,8 @@ from torch import Tensor
 from kitten.experience import AuxiliaryData, Transitions
 from kitten.logging import Loggable
 
-
 # This file contains a set of interfaces commonly used in RL
 Aux = TypeVar("Aux", bound=AuxiliaryData)
-
-
 class Algorithm(Loggable, Generic[Aux], ABC):
     """Interface for RL Policy Improvement Algorithms"""
 

@@ -1,31 +1,20 @@
-from abc import ABC, abstractmethod
 import math
 from typing import Any
 
 import numpy as np
 import torch
-from torch import Tensor
 
 from kitten.nn import Actor, StochasticActor, HasActor
 from kitten.experience import Transitions
 from kitten.common.rng import Generator
 from .interface import Algorithm, AuxiliaryData
 
-
-class AdvantageEstimation(ABC):
-    @abstractmethod
-    def A(self, batch: Transitions) -> Tensor:
-        raise NotImplementedError
-
-    def update(self, batch: Transitions, aux: AuxiliaryData, step: int):
-        pass
-
-
+from .advantage import AdvantageEstimator
 class ProximalPolicyOptimisation(Algorithm[AuxiliaryData], HasActor):
     def __init__(
         self,
         actor: StochasticActor,
-        advantage_estimation: AdvantageEstimation,
+        advantage_estimation: AdvantageEstimator,
         rng: Generator,
         update_epochs: int = 4,
         minibatch_size: int = 32,
@@ -44,7 +33,6 @@ class ProximalPolicyOptimisation(Algorithm[AuxiliaryData], HasActor):
 
     def update(self, batch: Transitions, aux: AuxiliaryData, step: int) -> Any:
         # Calculate Advantage
-        self._advantage_estimation.update(batch, aux, step)
         a_hat = self._advantage_estimation.A(batch)
         # Update Policy
         n = len(
