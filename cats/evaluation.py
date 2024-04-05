@@ -28,32 +28,64 @@ def visualise_teleport_targets(experiment: CatsExperiment, fig: Figure, ax: Axes
     env = experiment.env
     s = np.array(experiment.logger._engine.results["teleport_targets_observations"])
     s, (x_label, x_low, x_high), (y_label, y_low, y_high) = env_to_2d(env, s)
+    print(s.shape)
+
+    norm = mpl.colors.Normalize(vmin=0, vmax=len(s) - 1)
+    cmap = cm.viridis
+    m = cm.ScalarMappable(norm=norm, cmap=cmap)
+    colors = m.to_rgba(np.linspace(0, len(s) - 1, len(s)))
+
     ax.set_xlim(x_low, x_high)
     ax.set_xlabel(x_label)
     ax.set_ylim(y_low, y_high)
     ax.set_ylabel(y_label)
     for i, (x, y) in enumerate(s):
-        ax.scatter(x, y, s=2)
+        ax.scatter(x, y, s=2, color=colors[i])
     ax.set_title("Teleportation Targets")
+
+    fig.colorbar(m, ax=ax)
     return fig, ax
 
 
+def inverse_to_env(env: gym.Env, s):
+    match env.spec.id:
+        case "MountainCarContinuous-v0":
+            return s
+        case "Pendulum-v1":
+            return np.stack((np.cos(s[:, 0]), np.sin(s[:, 0]), s[:, 1]), axis=1)
+        case _:
+            raise ValueError("Environment not yet supported")
+
+
 def env_to_2d(env: gym.Env, s):
-    supported_environments = ["MountainCarContinuous-v0", "Pendulum-v1"]
-    if not env.spec.id in supported_environments:
-        raise ValueError("Environment not supported")
     match env.spec.id:
         case "MountainCarContinuous-v0":
             return (
                 s if s is not None else None,
-                ("Position", env.observation_space.low[0], env.observation_space.high[0]),
-                ("Velocity", env.observation_space.low[1], env.observation_space.high[1])
+                (
+                    "Position",
+                    env.observation_space.low[0],
+                    env.observation_space.high[0],
+                ),
+                (
+                    "Velocity",
+                    env.observation_space.low[1],
+                    env.observation_space.high[1],
+                ),
             )
         case "Pendulum-v1":
             return (
-                np.arctan2(s[:, 1], s[:, 0]) if s is not None else None, 
+                (
+                    np.stack((np.arctan2(s[:, 1], s[:, 0]), s[:, 2]), axis=1)
+                    if s is not None
+                    else None
+                ),
                 ("Theta", -math.pi, math.pi),
-                ("Angular Velocity", env.observation_space.low[2], env.observation_space.high[2])
+                (
+                    "Angular Velocity",
+                    env.observation_space.low[2],
+                    env.observation_space.high[2],
+                ),
             )
         case _:
             raise ValueError("Environment not yet supported")
@@ -83,54 +115,56 @@ def visualise_memory(experiment: CatsExperiment, fig: Figure, ax: Axes):
 
     fig.colorbar(m, ax=ax)
 
+
 def visualise_experiment_value_estimate(
     experiment: CatsExperiment,
     fig: Figure,
     ax_v: Axes | None = None,
-    ax_p: Axes | None = None
+    ax_p: Axes | None = None,
 ):
-    device = experiment.device
-    supported_environments = ["MountainCarContinuous-v0", "Pendulum-v1"]
-    if not experiment.env.unwrapped.spec.id in supported_environments:
-        raise ValueError("Environment not supported")
-    # Plot
-
+    _, (x_label, x_low, x_high), (y_label, y_low, y_high) = env_to_2d(
+        experiment.env, None
+    )
     # Construct Grid
     X = torch.linspace(
-        experiment.env.observation_space.low[0],
-        experiment.env.observation_space.high[0],
+        x_low,
+        x_high,
         100,
     )
     Y = torch.linspace(
-        experiment.env.observation_space.low[1],
-        experiment.env.observation_space.high[1],
+        y_low,
+        y_high,
         100,
     )
     grid_X, grid_Y = torch.meshgrid((X, Y))
     states = torch.stack((grid_X.flatten(), grid_Y.flatten())).T
-    states = states.to(device)
+
     # Observation Normalisation
-    states_cpu = states.cpu()
-    states = experiment.rmv.transform(states)
+    s = torch.tensor(inverse_to_env(experiment.env, states), device=experiment.device)
+    s = experiment.rmv.transform(s)
     # V
     if ax_v is not None:
-        values = experiment.algorithm.value.v(states)
+        values = experiment.algorithm.value.v(s)
         norm = mpl.colors.Normalize(vmin=values.min(), vmax=values.max())
         cmap = cm.viridis
         m = cm.ScalarMappable(norm=norm, cmap=cmap)
         colors = m.to_rgba(values.detach().cpu())
 
         ax_v.set_title("Value Function Visualisation")
-        ax_v.scatter(states_cpu[:, 0], states_cpu[:, 1], c=colors)
+        ax_v.scatter(states[:, 0], states[:, 1], c=colors)
+        ax_v.set_xlabel(x_label)
+        ax_v.set_ylabel(y_label)
         fig.colorbar(m, ax=ax_v)
 
     # Policy
-    actions = experiment.algorithm.policy_fn(states)[:, :1]
+    actions = experiment.algorithm.policy_fn(s)[:, :1]
     if ax_p is not None:
         norm = mpl.colors.Normalize(vmin=-1, vmax=1)
         cmap = cm.viridis
         m = cm.ScalarMappable(norm=norm, cmap=cmap)
         colors = m.to_rgba(actions.detach().cpu())
-        ax_p.scatter(states_cpu[:, 0], states_cpu[:, 1], c=colors)
+        ax_p.scatter(states[:, 0], states[:, 1], c=colors)
         ax_p.set_title("Policy Actions")
+        ax_p.set_xlabel(x_label)
+        ax_p.set_ylabel(y_label)
         fig.colorbar(m, ax=ax_p)

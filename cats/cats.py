@@ -158,7 +158,7 @@ class CatsExperiment:
     def _build_data(self):
         self.memory, self.rmv = build_replay_buffer(
             self.env,
-            capacity=self.cfg.total_frames,
+            capacity=self.cfg.train.total_frames + self.cfg.train.initial_collection_size,
             normalise_observation=True,
             device=self.device,
         )
@@ -206,7 +206,16 @@ class CatsExperiment:
         """
         self.reset_env()
         policy = self.collector.policy
-        self.collector.set_policy(Policy(lambda _: self.env.action_space.sample()))
+        if self.reset_as_an_action is None:
+            self.collector.set_policy(Policy(lambda _: self.env.action_space.sample()))
+        else:
+            # TODO: Edit reset evaluation policy with a small probability of of resets,
+            # But teleport right back! To improve initial learning of reset value
+            early_start_policy = ResetEvaluationPolicy(
+                self.env, Policy(lambda _: self.env.action_space.sample())
+            )
+            early_start_policy.enable_evaluation()
+            self.collector.set_policy(early_start_policy)
         results = []
         for i in range(n):
             obs, action, reward, n_obs, terminated, truncated = self.collector.collect(
@@ -226,12 +235,13 @@ class CatsExperiment:
     # ==============================
     def _reset(self):
         if isinstance(self.teleport_strategy, TeleportStrategy):
+            initial_step = self.teleport_memory.episode_step
             s = self.teleport_memory.targets()
             tid = self.teleport_strategy.select(s)
             self.teleport_memory.select(tid, self.collector)
             self.logger.log(
                 {
-                    "teleport_targets_index": (self.teleport_memory.episode_step, tid),
+                    "teleport_targets_index": (initial_step, tid),
                     "teleport_targets_observations": self.collector.obs,
                 }
             )
