@@ -10,6 +10,7 @@ from torch import Tensor
 import torch.nn as nn
 
 from kitten.policy.interface import PolicyFn
+from kitten.common.rng import Generator
 
 
 class Actor(ABC, nn.Module):
@@ -32,6 +33,8 @@ class Actor(ABC, nn.Module):
 
 
 class StochasticActor(Actor, nn.Module):
+
+    @abstractmethod
     def log_prob(self, s: Tensor, a: Tensor) -> Tensor:
         raise NotImplementedError
 
@@ -209,3 +212,50 @@ class ClassicalBoxActor(Actor):
 
     def forward(self, x: Tensor):
         return self.net(x) * self.scale + self.bias
+
+class ClassicalDiscreteStochasticActor(StochasticActor):
+    def __init__(self,
+                 env: Env,
+                 rng: Generator | None = None,
+                 net: nn.Module | None = None,
+                 features: int = 128
+        ) -> None:
+        super().__init__()
+        assert isinstance(env.action_space, gym.spaces.Discrete)
+        assert isinstance(env.observation_space, gym.spaces.Box)
+
+        self._n = env.action_space.n
+        if net is None:
+            self.net: nn.Module = nn.Sequential(
+                nn.Linear(
+                    in_features=env.observation_space.shape[0], out_features=features
+                ),
+                nn.LeakyReLU(),
+                nn.Linear(in_features=features, out_features=features),
+                nn.LeakyReLU(),
+                nn.Linear(
+                    in_features=features, out_features=self._n
+                )
+            )
+        else:
+            self.net = net
+
+
+        self._softmax = nn.Softmax()
+        self._log_softmax = nn.LogSoftmax()
+        self._rng = rng
+
+    def forward(self, x):
+        return self.net(x)
+
+    def a(self, s: Tensor) -> Tensor:
+        p = self._softmax(self.net(s))
+        a = torch.multinomial(input=p, num_samples=1)
+        return a
+
+    def log_prob(self, s: Tensor, a: Tensor) -> Tensor:
+        return torch.gather(
+            input=self._log_softmax(self.net(s)),
+            dim=1,
+            index=a
+        )
