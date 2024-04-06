@@ -7,10 +7,11 @@ from numpy.typing import NDArray
 from gymnasium import Env
 from gymnasium.spaces.discrete import Discrete
 from jaxtyping import Float32
+import hydra
 
 from kitten.dataflow.normalisation import RunningMeanVariance
 from kitten.experience import Transitions
-from kitten.common.typing import ActType, ObsType, Device, Shape, Log
+from kitten.common.typing import ActType, Device, Shape, Log
 from .memory import ReplayBuffer, PrioritizedReplayBuffer
 from .collector import DataCollector, GymCollector
 from .interface import AuxiliaryMemoryData, Memory
@@ -107,7 +108,7 @@ def build_transition_from_update(
 ) -> Transitions:
     """Utility to wrap a single gym update into a transition"""
     obs = torch.tensor(obs, device=device, dtype=torch.float32)
-    action = torch.tensor(action, device=device, dtype=torch.float32)
+    action = torch.tensor(action, device=device)
     reward = torch.tensor(reward, device=device, dtype=torch.float32)
     n_obs = torch.tensor(n_obs, device=device, dtype=torch.float32)
     terminated = torch.tensor(terminated, device=device)

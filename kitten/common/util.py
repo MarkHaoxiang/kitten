@@ -2,6 +2,7 @@
 
 from typing import Any
 
+import hydra
 import gymnasium as gym
 from gymnasium import Env
 from gymnasium.spaces import Box, Discrete
@@ -21,6 +22,7 @@ from kitten.intrinsic import IntrinsicReward, NoIntrinsicReward
 from kitten.intrinsic.icm import IntrinsicCuriosityModule
 from kitten.intrinsic.rnd import RandomNetworkDistillation
 from kitten.intrinsic.disagreement import Disagreement
+from kitten.logging import KittenLogger, engine_registry
 from kitten.rl import Algorithm
 from kitten.rl.ddpg import DeepDeterministicPolicyGradient
 from kitten.rl.td3 import TwinDelayedDeepDeterministicPolicyGradient
@@ -63,7 +65,9 @@ def build_env(
     return env
 
 
-def build_rl(env: gym.Env, algorithm_configuration, device: Device) -> Algorithm:
+def build_rl(
+    env: gym.Env[Any, Any], algorithm_configuration, device: Device
+) -> Algorithm:
     """Utility to construct a RL algorithm"""
     if algorithm_configuration.type == "ddpg":
         assert isinstance(env.action_space, gym.spaces.Box)
@@ -308,3 +312,15 @@ def build_disagreement(
         ).to(device=device)
 
     return Disagreement(build_forward_head, feature_net=None, lr=lr, **kwargs)
+
+
+def build_logger(cfg, path: str | None = None) -> KittenLogger:
+    if path is None:
+        path = hydra.core.hydra_config.HydraConfig.get().runtime.output_dir
+    return KittenLogger(
+        cfg,
+        cfg.algorithm.type,
+        path=path,
+        engine=engine_registry[cfg.log.engine.type],
+        engine_kwargs={k: v for k, v in cfg.log.engine.items() if k != "type"},
+    )

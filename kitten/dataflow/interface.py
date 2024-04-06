@@ -104,6 +104,9 @@ class Transform(Generic[IN, OUT], ABC):
             raise ValueError(f"{f} is not a valid function target")
 
 
-class Identity(Generic[T], Transform[T, T]):
+class Identity(Transform[Any, Any]):
     def transform(self, data: T, *args, **kwargs) -> T:
         return data
+
+
+identity = Identity()

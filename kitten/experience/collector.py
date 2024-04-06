@@ -85,6 +85,7 @@ class GymCollector(Generic[ActType], DataCollector):
         n: int,
         append_memory: bool = True,
         early_start: bool = False,
+        single_episode: bool = False,
         *args,
         **kwargs,
     ) -> list[tuple[NDArray[Any], ActType, float, NDArray[Any], bool, bool]]:
@@ -93,32 +94,35 @@ class GymCollector(Generic[ActType], DataCollector):
             self.frame += n
         with torch.no_grad():
             result = []
-            obs = self.obs
+            s = self.obs
             for _ in range(n):
                 # Calculate actions
-                action = policy(obs, *args, **kwargs)
+                a = policy(s, *args, **kwargs)
                 # Step
-                n_obs, reward, terminated, truncated, _ = self.env.step(action)
-                transition_tuple = (
-                    obs,
-                    action,
-                    float(reward),
-                    n_obs,
-                    terminated,
-                    truncated,
+                s_1, r, d, t, _ = self.env.step(a)
+                transition = (
+                    s,
+                    a,
+                    float(r),
+                    s_1,
+                    d,
+                    t,
                 )
                 # Store buffer
-                result.append(transition_tuple)
+                result.append(transition)
                 if not self.memory is None and append_memory:
-                    self.memory.append(transition_tuple, update=not early_start)
+                    self.memory.append(transition, update=not early_start)
                 # Reset
-                if terminated or truncated:
-                    n_obs, _ = self.env.reset()
+                if d or t:
+                    s_1, _ = self.env.reset()
                     self.policy.reset()
                 # Crucial Step
-                obs = n_obs
+                s = s_1
+                if (d or t) and single_episode:
+                    self.obs = s
+                    return result
 
-            self.obs = obs
+            self.obs = s
             return result
 
     def early_start(

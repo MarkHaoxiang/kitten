@@ -11,7 +11,10 @@ TorchCompatible: TypeAlias = int | float | bool | complex | torch.Tensor | NDArr
 
 
 def shape_annotation(shape: Shape) -> str:
-    return " ".join(map(str, shape))
+    if len(shape) > 0:
+        return " ".join(map(str, shape))
+    else:
+        return ""
 
 
 Device: TypeAlias = str | torch.device

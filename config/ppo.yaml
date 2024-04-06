@@ -1,0 +1,5 @@
+seed: 0
+env:
+  name: CartPole-v1
+train:
+  total_frames: 1000

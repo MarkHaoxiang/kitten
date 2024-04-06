@@ -167,7 +167,7 @@ class ClassicalDiscreteCritic(Critic):
         if a is None:
             return self(s)
         else:
-            return self(s)[a]
+            return torch.gather(self(s), dim=-1, index=a).squeeze()
 
     def forward(self, x: Tensor):
         return self.net(x)
@@ -213,13 +213,15 @@ class ClassicalBoxActor(Actor):
     def forward(self, x: Tensor):
         return self.net(x) * self.scale + self.bias
 
+
 class ClassicalDiscreteStochasticActor(StochasticActor):
-    def __init__(self,
-                 env: Env,
-                 rng: Generator | None = None,
-                 net: nn.Module | None = None,
-                 features: int = 128
-        ) -> None:
+    def __init__(
+        self,
+        env: Env,
+        rng: Generator | None = None,
+        net: nn.Module | None = None,
+        features: int = 128,
+    ) -> None:
         super().__init__()
         assert isinstance(env.action_space, gym.spaces.Discrete)
         assert isinstance(env.observation_space, gym.spaces.Box)
@@ -233,16 +235,13 @@ class ClassicalDiscreteStochasticActor(StochasticActor):
                 nn.LeakyReLU(),
                 nn.Linear(in_features=features, out_features=features),
                 nn.LeakyReLU(),
-                nn.Linear(
-                    in_features=features, out_features=self._n
-                )
+                nn.Linear(in_features=features, out_features=self._n),
             )
         else:
             self.net = net
 
-
-        self._softmax = nn.Softmax()
-        self._log_softmax = nn.LogSoftmax()
+        self._softmax = nn.Softmax(-1)
+        self._log_softmax = nn.LogSoftmax(-1)
         self._rng = rng
 
     def forward(self, x):
@@ -254,8 +253,7 @@ class ClassicalDiscreteStochasticActor(StochasticActor):
         return a
 
     def log_prob(self, s: Tensor, a: Tensor) -> Tensor:
-        return torch.gather(
-            input=self._log_softmax(self.net(s)),
-            dim=1,
-            index=a
-        )
+        log_prob = self._log_softmax(self.net(s))
+        if len(a.shape) < len(log_prob.shape):
+            a = a.unsqueeze(-1)
+        return torch.gather(input=log_prob, dim=-1, index=a)

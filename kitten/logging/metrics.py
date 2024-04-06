@@ -9,6 +9,7 @@ import numpy as np
 from gymnasium import Env
 from gymnasium.wrappers.record_video import RecordVideo
 
+from kitten.dataflow import Transform, identity
 from kitten.policy import Policy
 from kitten.common.typing import Log, ObsType, ActType, Device
 from kitten.common.lib import policy_wrapper
@@ -161,7 +162,13 @@ def evaluate(
 class EstimatedValue(Loggable):
     """The estimated value of the reset distribution"""
 
-    def __init__(self, target: Any, evaluator: KittenEvaluator) -> None:
+    def __init__(
+        self,
+        target: Any,
+        evaluator: KittenEvaluator,
+        obs_transform: Transform | None = None,
+        post_transform: Transform | None = None,
+    ) -> None:
         super().__init__()
         self._target: None | HasValue = None
         if not isinstance(target, HasValue):
@@ -169,10 +176,17 @@ class EstimatedValue(Loggable):
         else:
             self._target = target
             self._evaluator = evaluator
+        self._obs_transform = obs_transform if obs_transform is not None else identity
+        self._post_transform = (
+            post_transform if post_transform is not None else identity
+        )
 
     def estimate_value(self, obs: Tensor) -> float:
         assert isinstance(self._target, HasValue), "Doesn't have a value function"
-        return self._target.value.v(obs).mean().item()
+        obs = self._obs_transform.transform(obs)
+        res = self._target.value.v(obs).mean().item()
+        res = self._post_transform.transform(res)
+        return res
 
     def get_log(self) -> Log:
         if isinstance(self._target, HasValue):

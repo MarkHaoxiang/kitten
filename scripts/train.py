@@ -12,13 +12,8 @@ from kitten.experience.util import (
 )
 from kitten.policy import ColoredNoisePolicy
 from kitten.common import global_seed
-from kitten.common.util import build_env, build_rl, build_intrinsic
-from kitten.logging import (
-    KittenEvaluator,
-    KittenLogger,
-    EstimatedValue,
-    engine_registry,
-)
+from kitten.common.util import build_env, build_rl, build_intrinsic, build_logger
+from kitten.logging import KittenEvaluator, EstimatedValue
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -52,13 +47,7 @@ def train(cfg: DictConfig) -> None:
     collector = build_collector(policy, env, memory, device=DEVICE)
 
     # Logging and Evaluation
-    logger = KittenLogger(
-        cfg,
-        cfg.algorithm.type,
-        path=hydra.core.hydra_config.HydraConfig.get().runtime.output_dir,
-        engine=engine_registry[cfg.log.engine.type],
-        engine_kwargs={k: v for k, v in cfg.log.engine.items() if k != "type"},
-    )
+    logger = build_logger(cfg)
     evaluator = KittenEvaluator(env, policy=policy, device=DEVICE, **cfg.log.evaluation)
     # Register logging and checkpoints
     logger.register_models(algorithm.get_models())
@@ -69,7 +58,7 @@ def train(cfg: DictConfig) -> None:
             (collector, "collector"),
             (evaluator, "evaluation"),
             (memory, "memory"),
-            (EstimatedValue(algorithm, evaluator), "train"),  # TODO: RMV messes this up
+            (EstimatedValue(algorithm, evaluator, obs_transform=rmv), "train"),
         ]
     )
 
@@ -92,8 +81,8 @@ def train(cfg: DictConfig) -> None:
         # RL Update
         batch, aux = memory.sample(cfg.train.minibatch_size)
         # Intrinsic Update
-        r_t, _, _ = intrinsic.reward(batch)
         intrinsic.update(batch, aux, step=step)
+        r_t, _, _ = intrinsic.reward(batch)
         batch = Transitions(batch.s_0, batch.a, r_t, batch.s_1, batch.d)
         # Algorithm Update
         algorithm.update(batch, aux, step=step)
@@ -101,7 +90,8 @@ def train(cfg: DictConfig) -> None:
         if step % cfg.log.frames_per_epoch == 0:
             pbar.set_description(
                 f"epoch {logger.epoch()} reward {evaluator.evaluate(policy)}"
-            ), pbar.update(1)
+            )
+            pbar.update(1)
         # Update checkpoints
         if step % cfg.log.checkpoint.frames_per_checkpoint == 0:
             logger.checkpoint_registered(step)

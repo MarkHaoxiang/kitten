@@ -158,7 +158,8 @@ class CatsExperiment:
     def _build_data(self):
         self.memory, self.rmv = build_replay_buffer(
             self.env,
-            capacity=self.cfg.train.total_frames + self.cfg.train.initial_collection_size,
+            capacity=self.cfg.train.total_frames
+            + self.cfg.train.initial_collection_size,
             normalise_observation=True,
             device=self.device,
         )
@@ -234,10 +235,12 @@ class CatsExperiment:
     # Key Algorithm: Teleportation
     # ==============================
     def _reset(self):
-        self.logger.log({
-            "reset_step": self.teleport_memory.episode_step,
-            "reset_obs": self.collector.obs
-        })
+        self.logger.log(
+            {
+                "reset_step": self.teleport_memory.episode_step,
+                "reset_obs": self.collector.obs,
+            }
+        )
         if isinstance(self.teleport_strategy, TeleportStrategy):
             s = self.teleport_memory.targets()
             tid = self.teleport_strategy.select(s)
