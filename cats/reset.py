@@ -94,11 +94,13 @@ class ResetPolicy(Policy):
         assert isinstance(env, ResetActionWrapper), "Env should be reset_action"
         self._env = env
 
-    def fn(self, obs: Tensor):
-        return self._policy.fn(obs)
+    @property
+    def fn(self):
+        return self._policy.fn
 
     def reset(self) -> None:
         super().reset()
+        self._policy.reset()
         self._step_counter = 0
 
     def enable_evaluation(self) -> None:
