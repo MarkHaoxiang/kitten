@@ -127,7 +127,7 @@ class KittenEvaluator(Loggable):
 
 
 def evaluate(
-    env: Env[ObsType, ActType], policy: Callable[[ObsType], ActType], repeat: int = 1
+    env: Env[ObsType, ActType], policy: Callable[[ObsType], ActType] | Policy, repeat: int = 1
 ) -> tuple[float, float, float]:
     """Evaluates an episode
 
@@ -144,6 +144,8 @@ def evaluate(
         with torch.no_grad():
             env.close()
             obs, _ = env.reset(seed=seed)
+            if isinstance(policy, Policy):
+                policy.reset()
             terminated = False
             truncated = False
             while not terminated and not truncated:

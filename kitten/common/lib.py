@@ -4,12 +4,15 @@ import numpy as np
 import torch
 from gymnasium import Env
 from gymnasium.spaces import Box, Discrete
+
+from kitten.policy import Policy
 from kitten.common.typing import ActType, ObsType
 
 
-def policy_wrapper(
-    policy: Callable[[ObsType], Any], env: Env[ObsType, ActType]
+def policy_wrapper(policy: Callable[[ObsType], Any] | Policy,
+                   env: Env[ObsType, ActType]
 ) -> Callable[[ObsType], ActType]:
+
     def pi(obs):
         action = policy(obs)
         if isinstance(action, torch.Tensor):
@@ -20,4 +23,7 @@ def policy_wrapper(
             action = action[0]
         return action
 
-    return pi
+    if isinstance(policy, Policy):
+        return Policy(fn=pi, device=policy.device)
+    else:
+        return pi

@@ -57,7 +57,8 @@ class QTOptCats(Algorithm, HasCritic, HasValue):
 
         self.critics = Ensemble(
             lambda: AddTargetNetwork(build_critic(), device=device),
-            n=ensemble_number
+            n=ensemble_number,
+            rng=rng
         )
 
         self.device = device

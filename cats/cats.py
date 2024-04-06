@@ -155,6 +155,8 @@ class CatsExperiment:
             device=self.device,
             **self.cfg.noise,
         )
+        if self.reset_as_an_action is not None:
+            self.policy = ResetPolicy(env=self.env, policy=self.policy)
 
     def _build_data(self):
         self.memory, self.rmv = build_replay_buffer(
@@ -175,12 +177,7 @@ class CatsExperiment:
         self.logger = KittenLogger(
             self.cfg, algorithm="cats", engine=DictEngine, path=self.logging_path
         )
-
-        if self.reset_as_an_action is None:
-            evaluation_policy = self.policy
-        else:
-            evaluation_policy = ResetEvaluationPolicy(self.env, self.policy)
-        self.evaluator = KittenEvaluator(self.env, policy=evaluation_policy)
+        self.evaluator = KittenEvaluator(self.env, policy=self.policy)
 
         self.logger.register_providers(
             [
@@ -213,7 +210,7 @@ class CatsExperiment:
         else:
             # TODO: Edit reset evaluation policy with a small probability of of resets,
             # But teleport right back! To improve initial learning of reset value
-            early_start_policy = ResetEvaluationPolicy(
+            early_start_policy = ResetPolicy(
                 self.env, Policy(lambda _: self.env.action_space.sample())
             )
             early_start_policy.enable_evaluation()
@@ -236,6 +233,7 @@ class CatsExperiment:
     # Key Algorithm: Teleportation
     # ==============================
     def _reset(self):
+        # Collector actually already resets the policy, so don't need to repeat here
         self.logger.log(
             {
                 "reset_step": self.teleport_memory.episode_step,
