@@ -139,6 +139,7 @@ class CatsExperiment:
             ),
             action_space=self.env.action_space,
             obs_space=self.env.observation_space,
+            rng=self.rng.build_generator(),
             device=self.device,
             **self.cfg.algorithm,
         )
@@ -304,11 +305,12 @@ class CatsExperiment:
             if self.death_is_not_the_end or self.reset_as_an_action is not None:
                 reset_sample = self.reset_distribution.to(torch.float32)
                 reset_sample = self.rmv.transform(reset_sample)
-                critics = random.sample(self.algorithm.critics, 2)
-                a_1 = self.algorithm.policy_fn(reset_sample, critic=critics[0].target)
-                a_2 = self.algorithm.policy_fn(reset_sample, critic=critics[1].target)
-                target_max_1 = critics[0].target.q(reset_sample, a_1).squeeze()
-                target_max_2 = critics[1].target.q(reset_sample, a_2).squeeze()
+                c_1 = self.algorithm.critics.sample_network()
+                c_2 = self.algorithm.critics.sample_network()
+                a_1 = self.algorithm.policy_fn(reset_sample, critic=c_1.target)
+                a_2 = self.algorithm.policy_fn(reset_sample, critic=c_2.target)
+                target_max_1 = c_1.target.q(reset_sample, a_1).squeeze()
+                target_max_2 = c_2.target.q(reset_sample, a_2).squeeze()
                 reset_value = torch.minimum(target_max_1, target_max_2).mean().item()
                 aux.v_1 = aux.v_1 * reset_value
                 if self.reset_as_an_action is not None:

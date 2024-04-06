@@ -39,3 +39,9 @@ class Ensemble(nn.Module, Generic[T]):
     @property
     def ensemble_numer(self) -> int:
         return self._n
+
+    def __getitem__(self, key) -> T:
+        return self._networks[key]
+
+    def sample_network(self) -> T:
+        return self._rng.numpy.choice(self._networks)

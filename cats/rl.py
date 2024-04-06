@@ -1,6 +1,5 @@
 from typing import Callable
 from dataclasses import dataclass
-import random
 
 import numpy as np
 import torch
@@ -9,11 +8,12 @@ import torch.nn as nn
 import gymnasium as gym
 from jaxtyping import Float, Bool
 
+from kitten.common.rng import Generator
 from kitten.experience import Transitions
 from kitten.rl import Algorithm
 from kitten.rl.qt_opt import cross_entropy_method
 from kitten.experience import AuxiliaryMemoryData
-from kitten.nn import Critic, AddTargetNetwork, HasCritic, HasValue, CriticPolicyPair
+from kitten.nn import Critic, AddTargetNetwork, HasCritic, HasValue, CriticPolicyPair, Ensemble
 
 
 @dataclass
@@ -40,6 +40,7 @@ class QTOptCats(Algorithm, HasCritic, HasValue):
         build_critic: Callable[[], Critic],
         obs_space: gym.spaces.Box,
         action_space: gym.spaces.Box,
+        rng: Generator,
         ensemble_number: int = 5,
         gamma: float = 0.99,
         lr: float = 1e-3,
@@ -54,10 +55,10 @@ class QTOptCats(Algorithm, HasCritic, HasValue):
     ) -> None:
         super().__init__()
 
-        self.critics = [
-            AddTargetNetwork(build_critic(), device=device)
-            for _ in range(ensemble_number)
-        ]
+        self.critics = Ensemble(
+            lambda: AddTargetNetwork(build_critic(), device=device),
+            n=ensemble_number
+        )
 
         self.device = device
 
@@ -80,17 +81,17 @@ class QTOptCats(Algorithm, HasCritic, HasValue):
         self._n = cem_n
         self._m = cem_m
         self._n_iterations = cem_n_iterations
-        self._chosen_critic = 0
+        self._chosen_critic = self.critics.sample_network().net
 
         self._optim_critic = torch.optim.Adam(
-            params=torch.nn.ModuleList(self.critics).parameters(), lr=lr
+            params=self.critics.parameters(), lr=lr
         )
 
         self.loss_critic_value = 0
 
     @property
     def critic(self):
-        return self.critics[self._chosen_critic].net
+        return self._chosen_critic
 
     @property
     def value(self):
@@ -128,18 +129,19 @@ class QTOptCats(Algorithm, HasCritic, HasValue):
         return result
 
     def reset_critic(self):
-        self._chosen_critic = random.randint(0, self._ensemble_number - 1)
+        self._chosen_critic = self.critics.sample_network().net
 
     def _critic_update(self, batch: Transitions, aux: ResetValueOverloadAux):
         x = [critic.net.q(batch.s_0, batch.a).squeeze() for critic in self.critics]
         with torch.no_grad():
             # Implement a variant of Clipped Double-Q Learning
             # Randomly sample two networks
-            sampled_critics = random.sample(self.critics, 2)
-            a_1 = self.policy_fn(batch.s_1, critic=sampled_critics[0].target)
-            a_2 = self.policy_fn(batch.s_1, critic=sampled_critics[1].target)
-            target_max_1 = sampled_critics[0].target.q(batch.s_1, a_1).squeeze()
-            target_max_2 = sampled_critics[1].target.q(batch.s_1, a_2).squeeze()
+            c_1 = self.critics.sample_network()
+            c_2 = self.critics.sample_network()
+            a_1 = self.policy_fn(batch.s_1, critic=c_1.target)
+            a_2 = self.policy_fn(batch.s_1, critic=c_2.target)
+            target_max_1 = c_1.target.q(batch.s_1, a_1).squeeze()
+            target_max_2 = c_2.target.q(batch.s_1, a_2).squeeze()
             y_1 = torch.minimum(target_max_1, target_max_2)
             if aux.reset_value_mixin_enable:
                 y_1 = torch.where(
