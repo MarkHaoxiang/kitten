@@ -114,7 +114,7 @@ class TeleportMemory(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def select(self, tid: int) -> tuple[gym.Env, NDArray[Any]]:
+    def select(self, tid: int, collector: GymCollector) -> tuple[gym.Env, NDArray[Any]]:
         """Teleport to target tid
 
         Returns:
@@ -161,12 +161,32 @@ class LatestEpisodeTeleportMemory(TeleportMemory):
 
 class FIFOTeleportMemory(TeleportMemory):
     def __init__(
-        self, env: gym.Env, capacity: int = 1024, device: Device = "cpu"
+        self, env: gym.Env, rng: Generator, capacity: int = 1024, device: Device = "cpu"
     ) -> None:
-        super().__init__()
+        super().__init__(rng=rng)
         self.teleport_target_observations = ReplayBuffer(
             capacity=capacity,
-            shape=(env.observation_space.shape,),
-            dtype=(torch.float32,),
+            shape=(env.observation_space.shape, ()),
+            dtype=(torch.float32, torch.int32),
             device=device,
         )
+        self.teleport_target_saves = [None for _ in range(capacity)]
+        self.episode_step = 0
+    
+    def update(self, env: gym.Env, obs: NDArray[Any]):
+        self.teleport_target_saves[self.teleport_target_observations._append_index] = self.state
+        self.state = copy.deepcopy(env)
+        self.teleport_target_observations.append((obs, self.episode_step))
+        self.episode_step += 1
+    
+    def targets(self):
+        (s, _), _ = self.teleport_target_observations.sample(len(self.teleport_target_observations))
+        return s
+    
+    def select(self, tid: int, collector: GymCollector) -> tuple[gym.Env, NDArray[Any]]:
+        obs, self.episode_step = self.teleport_target_observations._fetch_storage(indices=tid)
+        self.episode_step = self.episode_step.item()
+        env = copy.deepcopy(self.teleport_target_saves[tid])
+        collector.env, collector.obs = env, obs.cpu().numpy()
+        collector.env.np_random = self.rng.build_generator().numpy
+        return env, obs

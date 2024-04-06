@@ -118,8 +118,8 @@ class ResetPolicy(Policy):
         action = self._policy(obs, *args, **kwargs)
         self._step_counter += 1
         if self.train:
-            # if self._step_counter < self._minimum_exploration_time:
-            #     action[-1] = 0
+            if self._step_counter < self._minimum_exploration_time:
+                action[-1] = 0
             return action
         else:
             if self._step_counter > self._maximum_eval_steps:

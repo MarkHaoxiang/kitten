@@ -102,10 +102,14 @@ class CatsExperiment:
                     raise ValueError(
                         f"Unknown Teleport Strategy {self.teleport_strategy}"
                     )
-
-        self.teleport_memory = LatestEpisodeTeleportMemory(
-            self.rng.build_generator(), device=self.device
-        )
+        if self.deprecated_testing_flag:
+            self.teleport_memory = LatestEpisodeTeleportMemory(
+                self.rng.build_generator(), device=self.device
+            )
+        else:
+            self.teleport_memory = FIFOTeleportMemory(
+                self.env, self.rng.build_generator(), device=self.device
+            )
         self.rmv.prepend(self.teleport_memory.targets)
 
     def _build_intrinsic(self):
@@ -177,15 +181,12 @@ class CatsExperiment:
         self.logger = KittenLogger(
             self.cfg, algorithm="cats", engine=DictEngine, path=self.logging_path
         )
-        self.evaluator = KittenEvaluator(self.env, policy=self.policy)
-
         self.logger.register_providers(
             [
                 (self.algorithm, "train"),
                 (self.intrinsic, "intrinsic"),
                 (self.collector, "collector"),
-                (self.memory, "memory"),
-                (self.evaluator, "evaluation"),
+                (self.memory, "memory")
             ]
         )
 
@@ -281,8 +282,9 @@ class CatsExperiment:
             batch, aux = self.memory.sample(self.cfg.train.minibatch_size)
 
             # Death is not the end - disabled termination
-            if self.death_is_not_the_end:
-                batch.d = torch.zeros_like(batch.d, device=self.device).bool()
+            # Death is not the end is managed by overriding the update
+            #if self.death_is_not_the_end:
+            #   batch.d = torch.zeros_like(batch.d, device=self.device).bool()
             # Intrinsic Reward Calculation
             r_t, r_e, r_i = self.intrinsic.reward(batch)
             self.intrinsic.update(batch, aux, step=step)
@@ -327,5 +329,4 @@ class CatsExperiment:
 
             # Evaluation Epoch
             if step % self.cfg.log.frames_per_epoch == 0:
-                # self.evaluator.evaluate(repeats=1)
                 self.logger.epoch()
