@@ -1,10 +1,55 @@
+import copy
 from typing import Any
 
 import gymnasium as gym
 import numpy as np
 from numpy.typing import NDArray
+import torch
 from torch import Tensor
+
 from kitten.policy import Policy
+from kitten.experience.memory import ReplayBuffer
+from kitten.common.typing import Device
+from kitten.common.rng import Generator
+from kitten.experience.collector import GymCollector
+
+class ResetBuffer:
+    def __init__(self,
+                 env: gym.Env,
+                 capacity: int = 1024,
+                 rng: Generator = None,
+                 device: Device = "cpu"
+    ) -> None:
+        super().__init__()
+        self.capacity = capacity
+        self.env = copy.deepcopy(env)
+        self.rng = rng
+        self.reset_target_observations = ReplayBuffer(
+            capacity=capacity,
+            shape=(env.observation_space.shape,),
+            dtype=(torch.float32,),
+            device=device
+        )
+        self.reset_envs = [None for _ in range(self.capacity)]
+        self.refresh()
+    
+    def refresh(self) -> None:
+        assert self.reset_target_observations._append_index == 0
+        self.reset_envs = []
+        for _ in range(self.capacity):
+            obs, _ = self.env.reset()
+            self.reset_target_observations.append((obs,))
+            self.reset_envs.append(copy.deepcopy(self.env))
+
+    def targets(self):
+        return self.reset_target_observations.storage[0]
+
+    def select(self, tid: int, collector: GymCollector) -> tuple[gym.Env, NDArray[Any]]:
+        obs = self.reset_target_observations._fetch_storage(indices=tid)[0]
+        env = copy.deepcopy(self.reset_envs[tid])
+        collector.env, collector.obs = env, obs.cpu().numpy()
+        collector.env.np_random = self.rng.build_generator().numpy
+        return env, obs
 
 class ResetActionWrapper(gym.Wrapper, gym.utils.RecordConstructorArgs):
     """This wrapper adds an extra action option to the environment, and taking it send a truncation signal"""

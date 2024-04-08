@@ -180,9 +180,8 @@ class FIFOTeleportMemory(TeleportMemory):
         self.episode_step += 1
     
     def targets(self):
-        (s, _), _ = self.teleport_target_observations.sample(len(self.teleport_target_observations))
-        return s
-    
+        return self.teleport_target_observations.storage[0][:len(self.teleport_target_observations)]
+
     def select(self, tid: int, collector: GymCollector) -> tuple[gym.Env, NDArray[Any]]:
         obs, self.episode_step = self.teleport_target_observations._fetch_storage(indices=tid)
         self.episode_step = self.episode_step.item()

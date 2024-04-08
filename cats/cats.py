@@ -18,7 +18,7 @@ from kitten.policy import ColoredNoisePolicy, Policy
 from kitten.common import *
 from kitten.common.typing import Device
 from kitten.common.util import *
-from kitten.logging import DictEngine, KittenLogger, KittenEvaluator
+from kitten.logging import DictEngine, KittenLogger
 
 # Cats
 from .rl import QTOptCats, ResetValueOverloadAux
@@ -75,13 +75,6 @@ class CatsExperiment:
         self._build_teleport()
         self._build_logging()
 
-        self.reset_distribution = np.array(
-            [self.reset_env() for _ in range(1 if self.fixed_reset else 1024)]
-        )
-        self.reset_distribution = torch.tensor(
-            self.reset_distribution, device=self.device
-        )
-
     def _build_teleport(self):
         teleport_rng = self.rng.build_generator()
         if self.teleport_strategy is not None:
@@ -110,6 +103,15 @@ class CatsExperiment:
             self.teleport_memory = FIFOTeleportMemory(
                 self.env, self.rng.build_generator(), device=self.device
             )
+
+        self.reset_memory = ResetBuffer(
+            env=self.env,
+            capacity=1 if self.fixed_reset else 1024,
+            rng=self.rng.build_generator(),
+            device=self.device
+        )
+
+        self.rmv.prepend(self.reset_memory.targets)
         self.rmv.prepend(self.teleport_memory.targets)
 
     def _build_intrinsic(self):
@@ -281,10 +283,7 @@ class CatsExperiment:
             # Updates
             batch, aux = self.memory.sample(self.cfg.train.minibatch_size)
 
-            # Death is not the end - disabled termination
-            # Death is not the end is managed by overriding the update
-            #if self.death_is_not_the_end:
-            #   batch.d = torch.zeros_like(batch.d, device=self.device).bool()
+            
             # Intrinsic Reward Calculation
             r_t, r_e, r_i = self.intrinsic.reward(batch)
             self.intrinsic.update(batch, aux, step=step)
@@ -300,11 +299,11 @@ class CatsExperiment:
                 ).bool(),
                 reset_value_mixin_enable=False,
             )
+            
             # Update batch
             # Question: Should policy learn the value of resetting?
             if self.death_is_not_the_end or self.reset_as_an_action is not None:
-                reset_sample = self.reset_distribution.to(torch.float32)
-                reset_sample = self.rmv.transform(reset_sample)
+                reset_sample = self.reset_memory.targets()
                 c_1 = self.algorithm.critics.sample_network()
                 c_2 = self.algorithm.critics.sample_network()
                 a_1 = self.algorithm.policy_fn(reset_sample, critic=c_1.target)
@@ -313,6 +312,7 @@ class CatsExperiment:
                 target_max_2 = c_2.target.q(reset_sample, a_2).squeeze()
                 reset_value = torch.minimum(target_max_1, target_max_2).mean().item()
                 aux.v_1 = aux.v_1 * reset_value
+                self.logger.log({"reset_value": reset_value})
                 if self.reset_as_an_action is not None:
                     select = torch.logical_or(batch.t, batch.d)
                 elif self.death_is_not_the_end:
@@ -323,6 +323,9 @@ class CatsExperiment:
                 # Manually add the penalty to intrinsic rewards
                 if self.reset_as_an_action:
                     r_i = r_i - batch.t * self.reset_as_an_action
+
+            if self.death_is_not_the_end:
+               batch.d = torch.zeros_like(batch.d, device=self.device).bool()
 
             batch.r = r_i
             self.algorithm.update(batch, aux, step=step)
