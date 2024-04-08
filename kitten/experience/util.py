@@ -129,9 +129,7 @@ def build_replay_buffer(
     error_fn: Callable[[tuple[Tensor, ...]], NDArray[Any]] | None = None,
     device: Device = "cpu",
     **kwargs,
-) -> tuple[
-    TransitionReplayBuffer, RunningMeanVariance[Float32[torch.Tensor, "..."]] | None
-]:
+) -> tuple[TransitionReplayBuffer, RunningMeanVariance[Tensor] | None]:
     """Creates a replay buffer for env
 
     Args:
@@ -143,7 +141,7 @@ def build_replay_buffer(
         Replay Buffer: A replay buffer designed to hold tuples (State, Action, Reward, Next State, Done)
     """
     if normalise_observation:
-        rmv = RunningMeanVariance[Float32[torch.Tensor, "..."]]()
+        rmv = RunningMeanVariance[Tensor]()
         _normalise_observation = [rmv, None, None, rmv, None, None]
     else:
         _normalise_observation = [None, None, None, None, None, None]

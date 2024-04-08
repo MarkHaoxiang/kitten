@@ -13,7 +13,14 @@ from kitten.experience import Transitions
 from kitten.rl import Algorithm
 from kitten.rl.qt_opt import cross_entropy_method
 from kitten.experience import AuxiliaryMemoryData
-from kitten.nn import Critic, AddTargetNetwork, HasCritic, HasValue, CriticPolicyPair, Ensemble
+from kitten.nn import (
+    Critic,
+    AddTargetNetwork,
+    HasCritic,
+    HasValue,
+    CriticPolicyPair,
+    Ensemble,
+)
 
 
 @dataclass
@@ -58,7 +65,7 @@ class QTOptCats(Algorithm, HasCritic, HasValue):
         self.critics = Ensemble(
             lambda: AddTargetNetwork(build_critic(), device=device),
             n=ensemble_number,
-            rng=rng
+            rng=rng,
         )
 
         self.device = device
@@ -84,9 +91,7 @@ class QTOptCats(Algorithm, HasCritic, HasValue):
         self._n_iterations = cem_n_iterations
         self._chosen_critic = self.critics.sample_network().net
 
-        self._optim_critic = torch.optim.Adam(
-            params=self.critics.parameters(), lr=lr
-        )
+        self._optim_critic = torch.optim.Adam(params=self.critics.parameters(), lr=lr)
 
         self.loss_critic_value = 0
 

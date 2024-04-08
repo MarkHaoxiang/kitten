@@ -50,7 +50,7 @@ class ProximalPolicyOptimisation(Algorithm[AuxiliaryData], HasActor):
             for i in range(n_minibatches):
                 self._optim.zero_grad()
                 mb_indices = indices[
-                    i * self._minibatch_size:min(n, (i + 1) * self._minibatch_size)
+                    i * self._minibatch_size : min(n, (i + 1) * self._minibatch_size)
                 ]
                 mb = batch[mb_indices]
                 a_hat_mb = a_hat[mb_indices]

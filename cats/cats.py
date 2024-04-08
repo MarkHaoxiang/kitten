@@ -1,9 +1,8 @@
 # Std
 import copy
-from typing import Any
+
 
 # Training
-import numpy as np
 import torch
 from tqdm import tqdm
 from omegaconf import DictConfig
@@ -34,38 +33,20 @@ class CatsExperiment:
     def __init__(
         self,
         cfg: DictConfig,
-        collection_steps: int,
-        max_episode_steps: int | None = None,
-        death_is_not_the_end: bool = True,
-        fixed_reset: bool = True,
-        enable_policy_sampling: bool = True,
-        reset_as_an_action: float | None = None,
-        teleport_strategy: tuple[str, Any] | None = None,
-        environment_action_noise: float = 0,
-        seed: int = 0,
         deprecated_testing_flag: bool = False,
-        logging_path="log",
         device: Device = "cpu",
     ):
         # Parameters
         self.cfg = copy.deepcopy(cfg)
-        self.cfg.total_frames = collection_steps
-        self.cfg.seed = seed
-        self.cfg.env.max_episode_steps = max_episode_steps
         self.device = device
 
-        self.fixed_reset = fixed_reset
-        self.enable_policy_sampling = enable_policy_sampling
-        self.death_is_not_the_end = death_is_not_the_end
-        self.environment_action_noise = environment_action_noise
-        self.reset_as_an_action = reset_as_an_action
+        self.fixed_reset = self.cfg.cats.fixed_reset
+        self.enable_policy_sampling = self.cfg.cats.enable_policy_sampling
+        self.death_is_not_the_end = self.cfg.cats.death_not_end
+        self.environment_action_noise = self.cfg.cats.env_action_noise
+        self.reset_as_an_action = self.cfg.cats.reset_action
         self.deprecated_testing_flag = deprecated_testing_flag  # Utility to compare different versions of algorithms for bug testing
-        self.logging_path = logging_path
-        if teleport_strategy is None:
-            self.teleport_strategy = None
-        else:
-            self.teleport_strategy = teleport_strategy[0]
-            self.teleport_strategy_parameters = teleport_strategy[1]
+        self.logging_path = self.cfg.log.path
 
         # Init
         self._build_env()
@@ -77,38 +58,50 @@ class CatsExperiment:
 
     def _build_teleport(self):
         teleport_rng = self.rng.build_generator()
-        if self.teleport_strategy is not None:
-            match self.teleport_strategy:
+        self.teleport_cfg = self.cfg.cats.teleport
+        if self.teleport_cfg.enable:
+            match self.teleport_cfg.type:
                 case "e_greedy":
                     self.teleport_strategy = EpsilonGreedyTeleport(
-                        self.algorithm, teleport_rng, self.teleport_strategy_parameters
+                        algroithm=self.algorithm,
+                        rng=teleport_rng,
+                        **self.teleport_cfg.kwargs,
                     )
                 case "thompson":
                     self.teleport_strategy = ThompsonTeleport(
-                        self.algorithm, teleport_rng, self.teleport_strategy_parameters
+                        algorithm=self.algorithm,
+                        rng=teleport_rng,
+                        **self.teleport_cfg.kwargs,
                     )
                 case "ucb":
                     self.teleport_strategy = UCBTeleport(
-                        self.algorithm, self.teleport_strategy_parameters
+                        algorithm=self.algorithm, **self.teleport_cfg.kwargs
                     )
                 case _:
                     raise ValueError(
-                        f"Unknown Teleport Strategy {self.teleport_strategy}"
+                        f"Unknown Teleport Strategy {self.teleport_cfg.type}"
                     )
-        if self.deprecated_testing_flag:
-            self.teleport_memory = LatestEpisodeTeleportMemory(
-                self.rng.build_generator(), device=self.device
-            )
-        else:
-            self.teleport_memory = FIFOTeleportMemory(
-                self.env, self.rng.build_generator(), device=self.device
-            )
+
+        match self.teleport_cfg.memory.type:
+            case "fifo":
+                self.teleport_memory = FIFOTeleportMemory(
+                    env=self.env,
+                    rng=self.rng.build_generator(),
+                    capacity=self.teleport_cfg.memory.capacity,
+                    device=self.device,
+                )
+            case "episode":
+                self.teleport_memory = LatestEpisodeTeleportMemory(
+                    rng=self.rng.build_generator(), device=self.device
+                )
+            case _:
+                raise ValueError(f"Unknown Teleport Memory")
 
         self.reset_memory = ResetBuffer(
             env=self.env,
             capacity=1 if self.fixed_reset else 128,
             rng=self.rng.build_generator(),
-            device=self.device
+            device=self.device,
         )
 
         self.rmv.prepend(self.reset_memory.targets)
@@ -132,7 +125,7 @@ class CatsExperiment:
                 self.env, noise=self.environment_action_noise
             )
         # Reset as an action
-        if self.reset_as_an_action is not None:
+        if self.reset_as_an_action.enable:
             self.env = ResetActionWrapper(
                 self.env, penalty=self.reset_as_an_action, deterministic=True
             )
@@ -161,7 +154,7 @@ class CatsExperiment:
             device=self.device,
             **self.cfg.noise,
         )
-        if self.reset_as_an_action is not None:
+        if self.reset_as_an_action.enable:
             self.policy = ResetPolicy(env=self.env, policy=self.policy)
 
     def _build_data(self):
@@ -188,7 +181,7 @@ class CatsExperiment:
                 (self.algorithm, "train"),
                 (self.intrinsic, "intrinsic"),
                 (self.collector, "collector"),
-                (self.memory, "memory")
+                (self.memory, "memory"),
             ]
         )
 
@@ -208,7 +201,7 @@ class CatsExperiment:
         """
         self.reset_env()
         policy = self.collector.policy
-        if self.reset_as_an_action is None:
+        if not self.reset_as_an_action.enable:
             self.collector.set_policy(Policy(lambda _: self.env.action_space.sample()))
         else:
             # TODO: Edit reset evaluation policy with a small probability of of resets,
@@ -243,7 +236,7 @@ class CatsExperiment:
                 "reset_obs": self.collector.obs,
             }
         )
-        if isinstance(self.teleport_strategy, TeleportStrategy):
+        if self.teleport_cfg.enable:
             # s_t = self.teleport_memory.targets()
             # s_r = self.reset_memory.targets()
             # s = torch.cat((s_t, s_r))
@@ -293,7 +286,6 @@ class CatsExperiment:
             # Updates
             batch, aux = self.memory.sample(self.cfg.train.minibatch_size)
 
-            
             # Intrinsic Reward Calculation
             r_t, r_e, r_i = self.intrinsic.reward(batch)
             self.intrinsic.update(batch, aux, step=step)
@@ -309,10 +301,10 @@ class CatsExperiment:
                 ).bool(),
                 reset_value_mixin_enable=False,
             )
-            
+
             # Update batch
             # Question: Should policy learn the value of resetting?
-            if self.death_is_not_the_end or self.reset_as_an_action is not None:
+            if self.death_is_not_the_end or self.reset_as_an_action.enable:
                 reset_sample = self.reset_memory.targets()
                 c_1 = self.algorithm.critics.sample_network()
                 c_2 = self.algorithm.critics.sample_network()
@@ -322,7 +314,7 @@ class CatsExperiment:
                 target_max_2 = c_2.target.q(reset_sample, a_2).squeeze()
                 reset_value = torch.minimum(target_max_1, target_max_2).mean().item()
                 aux.v_1 = aux.v_1 * reset_value
-                if self.reset_as_an_action is not None:
+                if self.reset_as_an_action.enable:
                     select = torch.logical_or(batch.t, batch.d)
                 elif self.death_is_not_the_end:
                     select = batch.d
@@ -331,10 +323,10 @@ class CatsExperiment:
                 # Since we don't consider extrinsic rewards (for now)
                 # Manually add the penalty to intrinsic rewards
                 if self.reset_as_an_action:
-                    r_i = r_i - batch.t * self.reset_as_an_action
+                    r_i = r_i - batch.t * self.reset_as_an_action.penalty
 
             if self.death_is_not_the_end:
-               batch.d = torch.zeros_like(batch.d, device=self.device).bool()
+                batch.d = torch.zeros_like(batch.d, device=self.device).bool()
 
             batch.r = r_i
             self.algorithm.update(batch, aux, step=step)
@@ -344,3 +336,6 @@ class CatsExperiment:
                 self.logger.epoch()
                 if self.death_is_not_the_end or self.reset_as_an_action:
                     self.logger.log({"reset_value": reset_value})
+
+        # Store output
+        self.logger.close()

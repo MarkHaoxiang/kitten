@@ -86,9 +86,7 @@ class Transitions:
 
     @jaxtyped(typechecker=typechecker)  # type: ignore[misc]
     @s_0.setter
-    def s_0(
-        self, value: Shaped[Tensor, "{self._batch_annotation} ..."]
-    ):
+    def s_0(self, value: Shaped[Tensor, "{self._batch_annotation} ..."]):
         self._s_0 = value
 
     @property
@@ -97,9 +95,7 @@ class Transitions:
 
     @jaxtyped(typechecker=typechecker)  # type: ignore[misc]
     @a.setter
-    def a(
-        self, value: Shaped[Tensor, "{self._batch_annotation} ..."]
-    ):
+    def a(self, value: Shaped[Tensor, "{self._batch_annotation} ..."]):
         self._a = value
 
     @property
@@ -108,9 +104,7 @@ class Transitions:
 
     @jaxtyped(typechecker=typechecker)  # type: ignore[misc]
     @s_1.setter
-    def s_1(
-        self, value: Shaped[Tensor, "{self._batch_annotation} ..."]
-    ):
+    def s_1(self, value: Shaped[Tensor, "{self._batch_annotation} ..."]):
         self._s_1 = value
 
     @property

@@ -33,9 +33,7 @@ def train(cfg: DictConfig) -> None:
     gae = GeneralisedAdvantageEstimator(value)
     ppo = ProximalPolicyOptimisation(actor, gae, rng)
     collector = GymCollector(
-        env=env,
-        policy=Policy(fn=ppo.policy_fn, device=DEVICE),
-        device=DEVICE
+        env=env, policy=Policy(fn=ppo.policy_fn, device=DEVICE), device=DEVICE
     )
 
     optim_critic = torch.optim.Adam(params=critic.parameters())
@@ -43,19 +41,23 @@ def train(cfg: DictConfig) -> None:
     step = 0
     while step < cfg.train.total_frames:
         # Collect a single episode
-        batch = build_transition_from_list(collector.collect(
-            env.spec.max_episode_steps
-            if env.spec.max_episode_steps is not None
-            else 500,
-            single_episode=True
-        ), device=DEVICE)
+        batch = build_transition_from_list(
+            collector.collect(
+                (
+                    env.spec.max_episode_steps
+                    if env.spec.max_episode_steps is not None
+                    else 500
+                ),
+                single_episode=True,
+            ),
+            device=DEVICE,
+        )
         step += batch.shape[0]
 
         # Update Value Function
         # TODO
         ppo.update(batch, aux=None, step=step)
         break
-        
 
 
 if __name__ == "__main__":

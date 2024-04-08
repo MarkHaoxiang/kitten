@@ -1,0 +1,59 @@
+env:
+  name: MountainCarContinuous-v0
+memory:
+  type: experience_replay
+  normalise_observation: true
+cats:
+  fixed_reset: true
+  death_not_end: true
+  enable_policy_sampling: true
+  reset_action:
+    enable: false
+    penalty: 0.0
+  env_action_noise: 0.0
+  teleport:
+    enable: false
+    type: e_greedy
+    kwargs:
+      e: 0.1
+    memory:
+      type: fifo
+      capacity: 1024
+train:
+  initial_collection_size: 256
+  total_frames: 4096
+  minibatch_size: 128
+algorithm:
+  type: qt_opt
+  gamma: 0.99
+  tau: 0.005
+  lr: 0.01
+  update_frequency: 1
+  clip_grad_norm: 1
+  ensemble_number: 5
+  actor:
+    features: 128
+  critic:
+    features: 128
+intrinsic:
+  type: rnd
+  encoding_size: 32
+  lr: 0.0003
+  int_coef: 1
+  ext_coef: 2
+  reward_normalisation: true
+  normalised_obs_clip: 5
+noise:
+  scale: 0.1
+  beta: 0
+log:
+  name: false
+  checkpoint:
+    enable: false
+  evaluation:
+    video:
+      enable: false
+      path:
+  frames_per_epoch: 100
+  path: test
+seed: 0

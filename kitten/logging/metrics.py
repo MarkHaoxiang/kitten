@@ -127,7 +127,9 @@ class KittenEvaluator(Loggable):
 
 
 def evaluate(
-    env: Env[ObsType, ActType], policy: Callable[[ObsType], ActType] | Policy, repeat: int = 1
+    env: Env[ObsType, ActType],
+    policy: Callable[[ObsType], ActType] | Policy,
+    repeat: int = 1,
 ) -> tuple[float, float, float]:
     """Evaluates an episode
 

@@ -172,18 +172,24 @@ class FIFOTeleportMemory(TeleportMemory):
         )
         self.teleport_target_saves = [None for _ in range(capacity)]
         self.episode_step = 0
-    
+
     def update(self, env: gym.Env, obs: NDArray[Any]):
-        self.teleport_target_saves[self.teleport_target_observations._append_index] = self.state
+        self.teleport_target_saves[self.teleport_target_observations._append_index] = (
+            self.state
+        )
         self.state = copy.deepcopy(env)
         self.teleport_target_observations.append((obs, self.episode_step))
         self.episode_step += 1
-    
+
     def targets(self):
-        return self.teleport_target_observations.storage[0][:len(self.teleport_target_observations)]
+        return self.teleport_target_observations.storage[0][
+            : len(self.teleport_target_observations)
+        ]
 
     def select(self, tid: int, collector: GymCollector) -> tuple[gym.Env, NDArray[Any]]:
-        obs, self.episode_step = self.teleport_target_observations._fetch_storage(indices=tid)
+        obs, self.episode_step = self.teleport_target_observations._fetch_storage(
+            indices=tid
+        )
         self.episode_step = self.episode_step.item()
         env = copy.deepcopy(self.teleport_target_saves[tid])
         collector.env, collector.obs = env, obs.cpu().numpy()

@@ -13,12 +13,14 @@ from kitten.common.typing import Device
 from kitten.common.rng import Generator
 from kitten.experience.collector import GymCollector
 
+
 class ResetBuffer:
-    def __init__(self,
-                 env: gym.Env,
-                 capacity: int = 1024,
-                 rng: Generator = None,
-                 device: Device = "cpu"
+    def __init__(
+        self,
+        env: gym.Env,
+        capacity: int = 1024,
+        rng: Generator = None,
+        device: Device = "cpu",
     ) -> None:
         super().__init__()
         self.capacity = capacity
@@ -28,11 +30,11 @@ class ResetBuffer:
             capacity=capacity,
             shape=(env.observation_space.shape,),
             dtype=(torch.float32,),
-            device=device
+            device=device,
         )
         self.reset_envs = [None for _ in range(self.capacity)]
         self.refresh()
-    
+
     def refresh(self) -> None:
         assert self.reset_target_observations._append_index == 0
         self.reset_envs = []
@@ -50,6 +52,7 @@ class ResetBuffer:
         collector.env, collector.obs = env, obs.cpu().numpy()
         collector.env.np_random = self.rng.build_generator().numpy
         return env, obs
+
 
 class ResetActionWrapper(gym.Wrapper, gym.utils.RecordConstructorArgs):
     """This wrapper adds an extra action option to the environment, and taking it send a truncation signal"""
@@ -114,8 +117,9 @@ class ResetActionWrapper(gym.Wrapper, gym.utils.RecordConstructorArgs):
             # TODO
             raise NotImplementedError()
 
+
 class ResetPolicy(Policy):
-    """ Manually overrides resets for...
+    """Manually overrides resets for...
 
     Removing resets on evaluation episodes (and adds truncation back)
     Enforcing minimum exploration time after resets
@@ -129,7 +133,7 @@ class ResetPolicy(Policy):
         env: ResetActionWrapper,
         policy: Policy,
         minimum_exploration_time: int = 0,
-        maximum_eval_steps: int = 1000
+        maximum_eval_steps: int = 1000,
     ) -> None:
         super().__init__(policy._fn, device=policy.device)
         self._policy = policy

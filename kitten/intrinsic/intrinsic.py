@@ -2,7 +2,6 @@ from abc import ABC, abstractmethod
 
 import torch
 from torch import Tensor
-from jaxtyping import Float32
 
 from kitten.experience import AuxiliaryMemoryData, Transitions
 from kitten.logging import Loggable
@@ -37,7 +36,7 @@ class IntrinsicReward(Loggable, ABC):
 
         # Normalisation
         self._enable_reward_normalisation = reward_normalisation
-        self._reward_normalisation = RunningMeanVariance[Float32[Tensor, "..."]]()
+        self._reward_normalisation = RunningMeanVariance[Tensor]()
         self._normalised_obs_clip = normalised_obs_clip
 
     def _clip_batch(self, batch: Transitions):

@@ -9,8 +9,8 @@ from kitten.policy import Policy
 from kitten.common.typing import ActType, ObsType
 
 
-def policy_wrapper(policy: Callable[[ObsType], Any] | Policy,
-                   env: Env[ObsType, ActType]
+def policy_wrapper(
+    policy: Callable[[ObsType], Any] | Policy, env: Env[ObsType, ActType]
 ) -> Callable[[ObsType], ActType]:
 
     def pi(obs):
