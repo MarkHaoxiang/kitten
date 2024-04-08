@@ -106,7 +106,7 @@ class CatsExperiment:
 
         self.reset_memory = ResetBuffer(
             env=self.env,
-            capacity=1 if self.fixed_reset else 1024,
+            capacity=1 if self.fixed_reset else 128,
             rng=self.rng.build_generator(),
             device=self.device
         )
@@ -244,9 +244,19 @@ class CatsExperiment:
             }
         )
         if isinstance(self.teleport_strategy, TeleportStrategy):
-            s = self.teleport_memory.targets()
-            tid = self.teleport_strategy.select(s)
+            # s_t = self.teleport_memory.targets()
+            # s_r = self.reset_memory.targets()
+            # s = torch.cat((s_t, s_r))
+            # tid = self.teleport_strategy.select(s)
+            # if tid >= len(s_t):
+            #     self.teleport_strategy.select(s)
+            # else:
+            #     self.reset_memory.select(s)
+
+            s_t = self.teleport_memory.targets()
+            tid = self.teleport_strategy.select(s_t)
             self.teleport_memory.select(tid, self.collector)
+
             self.logger.log(
                 {
                     "teleport_targets_index": tid,
@@ -312,7 +322,6 @@ class CatsExperiment:
                 target_max_2 = c_2.target.q(reset_sample, a_2).squeeze()
                 reset_value = torch.minimum(target_max_1, target_max_2).mean().item()
                 aux.v_1 = aux.v_1 * reset_value
-                self.logger.log({"reset_value": reset_value})
                 if self.reset_as_an_action is not None:
                     select = torch.logical_or(batch.t, batch.d)
                 elif self.death_is_not_the_end:
@@ -333,3 +342,5 @@ class CatsExperiment:
             # Evaluation Epoch
             if step % self.cfg.log.frames_per_epoch == 0:
                 self.logger.epoch()
+                if self.death_is_not_the_end or self.reset_as_an_action:
+                    self.logger.log({"reset_value": reset_value})
