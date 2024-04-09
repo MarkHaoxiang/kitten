@@ -83,8 +83,6 @@ class DeepDeterministicPolicyGradient(
             s_0 (Tensor): Observation before action
             a (Tensor): Agent action
             r (Tensor): Reward (s_0, a) -> (s_1
-        # TRY NOT TO MODIFY: record rewards for plotting purposes
-        writer.add_scalar("charts/learning_rate", optimizer.param_groups[0]["lr"],)
             s_1 (Tensor): Observation after action
             d (Tensor): Dones
             weights (Tensor): Loss importance weighting for off-policy
