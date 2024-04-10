@@ -3,6 +3,7 @@
 from typing import Any
 
 import hydra
+from omegaconf import OmegaConf, DictConfig
 import gymnasium as gym
 from gymnasium import Env
 from gymnasium.spaces import Box, Discrete
@@ -27,6 +28,7 @@ from kitten.rl import Algorithm
 from kitten.rl.ddpg import DeepDeterministicPolicyGradient
 from kitten.rl.td3 import TwinDelayedDeepDeterministicPolicyGradient
 from kitten.rl.qt_opt import QTOpt
+from kitten.policy import ColoredNoisePolicy, EpsilonGreedyPolicy, PolicyFn, Policy
 from kitten.common.typing import Device
 
 from .rng import Generator
@@ -116,6 +118,37 @@ def build_rl(
         raise NotImplementedError()
     raise ValueError("Reinforcement learning algorithm type not valid")
 
+def build_policy(policy_fn: PolicyFn,
+                 rng: Generator,
+                 env: Env,
+                 policy_cfg: dict[str, Any] | DictConfig,
+                 device: Device = "cpu"
+    ) -> Policy:
+    if isinstance(policy_cfg, DictConfig):
+        policy_cfg = OmegaConf.to_container(policy_cfg)
+
+    t = policy_cfg.pop("type")
+    match t:
+        case "colour":
+            if "episode_length" not in policy_cfg:
+                policy_cfg["episode_length"] = env.spec.max_episode_steps
+            return ColoredNoisePolicy(
+                fn=policy_fn,
+                action_space=env.action_space,
+                rng=rng,
+                device=device,
+                **policy_cfg,
+            )
+        case "e_greedy":
+            return EpsilonGreedyPolicy(
+                fn=policy_fn,
+                action_space=env.action_space,
+                rng=rng,
+                device=device,
+                **policy_cfg
+            )
+        case _:
+            raise ValueError("Unknown policy type")
 
 def build_actor(env: Env, features: int = 128) -> Actor:
     """Builds an actor for gym environment

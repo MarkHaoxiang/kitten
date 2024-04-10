@@ -26,6 +26,30 @@ from .reset import *
 from .teleport import *
 from .logging import *
 
+class TeleportationResetModule:
+    def __init__(self,
+                 rm: ResetMemory,
+                 tm: TeleportMemory,
+                 ts: TeleportStrategy
+        ) -> None:
+        super().__init__()
+        self.rm = rm
+        self.tm = tm
+        self.ts = ts
+
+    def select(self):
+        # Get possibilities
+        s_t = self.tm.targets()
+        s_r = self.rm.targets()
+        s = torch.cat((s_t, s_r))
+        # Find teleportation target
+        tid = self.ts.select(s)
+        if tid >= len(s_t):
+            env, obs = self.tm.select(s)
+        else:
+            env, obs = self.rm.select(s)
+            self.tm.reset(env, obs)
+        return env, obs
 
 class CatsExperiment:
     """Experiment baseline"""
@@ -97,7 +121,7 @@ class CatsExperiment:
             case _:
                 raise ValueError(f"Unknown Teleport Memory")
 
-        self.reset_memory = ResetBuffer(
+        self.reset_memory = ResetMemory(
             env=self.env,
             capacity=1 if self.fixed_reset else 128,
             rng=self.rng.build_generator(),
@@ -248,12 +272,12 @@ class CatsExperiment:
 
             s_t = self.teleport_memory.targets()
             tid = self.teleport_strategy.select(s_t)
-            self.teleport_memory.select(tid, self.collector)
+            obs = self.teleport_memory.select(tid, self.collector)
 
             self.logger.log(
                 {
                     "teleport_targets_index": tid,
-                    "teleport_targets_observations": self.collector.obs,
+                    "teleport_targets_observations": obs,
                 }
             )
         else:
@@ -339,3 +363,4 @@ class CatsExperiment:
 
         # Store output
         self.logger.close()
+

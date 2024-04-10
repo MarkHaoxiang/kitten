@@ -1,0 +1,8 @@
+type: icm
+encoding_size: 32
+int_coef: 1
+ext_coef: 1
+beta: 0.2
+lr: 0.0003
+reward_normalisation: false
+normalised_obs_clip: 5

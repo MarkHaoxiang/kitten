@@ -10,9 +10,8 @@ from kitten.experience.util import (
     build_replay_buffer,
     build_transition_from_list,
 )
-from kitten.policy import ColoredNoisePolicy
 from kitten.common import global_seed
-from kitten.common.util import build_env, build_rl, build_intrinsic, build_logger
+from kitten.common.util import build_env, build_rl, build_intrinsic, build_logger, build_policy
 from kitten.logging import KittenEvaluator, EstimatedValue
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -28,14 +27,7 @@ def train(cfg: DictConfig) -> None:
 
     # Define actor-critic policy
     algorithm = build_rl(env, cfg.algorithm, device=DEVICE)
-    policy = ColoredNoisePolicy(
-        algorithm.policy_fn,
-        env.action_space,
-        env.spec.max_episode_steps,
-        rng=rng,
-        device=DEVICE,
-        **cfg.noise,
-    )
+    policy = build_policy(algorithm.policy_fn, rng, env, cfg.noise, device=DEVICE)
 
     # Define intrinsic reward
     intrinsic = build_intrinsic(env, cfg.intrinsic, device=DEVICE)

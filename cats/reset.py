@@ -14,7 +14,7 @@ from kitten.common.rng import Generator
 from kitten.experience.collector import GymCollector
 
 
-class ResetBuffer:
+class ResetMemory:
     def __init__(
         self,
         env: gym.Env,

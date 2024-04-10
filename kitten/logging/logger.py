@@ -37,14 +37,17 @@ class KittenLogger:
         engine_kwargs: dict[str, object] = {},
         path: str = "log",
     ) -> None:
-        """Logging tool for reinforcement learning experiments.
-
-        Wandb centric.
+        """ Logging utility to help run experiments
 
         Args:
             cfg (DictConfig): Experiment Configuration
-            algorithm (str): Base RL algorithm
-            path (str, optional): Path for saved logs. Defaults to "log".
+            algorithm (str): 
+            engine (Type[Engine], optional): _description_. Defaults to WandBEngine.
+            engine_kwargs (dict[str, object], optional): _description_. Defaults to {}.
+            path (str | None, optional): _description_. Defaults to None.
+
+        Raises:
+            ImportError: _description_
         """
         if not has_omegaconf:
             raise ImportError("Omegaconf not available")
@@ -73,6 +76,10 @@ class KittenLogger:
             name=self.name,
             **engine_kwargs,
         )
+
+    @property
+    def engine(self) -> LogEngine:
+        return self._engine
 
     def generate_project_name(self, environment: str, algorithm: str) -> str:
         """Generates an identifier for the experiment

@@ -1,6 +1,6 @@
 import importlib
 
-from .interface import Policy
+from .interface import Policy, PolicyFn
 from .e_greedy import EpsilonGreedyPolicy
 
 is_pink_installed = importlib.util.find_spec("pink") is not None

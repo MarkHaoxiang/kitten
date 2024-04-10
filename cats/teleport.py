@@ -107,6 +107,11 @@ class TeleportMemory(ABC):
             obs (NDArray[Any]): Observation
         """
         raise NotImplementedError
+    
+    def reset(env: gym.Env, obs: NDArray[Any]):
+        """ Environment reset
+        """
+        pass
 
     @abstractmethod
     def targets(self):

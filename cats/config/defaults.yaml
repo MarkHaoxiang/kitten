@@ -1,8 +1,9 @@
+defaults:
+  - _self_
+  - intrinsic: rnd
+
 env:
   name: MountainCarContinuous-v0
-memory:
-  type: experience_replay
-  normalise_observation: true
 cats:
   fixed_reset: true
   death_not_end: true
@@ -35,14 +36,6 @@ algorithm:
     features: 128
   critic:
     features: 128
-intrinsic:
-  type: rnd
-  encoding_size: 32
-  lr: 0.0003
-  int_coef: 1
-  ext_coef: 2
-  reward_normalisation: true
-  normalised_obs_clip: 5
 noise:
   scale: 0.1
   beta: 0
@@ -55,5 +48,5 @@ log:
       enable: false
       path:
   frames_per_epoch: 100
-  path: test
+  path: log
 seed: 0
