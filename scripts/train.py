@@ -59,9 +59,10 @@ def train(cfg: DictConfig) -> None:
     batch = build_transition_from_list(
         collector.early_start(cfg.train.initial_collection_size), device=DEVICE
     )
-    intrinsic.initialise(batch)
     if rmv is not None:
         rmv.add_tensor_batch(batch.s_1)
+        batch.s_0, batch.s_1 = rmv.transform(batch.s_0), rmv.transform(batch.s_1)
+    intrinsic.initialise(batch)
     # Main Loop
     pbar = tqdm(
         total=cfg.train.total_frames // cfg.log.frames_per_epoch, file=sys.stdout

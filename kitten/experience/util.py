@@ -144,6 +144,7 @@ def build_replay_buffer(
         rmv = RunningMeanVariance[Tensor]()
         _normalise_observation = [rmv, None, None, rmv, None, None]
     else:
+        rmv = None
         _normalise_observation = [None, None, None, None, None, None]
 
     observation_space = env.observation_space

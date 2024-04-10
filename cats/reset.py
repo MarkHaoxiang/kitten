@@ -47,9 +47,9 @@ class ResetMemory:
         return self.reset_target_observations.storage[0]
 
     def select(self, tid: int, collector: GymCollector) -> tuple[gym.Env, NDArray[Any]]:
-        obs = self.reset_target_observations._fetch_storage(indices=tid)[0]
+        obs = self.reset_target_observations._fetch_storage(indices=tid)[0].cpu().numpy()
         env = copy.deepcopy(self.reset_envs[tid])
-        collector.env, collector.obs = env, obs.cpu().numpy()
+        collector.env, collector.obs = env, obs
         collector.env.np_random = self.rng.build_generator().numpy
         return env, obs
 

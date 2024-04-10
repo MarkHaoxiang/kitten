@@ -48,7 +48,7 @@ class EpsilonGreedyTeleport(TeleportStrategy):
         return teleport_index
 
 
-class ThompsonTeleport(TeleportStrategy):
+class BoltzmannTeleport(TeleportStrategy):
     def __init__(
         self, algorithm: QTOptCats, rng: Generator | None = None, alpha: float = 0.1
     ) -> None:
@@ -158,6 +158,7 @@ class LatestEpisodeTeleportMemory(TeleportMemory):
             copy.deepcopy(self.teleport_target_saves[tid]),
             self.teleport_target_observations[tid],
         )
+        obs = obs.cpu().numpy()
         # Update Collector State
         collector.env, collector.obs = env, obs
         collector.env.np_random = self.rng.build_generator().numpy
@@ -195,8 +196,9 @@ class FIFOTeleportMemory(TeleportMemory):
         obs, self.episode_step = self.teleport_target_observations._fetch_storage(
             indices=tid
         )
+        obs = obs.cpu().numpy()
         self.episode_step = self.episode_step.item()
         env = copy.deepcopy(self.teleport_target_saves[tid])
-        collector.env, collector.obs = env, obs.cpu().numpy()
+        collector.env, collector.obs = env, obs
         collector.env.np_random = self.rng.build_generator().numpy
         return env, obs

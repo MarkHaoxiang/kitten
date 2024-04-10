@@ -1,8 +1,11 @@
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
 from collections.abc import Iterator
 from dataclasses import dataclass
 from typing import TypeVar, Generic
 
+import torch
 from torch import Tensor
 from jaxtyping import Bool, Float, Shaped, Integer, jaxtyped
 from typeguard import typechecked as typechecker
@@ -75,6 +78,10 @@ class Transitions:
         ), f"Batch shape of action is inconsistent"
         # Annotations
         self._batch_annotation = shape_annotation(self._batch_shape)
+    
+    @property
+    def device(self):
+        return self.s_0.get_device()
 
     @property
     def shape(self) -> Shape:
@@ -156,8 +163,16 @@ class AuxiliaryData:
 
 
 @jaxtyped(typechecker=typechecker)
-@dataclass()
+@dataclass
 class AuxiliaryMemoryData(AuxiliaryData):
     weights: Float[Tensor, "*batch"]
     random: Float[Tensor, "*batch"]
     indices: Integer[Tensor, "*batch"]
+
+    @staticmethod
+    def placeholder(batch: Transitions) -> AuxiliaryMemoryData:
+        return AuxiliaryMemoryData(
+            weights=torch.ones(batch.shape, device=batch.device),
+            random=torch.rand(batch.shape, device=batch.device),
+            indices=torch.zeros(batch.shape, device=batch.device)
+        )

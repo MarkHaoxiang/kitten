@@ -12,6 +12,7 @@ cats:
     enable: false
     penalty: 0.0
   env_action_noise: 0.0
+  online_intrinsic_training: False
   teleport:
     enable: false
     type: e_greedy

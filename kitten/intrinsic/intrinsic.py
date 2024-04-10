@@ -99,10 +99,7 @@ class IntrinsicReward(Loggable, ABC):
         Args:
             batch: Transition
         """
-        batch = self._clip_batch(batch)
-        if self._enable_reward_normalisation:
-            rewards = self._reward(batch)
-            self._reward_normalisation.add_tensor_batch(rewards)
+        self.update(batch, AuxiliaryMemoryData.placeholder(batch), step=0)
 
     def get_log(self):
         return self.info
