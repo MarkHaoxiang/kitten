@@ -26,30 +26,32 @@ from .reset import *
 from .teleport import *
 from .logging import *
 
+
 class TeleportationResetModule:
-    def __init__(self,
-                 rm: ResetMemory,
-                 tm: TeleportMemory,
-                 ts: TeleportStrategy
-        ) -> None:
+    def __init__(
+        self, rm: ResetMemory, tm: TeleportMemory, ts: TeleportStrategy
+    ) -> None:
         super().__init__()
         self.rm = rm
         self.tm = tm
         self.ts = ts
 
-    def select(self):
+    def select(self, collector: GymCollector) -> tuple[int, gym.Env, NDArray[Any]]:
         # Get possibilities
         s_t = self.tm.targets()
         s_r = self.rm.targets()
         s = torch.cat((s_t, s_r))
         # Find teleportation target
         tid = self.ts.select(s)
-        if tid >= len(s_t):
-            env, obs = self.tm.select(s)
+        if tid < len(s_t):
+            env, obs = self.tm.select(tid, collector)
         else:
-            env, obs = self.rm.select(s)
+            tid = tid - len(s_t)
+            env, obs = self.rm.select(tid, collector)
             self.tm.reset(env, obs)
-        return env, obs
+            tid = 0
+        return tid, env, obs
+
 
 class CatsExperiment:
     """Experiment baseline"""
@@ -86,7 +88,7 @@ class CatsExperiment:
         # Initialisation
         self.early_start(self.cfg.train.initial_collection_size)
         self.reset_env()
-        self.teleport_memory.state = self.env
+        self.teleport_memory.reset(self.collector.env, self.collector.obs)
 
         # Main Loop
         for step in tqdm(range(1, self.cfg.train.total_frames + 1)):
@@ -197,7 +199,9 @@ class CatsExperiment:
         self.collector.policy = policy
         batch = build_transition_from_list(results, device=self.device)
         self.rmv.add_tensor_batch(batch.s_1)
-        batch.s_0, batch.s_1 = self.rmv.transform(batch.s_0), self.rmv.transform(batch.s_1)
+        batch.s_0, batch.s_1 = self.rmv.transform(batch.s_0), self.rmv.transform(
+            batch.s_1
+        )
         self.intrinsic.initialise(batch)
 
     def _reset(self):
@@ -209,19 +213,7 @@ class CatsExperiment:
             }
         )
         if self.teleport_cfg.enable:
-            # s_t = self.teleport_memory.targets()
-            # s_r = self.reset_memory.targets()
-            # s = torch.cat((s_t, s_r))
-            # tid = self.teleport_strategy.select(s)
-            # if tid >= len(s_t):
-            #     self.teleport_strategy.select(s)
-            # else:
-            #     self.reset_memory.select(s)
-
-            s_t = self.teleport_memory.targets()
-            tid = self.teleport_strategy.select(s_t)
-            _, obs = self.teleport_memory.select(tid, self.collector)
-
+            tid, _, obs = self.reset_module.select(self.collector)
             self.logger.log(
                 {
                     "teleport_targets_index": tid,
@@ -281,6 +273,10 @@ class CatsExperiment:
 
         self.rmv.prepend(self.reset_memory.targets)
         self.rmv.prepend(self.teleport_memory.targets)
+
+        self.reset_module = TeleportationResetModule(
+            rm=self.reset_memory, tm=self.teleport_memory, ts=self.teleport_strategy
+        )
 
     def _build_intrinsic(self):
         self.intrinsic = build_intrinsic(
@@ -342,11 +338,16 @@ class CatsExperiment:
         )
         if self.online_intrinsic_training:
             self.intrinsic_memory, _ = build_replay_buffer(
-                self.env,
-                capacity=self.cfg.train.minibatch_size,
-                device=self.device
+                self.env, capacity=self.cfg.train.minibatch_size, device=self.device
             )
-            self.intrinsic_memory.rb.transforms = [self.rmv, None, None, self.rmv, None, None]
+            self.intrinsic_memory.rb.transforms = [
+                self.rmv,
+                None,
+                None,
+                self.rmv,
+                None,
+                None,
+            ]
         # Remove automatic memory addition for more control
         self.collector = GymCollector(self.policy, self.env, device=self.device)
         self.rmv.append(self.policy.fn)
@@ -354,7 +355,9 @@ class CatsExperiment:
     def _update_memory(self, obs, action, reward, n_obs, terminated, truncated):
         self.memory.append((obs, action, reward, n_obs, terminated, truncated))
         if self.online_intrinsic_training:
-            self.intrinsic_memory.append((obs, action, reward, n_obs, terminated, truncated))
+            self.intrinsic_memory.append(
+                (obs, action, reward, n_obs, terminated, truncated)
+            )
 
     def _build_logging(self):
         self.logger = KittenLogger(

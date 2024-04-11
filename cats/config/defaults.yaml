@@ -17,7 +17,7 @@ cats:
     enable: false
     type: e_greedy
     kwargs:
-      e: 0.1
+      e: 0.0
     memory:
       type: fifo
       capacity: 1024

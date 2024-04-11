@@ -11,7 +11,13 @@ from kitten.experience.util import (
     build_transition_from_list,
 )
 from kitten.common import global_seed
-from kitten.common.util import build_env, build_rl, build_intrinsic, build_logger, build_policy
+from kitten.common.util import (
+    build_env,
+    build_rl,
+    build_intrinsic,
+    build_logger,
+    build_policy,
+)
 from kitten.logging import KittenEvaluator, EstimatedValue
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")

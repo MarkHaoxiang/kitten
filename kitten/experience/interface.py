@@ -78,7 +78,7 @@ class Transitions:
         ), f"Batch shape of action is inconsistent"
         # Annotations
         self._batch_annotation = shape_annotation(self._batch_shape)
-    
+
     @property
     def device(self):
         return self.s_0.get_device()
@@ -174,5 +174,5 @@ class AuxiliaryMemoryData(AuxiliaryData):
         return AuxiliaryMemoryData(
             weights=torch.ones(batch.shape, device=batch.device),
             random=torch.rand(batch.shape, device=batch.device),
-            indices=torch.zeros(batch.shape, device=batch.device)
+            indices=torch.zeros(batch.shape, device=batch.device),
         )

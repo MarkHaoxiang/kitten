@@ -37,11 +37,11 @@ class KittenLogger:
         engine_kwargs: dict[str, object] = {},
         path: str = "log",
     ) -> None:
-        """ Logging utility to help run experiments
+        """Logging utility to help run experiments
 
         Args:
             cfg (DictConfig): Experiment Configuration
-            algorithm (str): 
+            algorithm (str):
             engine (Type[Engine], optional): _description_. Defaults to WandBEngine.
             engine_kwargs (dict[str, object], optional): _description_. Defaults to {}.
             path (str | None, optional): _description_. Defaults to None.

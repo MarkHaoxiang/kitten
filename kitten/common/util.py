@@ -118,12 +118,14 @@ def build_rl(
         raise NotImplementedError()
     raise ValueError("Reinforcement learning algorithm type not valid")
 
-def build_policy(policy_fn: PolicyFn,
-                 rng: Generator,
-                 env: Env,
-                 policy_cfg: dict[str, Any] | DictConfig,
-                 device: Device = "cpu"
-    ) -> Policy:
+
+def build_policy(
+    policy_fn: PolicyFn,
+    rng: Generator,
+    env: Env,
+    policy_cfg: dict[str, Any] | DictConfig,
+    device: Device = "cpu",
+) -> Policy:
     if isinstance(policy_cfg, DictConfig):
         policy_cfg = OmegaConf.to_container(policy_cfg)
 
@@ -145,10 +147,11 @@ def build_policy(policy_fn: PolicyFn,
                 action_space=env.action_space,
                 rng=rng,
                 device=device,
-                **policy_cfg
+                **policy_cfg,
             )
         case _:
             raise ValueError("Unknown policy type")
+
 
 def build_actor(env: Env, features: int = 128) -> Actor:
     """Builds an actor for gym environment
