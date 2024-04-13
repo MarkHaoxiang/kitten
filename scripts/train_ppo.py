@@ -54,13 +54,15 @@ def train(cfg: DictConfig) -> None:
         # Update Value Function
         value_targets = [0 for _ in range(len(batch))]
         if batch.d[-1]:
-            value_targets[-1] = batch.r[-1] if batch.d[-1] else batch.r[-1] + gamma * value.v(batch.s_1[-1])
+            value_targets[-1] = batch.r[-1] + gamma * value.v(batch.s_1[-1]) * (~batch.d[-1])
         for i in range(1, len(batch)):
             value_targets[-i-1] = batch.r[-i-1] + gamma * value_targets[-i]
+        total_value_loss = 0
         value_targets = torch.tensor(value_targets, device=DEVICE)
         for _ in range(cfg.algorithm.update_epochs):
             optim_value.zero_grad()
             value_loss = ((value_targets - value.v(batch.s_0))**2).mean()
+            total_value_loss += value_loss.item()
             value_loss.backward()
             optim_value.step()
 
@@ -68,7 +70,7 @@ def train(cfg: DictConfig) -> None:
         l = ppo.update(batch, aux=None, step=step)
 
         if step > previous_epoch_step + 100:
-            print(f"{step} | Loss {l} Ep Length {len(batch)}")
+            print(f"{step} | Actor Loss {l} Value Loss {total_value_loss} Ep Length {len(batch)}")
             previous_epoch_step = step
 
 

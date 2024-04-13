@@ -31,7 +31,7 @@ class GeneralisedAdvantageEstimator(AdvantageEstimator):
             delta = (
                 batch.r
                 - self._value.v(batch.s_0)
-                + self._gamma * self._value.v(batch.s_1) * batch.d
+                + self._gamma * self._value.v(batch.s_1) * (~batch.d)
             )
             f = self._gamma * self._lmbda
             advantages = torch.zeros_like(batch.r, device=batch.r.get_device())
