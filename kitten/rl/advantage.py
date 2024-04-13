@@ -36,6 +36,6 @@ class GeneralisedAdvantageEstimator(AdvantageEstimator):
             f = self._gamma * self._lmbda
             advantages = torch.zeros_like(batch.r, device=batch.r.get_device())
             advantages[-1] = delta[-1]
-            for i in range(n - 1):
+            for i in range(1, n):
                 advantages[-(i + 1)] = f * advantages[-i] + delta[-(i + 1)]
             return advantages

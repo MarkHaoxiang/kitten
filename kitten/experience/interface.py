@@ -155,7 +155,9 @@ class Transitions:
             self.d[key],
             None if self._t is None else self.t[key],
         )
-
+ 
+    def __len__(self) -> int:
+        return self.shape[0]
 
 @dataclass
 class AuxiliaryData:

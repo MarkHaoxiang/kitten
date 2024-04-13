@@ -7,10 +7,10 @@ import torch
 from kitten.nn import Actor, StochasticActor, HasActor
 from kitten.experience import Transitions
 from kitten.common.rng import Generator
+from kitten.rl.util import generate_minibatches
+
 from .interface import Algorithm, AuxiliaryData
-
 from .advantage import AdvantageEstimator
-
 
 class ProximalPolicyOptimisation(Algorithm[AuxiliaryData], HasActor):
     def __init__(
@@ -37,26 +37,17 @@ class ProximalPolicyOptimisation(Algorithm[AuxiliaryData], HasActor):
         # Calculate Advantage
         a_hat = self._advantage_estimation.A(batch)
         # Update Policy
-        n = len(
-            batch.s_0
-        )  # TODO: Some method to assert flat and batch size other than batch.s_0
-        n_minibatches = math.ceil(n / self._minibatch_size)
         with torch.no_grad():
             log_prob_orig = self._actor.log_prob(batch.s_0, batch.a)
         total_loss = 0
         for _ in range(self._update_epochs):
-            indices = np.arange(n)
-            self._rng.shuffle(indices, axis=0)
-            for i in range(n_minibatches):
+            for i, mb in generate_minibatches(batch, mb_size=self._minibatch_size, rng=self._rng):
                 self._optim.zero_grad()
-                mb_indices = indices[
-                    i * self._minibatch_size : min(n, (i + 1) * self._minibatch_size)
-                ]
-                mb = batch[mb_indices]
-                a_hat_mb = a_hat[mb_indices]
+                a_hat_mb = a_hat[i]
                 log_prob_update_mb = self._actor.log_prob(mb.s_0, mb.a)
-                log_prob_orig_mb = log_prob_orig[mb_indices]
-                ratio = log_prob_update_mb / log_prob_orig_mb
+                log_prob_orig_mb = log_prob_orig[i]
+                ratio = log_prob_update_mb-log_prob_orig_mb
+                ratio = ratio.exp().squeeze()
                 actor_loss = -torch.minimum(
                     ratio * a_hat_mb,
                     torch.clamp(ratio, 1 - self._clip_ratio, 1 + self._clip_ratio)
