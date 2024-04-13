@@ -56,7 +56,7 @@ class DQN(Algorithm[AuxiliaryMemoryData], HasCritic):
         # TODO: This doesn't work well with multiple batch sizes
         x = self._critic.net.q(s_0)[torch.arange(len(s_0)), a]
         with torch.no_grad():
-            target_max = (~d) * torch.max(self.critic.target.q(s_1), dim=1).values
+            target_max = (~d) * torch.max(self._critic.target.q(s_1), dim=1).values
             y = r + target_max * self._gamma
         return y - x
 
