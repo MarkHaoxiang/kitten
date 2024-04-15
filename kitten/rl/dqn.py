@@ -53,6 +53,7 @@ class DQN(Algorithm[AuxiliaryMemoryData], HasCritic):
 
     def td_error(self, s_0: Tensor, a: Tensor, r: Tensor, s_1: Tensor, d: Tensor):
         """Returns TD difference for a transition"""
+        # TODO: Move this out into independent module
         # TODO: This doesn't work well with multiple batch sizes
         x = self._critic.net.q(s_0)[torch.arange(len(s_0)), a]
         with torch.no_grad():

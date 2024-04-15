@@ -1,9 +1,12 @@
-from typing import Any, Callable
+import importlib
+from typing import Any
 
 from numpy.typing import NDArray
 import gymnasium as gym
 from gymnasium.spaces import Space
-import pink  # type: ignore[import-untyped]
+is_pink_installed = importlib.util.find_spec("pink") is not None
+if is_pink_installed:
+    import pink  # type: ignore[import-untyped]
 import numpy as np
 import torch
 from torch import Tensor

@@ -44,10 +44,7 @@ class ProximalPolicyOptimisation(Algorithm[AuxiliaryData], HasActor):
             for i, mb in generate_minibatches(batch, mb_size=self._minibatch_size, rng=self._rng):
                 self._optim.zero_grad()
                 a_hat_mb = a_hat[i]
-                log_prob_update_mb = self._actor.log_prob(mb.s_0, mb.a)
-                log_prob_orig_mb = log_prob_orig[i]
-                ratio = log_prob_update_mb-log_prob_orig_mb
-                ratio = ratio.exp().squeeze()
+                ratio = (self._actor.log_prob(mb.s_0, mb.a)-log_prob_orig[i]).exp().squeeze()
                 actor_loss = -torch.minimum(
                     ratio * a_hat_mb,
                     torch.clamp(ratio, 1 - self._clip_ratio, 1 + self._clip_ratio)
