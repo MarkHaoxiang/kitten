@@ -13,6 +13,7 @@ from kitten.experience.util import build_transition_from_list
 from kitten.policy import Policy
 from kitten.common import global_seed
 from kitten.common.util import build_env
+from kitten.rl.common import td_lambda
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -25,9 +26,9 @@ def train(cfg: DictConfig) -> None:
     env = build_env(**cfg.env, seed=rng)
     actor = ClassicalDiscreteStochasticActor(env, rng).to(DEVICE)
     value = ClassicalValue(env).to(DEVICE)
-    gamma = cfg.algorithm.gamma
+    gamma, lmbda = cfg.algorithm.gamma, cfg.algorithm.lmbda
     optim_value = torch.optim.Adam(value.parameters())
-    gae = GeneralisedAdvantageEstimator(value, discount_factor=gamma)
+    gae = GeneralisedAdvantageEstimator(value, lmbda, gamma)
     ppo = ProximalPolicyOptimisation(actor, gae, rng)
     collector = GymCollector(
         env=env, policy=Policy(fn=ppo.policy_fn, device=DEVICE), device=DEVICE
@@ -52,13 +53,8 @@ def train(cfg: DictConfig) -> None:
         step += batch.shape[0]
 
         # Update Value Function
-        value_targets = [0 for _ in range(len(batch))]
-        if batch.d[-1]:
-            value_targets[-1] = batch.r[-1] + gamma * value.v(batch.s_1[-1]) * (~batch.d[-1])
-        for i in range(1, len(batch)):
-            value_targets[-i-1] = batch.r[-i-1] + gamma * value_targets[-i]
+        value_targets = td_lambda(batch, lmbda, gamma, value)
         total_value_loss = 0
-        value_targets = torch.tensor(value_targets, device=DEVICE)
         for _ in range(cfg.algorithm.update_epochs):
             optim_value.zero_grad()
             value_loss = ((value_targets - value.v(batch.s_0))**2).mean()

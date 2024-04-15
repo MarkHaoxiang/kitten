@@ -5,4 +5,5 @@ train:
   total_frames: 10000
 algorithm:
   gamma: 0.99
+  lmbda: 0.9
   update_epochs: 4

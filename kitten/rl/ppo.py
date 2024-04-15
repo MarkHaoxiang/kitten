@@ -7,7 +7,7 @@ import torch
 from kitten.nn import Actor, StochasticActor, HasActor
 from kitten.experience import Transitions
 from kitten.common.rng import Generator
-from kitten.rl.util import generate_minibatches
+from kitten.rl.common import generate_minibatches
 
 from .interface import Algorithm, AuxiliaryData
 from .advantage import AdvantageEstimator
@@ -24,6 +24,7 @@ class ProximalPolicyOptimisation(Algorithm[AuxiliaryData], HasActor):
         lr: float = 1e-3,
         **kwargs,
     ) -> None:
+        # TODO: Add some tricks https://costa.sh/blog-the-32-implementation-details-of-ppo.html
         self._actor = actor
         self._advantage_estimation = advantage_estimation
         self._update_epochs = update_epochs
