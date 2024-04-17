@@ -20,7 +20,6 @@ class GeneralisedAdvantageEstimator(AdvantageEstimator):
         value: Value,
         exponential_weighting_factor: float = 0.9,
         discount_factor: float = 0.99,
-        
     ) -> None:
         super().__init__()
         self._value = value
@@ -28,4 +27,6 @@ class GeneralisedAdvantageEstimator(AdvantageEstimator):
         self._gamma = discount_factor
 
     def A(self, batch: Transitions) -> Tensor:
-        return generalised_advantage_estimation(batch, self._lmbda, self._gamma, self._value)
+        return generalised_advantage_estimation(
+            batch, self._lmbda, self._gamma, self._value
+        )

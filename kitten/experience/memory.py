@@ -158,7 +158,7 @@ class ReplayBuffer(
             )
         indices = torch.randint(0, len(self), (n,), device=self.device)
         return (
-            self._fetch_storage(indices),
+            self.fetch_storage(indices),
             AuxiliaryMemoryData(
                 weights=torch.ones(n, device=self.device),
                 random=self._random[indices].to(self.device),
@@ -177,7 +177,7 @@ class ReplayBuffer(
     def __len__(self):
         return self.capacity if self._full else self._append_index
 
-    def _fetch_storage(self, indices, transforms: bool = True) -> tuple[Tensor, ...]:
+    def fetch_storage(self, indices, transforms: bool = True) -> tuple[Tensor, ...]:
         if not (isinstance(indices, torch.Tensor) or isinstance(indices, int)):
             indices = torch.tensor(indices, device=self.device)
         results = [self.storage[i][indices] for i in range(self.N)]
@@ -290,7 +290,7 @@ class PrioritizedReplayBuffer(Generic[InDataType], ReplayBuffer[InDataType]):
         w = w / np.max(w)
         w = torch.from_numpy(w).to(self.device)
 
-        results = self._fetch_storage(selection)
+        results = self.fetch_storage(selection)
         # Update errors
         errors = self.error_fn(results)
         self.mean_batch_error = np.mean(errors)

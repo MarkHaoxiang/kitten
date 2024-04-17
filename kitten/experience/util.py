@@ -6,8 +6,6 @@ import numpy as np
 from numpy.typing import NDArray
 from gymnasium import Env
 from gymnasium.spaces.discrete import Discrete
-from jaxtyping import Float32
-import hydra
 
 from kitten.dataflow.normalisation import RunningMeanVariance
 from kitten.experience import Transitions
@@ -83,7 +81,7 @@ class TransitionReplayBuffer(
 
 
 def build_transition_from_list(
-    updates: list[tuple[Any, Any, Any, Any, Any]], device: Device = "cpu"
+    updates: list[tuple[Any, Any, Any, Any, Any, Any]], device: Device = "cpu"
 ) -> Transitions:
     """Utility to wrap collector results into a transition"""
     return build_transition_from_update(
@@ -92,6 +90,9 @@ def build_transition_from_list(
         reward=np.array([x[2] for x in updates]),
         n_obs=np.array([x[3] for x in updates]),
         terminated=np.array([x[4] for x in updates]),
+        truncated=(
+            np.array([x[5] for x in updates]) if updates[0][5] is not None else None
+        ),
         add_batch=False,
         device=device,
     )
@@ -103,6 +104,7 @@ def build_transition_from_update(
     reward,
     n_obs,
     terminated,
+    truncated=None,
     add_batch: bool = True,
     device: Device = "cpu",
 ) -> Transitions:
@@ -112,13 +114,17 @@ def build_transition_from_update(
     reward = torch.tensor(reward, device=device, dtype=torch.float32)
     n_obs = torch.tensor(n_obs, device=device, dtype=torch.float32)
     terminated = torch.tensor(terminated, device=device)
+    if truncated is not None:
+        truncated = torch.tensor(truncated, device=device)
     if add_batch:
         obs = obs.unsqueeze(0)
         action = action.unsqueeze(0)
         n_obs = n_obs.unsqueeze(0)
         reward = reward.unsqueeze(0)
         terminated = terminated.unsqueeze(0)
-    return Transitions(obs, action, reward, n_obs, terminated)
+        if truncated is not None:
+            truncated = truncated.unsqueeze(0)
+    return Transitions(obs, action, reward, n_obs, terminated, truncated)
 
 
 def build_replay_buffer(

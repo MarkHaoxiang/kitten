@@ -4,10 +4,7 @@ import torch
 
 from kitten.rl.ppo import ProximalPolicyOptimisation
 from kitten.rl.advantage import GeneralisedAdvantageEstimator
-from kitten.nn import (
-    ClassicalDiscreteStochasticActor,
-    ClassicalValue
-)
+from kitten.nn import ClassicalDiscreteStochasticActor, ClassicalValue
 from kitten.experience.collector import GymCollector
 from kitten.experience.util import build_transition_from_list
 from kitten.policy import Policy
@@ -16,6 +13,7 @@ from kitten.common.util import build_env
 from kitten.rl.common import td_lambda
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 
 @hydra.main(version_base=None, config_path="../config", config_name="ppo")
 def train(cfg: DictConfig) -> None:
@@ -57,7 +55,7 @@ def train(cfg: DictConfig) -> None:
         total_value_loss = 0
         for _ in range(cfg.algorithm.update_epochs):
             optim_value.zero_grad()
-            value_loss = ((value_targets - value.v(batch.s_0))**2).mean()
+            value_loss = ((value_targets - value.v(batch.s_0)) ** 2).mean()
             total_value_loss += value_loss.item()
             value_loss.backward()
             optim_value.step()
@@ -66,7 +64,9 @@ def train(cfg: DictConfig) -> None:
         l = ppo.update(batch, aux=None, step=step)
 
         if step > previous_epoch_step + 100:
-            print(f"{step} | Actor Loss {l} Value Loss {total_value_loss} Ep Length {len(batch)}")
+            print(
+                f"{step} | Actor Loss {l} Value Loss {total_value_loss} Ep Length {len(batch)}"
+            )
             previous_epoch_step = step
 
 

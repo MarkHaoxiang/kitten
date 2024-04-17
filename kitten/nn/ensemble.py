@@ -46,6 +46,6 @@ class Ensemble(nn.Module, Generic[T]):
     def sample_network(self) -> T:
         return self._rng.numpy.choice(self._networks)
 
-    def sample_networks(self, n: int) ->  list[T]:
-        """ Sample without replacement """
+    def sample_networks(self, n: int) -> list[T]:
+        """Sample without replacement"""
         return self._rng.numpy.choice(self._networks, size=2, replace=False).tolist()

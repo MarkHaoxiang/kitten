@@ -172,11 +172,13 @@ class ClassicalDiscreteCritic(Critic):
     def forward(self, x: Tensor):
         return self.net(x)
 
+
 class ClassicalValue(Value):
-    def __init__(self,
-                 env: Env[NDArray[Any], Any],
-                 net: nn.Module | None = None,
-                 features: int = 128,
+    def __init__(
+        self,
+        env: Env[NDArray[Any], Any],
+        net: nn.Module | None = None,
+        features: int = 128,
     ) -> None:
         super().__init__()
         if net is not None:
@@ -184,12 +186,13 @@ class ClassicalValue(Value):
         else:
             self.net = nn.Sequential(
                 nn.Linear(
-                    in_features=env.observation_space.shape[-1], out_features=features,
+                    in_features=env.observation_space.shape[-1],
+                    out_features=features,
                 ),
                 nn.LeakyReLU(),
                 nn.Linear(in_features=features, out_features=features),
                 nn.LeakyReLU(),
-                nn.Linear(in_features=features, out_features=1)
+                nn.Linear(in_features=features, out_features=1),
             )
 
     def v(self, s: Tensor) -> Tensor:
@@ -197,6 +200,7 @@ class ClassicalValue(Value):
 
     def forward(self, x: Tensor) -> Tensor:
         return self.net(x)
+
 
 class ClassicalBoxActor(Actor):
     """Actor for continuous low-dimensionality gym environments"""

@@ -12,6 +12,7 @@ from kitten.rl.common import generate_minibatches
 from .interface import Algorithm, AuxiliaryData
 from .advantage import AdvantageEstimator
 
+
 class ProximalPolicyOptimisation(Algorithm[AuxiliaryData], HasActor):
     def __init__(
         self,
@@ -42,10 +43,16 @@ class ProximalPolicyOptimisation(Algorithm[AuxiliaryData], HasActor):
             log_prob_orig = self._actor.log_prob(batch.s_0, batch.a)
         total_loss = 0
         for _ in range(self._update_epochs):
-            for i, mb in generate_minibatches(batch, mb_size=self._minibatch_size, rng=self._rng):
+            for i, mb in generate_minibatches(
+                batch, mb_size=self._minibatch_size, rng=self._rng
+            ):
                 self._optim.zero_grad()
                 a_hat_mb = a_hat[i]
-                ratio = (self._actor.log_prob(mb.s_0, mb.a)-log_prob_orig[i]).exp().squeeze()
+                ratio = (
+                    (self._actor.log_prob(mb.s_0, mb.a) - log_prob_orig[i])
+                    .exp()
+                    .squeeze()
+                )
                 actor_loss = -torch.minimum(
                     ratio * a_hat_mb,
                     torch.clamp(ratio, 1 - self._clip_ratio, 1 + self._clip_ratio)

@@ -82,12 +82,12 @@ class IntrinsicReward(Loggable, ABC):
             step (int): Training Step
         """
         batch = self._clip_batch(batch)
+        # Update assistance networks
+        self._update(batch, aux, step)
         # Update Reward Normalisation
         if self._enable_reward_normalisation:
             rewards = self._reward(batch)
             self._reward_normalisation.add_tensor_batch(rewards, aux.weights)
-        # Update assistance networks
-        self._update(batch, aux, step)
 
     @abstractmethod
     def _update(self, batch: Transitions, aux: AuxiliaryMemoryData, step: int):

@@ -4,6 +4,7 @@ from typing import Any
 from numpy.typing import NDArray
 import gymnasium as gym
 from gymnasium.spaces import Space
+
 is_pink_installed = importlib.util.find_spec("pink") is not None
 if is_pink_installed:
     import pink  # type: ignore[import-untyped]
