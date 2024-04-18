@@ -110,6 +110,7 @@ class IntrinsicCuriosityModule(IntrinsicReward, nn.Module):
     def _update(self, batch: Transitions, aux: AuxiliaryMemoryData, step: int):
         self._optim.zero_grad()
         loss = self._calc_loss(batch.s_0, batch.s_1, batch.a, aux.weights)
+        self.info["loss"] = loss.item()
         loss.backward()
         self._optim.step()
 
