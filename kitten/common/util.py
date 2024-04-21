@@ -28,6 +28,7 @@ from kitten.rl import Algorithm
 from kitten.rl.ddpg import DeepDeterministicPolicyGradient
 from kitten.rl.td3 import TwinDelayedDeepDeterministicPolicyGradient
 from kitten.rl.qt_opt import QTOpt
+from kitten.rl.dqn import DQN
 from kitten.policy import ColoredNoisePolicy, EpsilonGreedyPolicy, PolicyFn, Policy
 from kitten.common.typing import Device
 
@@ -115,7 +116,11 @@ def build_rl(
 
     elif algorithm_configuration.type == "dqn":
         assert isinstance(env.action_space, gym.spaces.Discrete)
-        raise NotImplementedError()
+        return DQN(
+            build_critic(env, **algorithm_configuration.critic),
+            device=device,
+            **algorithm_configuration
+        )
     raise ValueError("Reinforcement learning algorithm type not valid")
 
 

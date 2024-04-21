@@ -1,6 +1,5 @@
 from typing import Any
 
-from numpy import ndarray
 from numpy.typing import NDArray
 import torch
 import torch.nn as nn
@@ -8,7 +7,7 @@ from torch import Tensor
 
 from kitten.experience import AuxiliaryMemoryData, Transitions
 from kitten.rl import Algorithm
-from kitten.nn import HasCritic, AddTargetNetwork, ClassicalDiscreteCritic
+from kitten.nn import HasCritic, HasValue, AddTargetNetwork, ClassicalDiscreteCritic, CriticPolicyPair
 from kitten.common.typing import Log
 
 
@@ -20,7 +19,7 @@ class DQN(Algorithm[AuxiliaryMemoryData], HasCritic):
 
     def __init__(
         self,
-        critic: ClassicalDiscreteCritic,
+        critic_network: ClassicalDiscreteCritic,
         gamma: float = 0.99,
         lr: float = 1e-3,
         update_frequency=1,
@@ -40,7 +39,7 @@ class DQN(Algorithm[AuxiliaryMemoryData], HasCritic):
         """
         self.device = device
 
-        self._critic = AddTargetNetwork(critic, device=device)
+        self._critic = AddTargetNetwork(critic_network, device=device)
         self._gamma = gamma
         self._optim = torch.optim.Adam(params=self.critic.parameters(), lr=lr)
         self._update_frequency = update_frequency
@@ -50,6 +49,10 @@ class DQN(Algorithm[AuxiliaryMemoryData], HasCritic):
     @property
     def critic(self) -> ClassicalDiscreteCritic:
         return self._critic.net
+    
+    # @property
+    # def value(self) -> CriticPolicyPair:
+    #     return CriticPolicyPair(self.critic, self.policy_fn)
 
     def td_error(self, s_0: Tensor, a: Tensor, r: Tensor, s_1: Tensor, d: Tensor):
         """Returns TD difference for a transition"""

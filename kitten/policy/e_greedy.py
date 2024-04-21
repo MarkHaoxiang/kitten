@@ -16,6 +16,7 @@ class EpsilonGreedyPolicy(Policy):
         fn: PolicyFn,
         action_space: Space[Any],
         rng: np.random.Generator | None = None,
+        epsilon: float = 0.1,
         device: Device = "cpu",
     ):
         """Epsilon Greedy Exploration
@@ -32,9 +33,12 @@ class EpsilonGreedyPolicy(Policy):
         else:
             self._rng = rng
         self._action_space = action_space
+        self._epsilon = epsilon
 
-    def __call__(self, obs: Tensor | NDArray[Any], epsilon: float = 0.1):
+    def __call__(self, obs: Tensor | NDArray[Any], epsilon: float | None = None):
         x = super().__call__(obs)
+        if epsilon is None:
+            epsilon = self._epsilon
         if self.train:
             if self._rng.random() <= epsilon:
                 return self._action_space.sample()

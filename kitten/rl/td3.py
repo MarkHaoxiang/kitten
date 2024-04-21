@@ -72,6 +72,9 @@ class TwinDelayedDeepDeterministicPolicyGradient(DeepDeterministicPolicyGradient
         self._critic_update_frequency = critic_update_frequency
         self._policy_update_frequency = policy_update_frequency
 
+        self._loss_actor_value = 0
+        self._loss_critic_value = 0
+
     def _critic_update(self, batch: Transitions, aux: AuxiliaryMemoryData) -> float:
         """Runs a critic update
 
@@ -141,14 +144,14 @@ class TwinDelayedDeepDeterministicPolicyGradient(DeepDeterministicPolicyGradient
             Tuple[float, float]: Critic loss and actor loss
         """
         if step % self._critic_update_frequency == 0:
-            self.loss_critic_value = self._critic_update(batch, aux)
+            self._loss_critic_value = self._critic_update(batch, aux)
         if step % self._policy_update_frequency == 0:
-            self.loss_actor_value = self._actor_update(batch.s_0, aux.weights)
+            self._loss_actor_value = self._actor_update(batch.s_0, aux.weights)
             self._critic_1.update_target_network(tau=self._tau)
             self._critic_2.update_target_network(tau=self._tau)
             self._actor.update_target_network(tau=self._tau)
 
-        return self.loss_critic_value, self.loss_actor_value
+        return self._loss_critic_value, self._loss_actor_value
 
     def get_models(self) -> list[tuple[nn.Module, str]]:
         return [

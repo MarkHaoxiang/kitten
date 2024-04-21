@@ -12,11 +12,11 @@ seed: 0
 log:
   name: false
   evaluation:
-    evaluation_repeats: 1
+    evaluation_repeats: 3
     video:
       enable: false
       path: 
   engine:
     type: wandb
     project: kitten
-    online: false
+    online: true

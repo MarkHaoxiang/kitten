@@ -129,6 +129,8 @@ class QTOpt(Algorithm[AuxiliaryMemoryData], HasCritic, HasValue):
     def policy_fn(self, s: Tensor, critic: Critic | None = None) -> Tensor:
         if critic is None:
             policy_critic = self._critic_1.net
+        else:
+            policy_critic = critic
         squeeze = False
         if self._obs_space.shape == s.shape:
             squeeze = True

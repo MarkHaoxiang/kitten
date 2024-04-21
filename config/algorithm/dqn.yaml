@@ -1,0 +1,5 @@
+type: dqn
+gamma: 0.99
+lr: 0.001
+update_frequency: 1
+target_update_frequency: 100

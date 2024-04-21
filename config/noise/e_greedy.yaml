@@ -1,0 +1,2 @@
+type: e_greedy
+epsilon: 0.1
