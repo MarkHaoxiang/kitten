@@ -6,7 +6,7 @@ defaults:
   - noise: white
 
 memory:
-  normalise_observation: True 
+  normalise_observation: true 
 
 seed: 0 
 log:
@@ -19,4 +19,4 @@ log:
   engine:
     type: wandb
     project: kitten
-    online: true
+    online: false

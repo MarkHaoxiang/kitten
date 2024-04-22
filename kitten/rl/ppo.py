@@ -4,6 +4,7 @@ from typing import Any
 import numpy as np
 import torch
 
+from kitten.common.typing import Log
 from kitten.nn import Actor, StochasticActor, HasActor
 from kitten.experience import Transitions
 from kitten.common.rng import Generator
@@ -35,6 +36,8 @@ class ProximalPolicyOptimisation(Algorithm[AuxiliaryData], HasActor):
         self._rng = rng.numpy
         self._loss = torch.nn.MSELoss()
 
+        self._train_loss = 0
+
     def update(self, batch: Transitions, aux: AuxiliaryData, step: int) -> Any:
         # Calculate Advantage
         a_hat = self._advantage_estimation.A(batch)
@@ -62,7 +65,13 @@ class ProximalPolicyOptimisation(Algorithm[AuxiliaryData], HasActor):
                 actor_loss.backward()
                 self._optim.step()
 
+        self._train_loss = total_loss
         return total_loss
+
+    def get_log(self) -> dict[str, Any]:
+        return {
+            "ppo_loss": self._train_loss
+        }
 
     @property
     def actor(self) -> Actor:

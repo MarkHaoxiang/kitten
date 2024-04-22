@@ -1,9 +1,23 @@
+defaults:
+  - _self_
+  - experiment: cartpole
+
 seed: 0
-env:
-  name: CartPole-v1
 train:
   total_frames: 10000
 algorithm:
+  type: "ppo"
   gamma: 0.99
   lmbda: 0.9
   update_epochs: 4
+log:
+  name: false
+  evaluation:
+    evaluation_repeats: 3
+    video:
+      enable: false
+      path: 
+  engine:
+    type: wandb
+    project: kitten
+    online: false
