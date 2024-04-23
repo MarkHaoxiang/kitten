@@ -60,20 +60,21 @@ class IntrinsicReward(Loggable, ABC):
         Args:
             batch (Transition): Batch of transition tuples from experience
         """
-        batch = self._clip_batch(batch)
-        r_i = self._reward(batch)
-        if self._enable_reward_normalisation:
-            if update_normalisation:
-                self._reward_normalisation.add_tensor_batch(r_i, aux.weights if aux is not None else None)
-            r_i = r_i / self._reward_normalisation.std.unsqueeze(0)
-        self.info["mean_intrinsic_reward"] = torch.mean(r_i).item()
-        self.info["max_intrinsic_reward"] = torch.max(r_i).item()
-        self.info["mean_extrinsic_reward"] = torch.mean(batch.r)
-        return (
-            batch.r * self._ext_coef + r_i * self._int_coef,  # Total Reward
-            batch.r * self._ext_coef,  # Extrinsic Reward (Scaled)
-            r_i * self._int_coef,  # Intrinsic Reward
-        )
+        with torch.no_grad():
+            batch = self._clip_batch(batch)
+            r_i = self._reward(batch)
+            if self._enable_reward_normalisation:
+                if update_normalisation:
+                    self._reward_normalisation.add_tensor_batch(r_i, aux.weights if aux is not None else None)
+                r_i = r_i / self._reward_normalisation.std.unsqueeze(0)
+            self.info["mean_intrinsic_reward"] = torch.mean(r_i).item()
+            self.info["max_intrinsic_reward"] = torch.max(r_i).item()
+            self.info["mean_extrinsic_reward"] = torch.mean(batch.r).item()
+            return (
+                batch.r * self._ext_coef + r_i * self._int_coef,  # Total Reward
+                batch.r * self._ext_coef,  # Extrinsic Reward (Scaled)
+                r_i * self._int_coef,  # Intrinsic Reward
+            )
 
     @abstractmethod
     def _reward(self, batch: Transitions):

@@ -81,7 +81,7 @@ class Transitions:
 
     @property
     def device(self):
-        return self.s_0.get_device()
+        return self.s_0.device
 
     @property
     def shape(self) -> Shape:

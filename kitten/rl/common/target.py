@@ -19,7 +19,7 @@ def monte_carlo_return(batch: Transitions, gamma: float, value: Value | None = N
         value_targets[-1] += gamma * value.v(batch.s_1[-1])
     for i in range(1, len(batch)):
         value_targets[-i - 1] = batch.r[-i - 1] + gamma * value_targets[-i]
-    return torch.tensor(value_targets, device=batch.s_0.get_device())
+    return torch.tensor(value_targets, device=batch.s_0.device)
 
 
 def generalised_advantage_estimation(
@@ -29,7 +29,7 @@ def generalised_advantage_estimation(
         n = len(batch.r)
         delta = batch.r - value.v(batch.s_0) + gamma * value.v(batch.s_1) * (~batch.d)
         f = gamma * lmbda
-        advantages = torch.zeros_like(batch.r, device=batch.r.get_device())
+        advantages = torch.zeros_like(batch.r, device=batch.r.device)
         advantages[-1] = delta[-1]
         for i in range(1, n):
             advantages[-(i + 1)] = f * advantages[-i] + delta[-(i + 1)]
