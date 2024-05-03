@@ -126,7 +126,7 @@ class GymCollector(Generic[ActType], DataCollector):
             return result
 
     def early_start(
-        self, n: int, dry_run: bool = False
+        self, n: int, dry_run: bool = False, append_memory: bool = True, 
     ) -> list[tuple[NDArray[Any], ActType, float, NDArray[Any], bool, bool]]:
         """Runs the environment for a certain number of steps using a random policy.
 
@@ -145,7 +145,7 @@ class GymCollector(Generic[ActType], DataCollector):
         # Run
         if dry_run:
             self.collect(n, append_memory=False, early_start=True)
-        result = self.collect(n, append_memory=True, early_start=True)
+        result = self.collect(n, append_memory=append_memory, early_start=True)
         # Restore initial policy
         self.policy = policy
         return result

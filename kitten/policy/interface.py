@@ -6,6 +6,7 @@ from numpy.typing import NDArray
 import torch
 from torch import Tensor
 
+from kitten.dataflow.interface import Transform, identity
 from kitten.common.typing import ObsType, ActType, Device
 
 PolicyFn: TypeAlias = Callable[[Tensor], Tensor]
@@ -75,10 +76,12 @@ class Policy:
         """
         self._fn = fn
         self._evaluate = False
+        self.transform_pre: Transform = identity
+        self.transform_post: Transform = identity
         self.device = device
 
     def fn(self, obs: Tensor):
-        return self._fn(obs)
+        return self.transform_post(self._fn(self.transform_pre.transform(obs)))
 
     def __call__(self, obs: Tensor | NDArray[Any], *args, **kwargs):
         """Actions from observations
