@@ -31,16 +31,12 @@ class Disagreement(IntrinsicReward):
         self.feature_net = feature_net
         self.ensemble_number = ensemble_number
         self.forward_heads = Ensemble(
-            build_forward_head,
-            n=self.ensemble_number,
-            rng=rng
+            build_forward_head, n=self.ensemble_number, rng=rng
         )
         self.discrete = discrete_action_space
         if self.discrete:
             raise NotImplementedError("Not yet implemented for discrete action space")
-        self._optim = torch.optim.Adam(
-            params=self.forward_heads.parameters(), lr=lr
-        )
+        self._optim = torch.optim.Adam(params=self.forward_heads.parameters(), lr=lr)
 
     def _featurise(self, s: Tensor) -> Tensor:
         """Encodes into a latent space
@@ -60,8 +56,8 @@ class Disagreement(IntrinsicReward):
     def _update(self, batch: Transitions, aux: AuxiliaryMemoryData, step: int):
         self._optim.zero_grad()
         phi_0 = self._featurise(batch.s_0)
-            # TODO: Rewrite with abstraction
-            # Rather than cat
+        # TODO: Rewrite with abstraction
+        # Rather than cat
         pred_phi_1 = self.forward_heads(torch.cat((phi_0, batch.a), -1))
         true_phi_1 = self._featurise(batch.s_0).unsqueeze(0)
 

@@ -7,7 +7,13 @@ from torch import Tensor
 
 from kitten.experience import AuxiliaryMemoryData, Transitions
 from kitten.rl import Algorithm
-from kitten.nn import HasCritic, HasValue, AddTargetNetwork, ClassicalDiscreteCritic, CriticPolicyPair
+from kitten.nn import (
+    HasCritic,
+    HasValue,
+    AddTargetNetwork,
+    ClassicalDiscreteCritic,
+    CriticPolicyPair,
+)
 from kitten.common.typing import Log
 
 
@@ -49,7 +55,7 @@ class DQN(Algorithm[AuxiliaryMemoryData], HasCritic):
     @property
     def critic(self) -> ClassicalDiscreteCritic:
         return self._critic.net
-    
+
     # @property
     # def value(self) -> CriticPolicyPair:
     #     return CriticPolicyPair(self.critic, self.policy_fn)

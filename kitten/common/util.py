@@ -119,7 +119,7 @@ def build_rl(
         return DQN(
             build_critic(env, **algorithm_configuration.critic),
             device=device,
-            **algorithm_configuration
+            **algorithm_configuration,
         )
     raise ValueError("Reinforcement learning algorithm type not valid")
 

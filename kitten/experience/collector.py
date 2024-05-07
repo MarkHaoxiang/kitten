@@ -126,7 +126,10 @@ class GymCollector(Generic[ActType], DataCollector):
             return result
 
     def early_start(
-        self, n: int, dry_run: bool = False, append_memory: bool = True, 
+        self,
+        n: int,
+        dry_run: bool = False,
+        append_memory: bool = True,
     ) -> list[tuple[NDArray[Any], ActType, float, NDArray[Any], bool, bool]]:
         """Runs the environment for a certain number of steps using a random policy.
 

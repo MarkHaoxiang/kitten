@@ -146,7 +146,6 @@ class Transitions:
     def __iter__(self) -> Iterator[Tensor]:
         # Deprecated, kept for compatibility
         return iter((self.s_0, self.a, self.r, self.s_1, self.d))
-        
 
     def __getitem__(self, key):
         return Transitions(

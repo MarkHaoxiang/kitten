@@ -69,9 +69,7 @@ class ProximalPolicyOptimisation(Algorithm[AuxiliaryData], HasActor):
         return total_loss
 
     def get_log(self) -> dict[str, Any]:
-        return {
-            "ppo_loss": self._train_loss
-        }
+        return {"ppo_loss": self._train_loss}
 
     @property
     def actor(self) -> Actor:

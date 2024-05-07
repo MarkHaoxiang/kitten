@@ -45,13 +45,9 @@ def train(cfg: DictConfig) -> None:
 
     # Register logging
     logger.register_providers(
-        [
-            (ppo, "train"),
-            (collector, "collector"),
-            (evaluator, "evaluation")
-        ]
+        [(ppo, "train"), (collector, "collector"), (evaluator, "evaluation")]
     )
-    
+
     step = 0
     previous_epoch_step = 0
     pbar = tqdm(total=cfg.train.total_frames, file=sys.stdout)
@@ -93,6 +89,7 @@ def train(cfg: DictConfig) -> None:
 
     # Close resources
     env.close(), evaluator.close(), logger.close(), pbar.close()
+
 
 if __name__ == "__main__":
     train()

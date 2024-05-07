@@ -50,10 +50,11 @@ class IntrinsicReward(Loggable, ABC):
             batch = Transitions(s_0, batch.a, batch.r, s_1, batch.d)
         return batch
 
-    def reward(self,
-               batch: Transitions,
-               aux: AuxiliaryMemoryData | None = None,
-               update_normalisation: bool = True,
+    def reward(
+        self,
+        batch: Transitions,
+        aux: AuxiliaryMemoryData | None = None,
+        update_normalisation: bool = True,
     ):
         """Calculates the intrinsic exploration reward
 
@@ -65,7 +66,9 @@ class IntrinsicReward(Loggable, ABC):
             r_i = self._reward(batch)
             if self._enable_reward_normalisation:
                 if update_normalisation:
-                    self._reward_normalisation.add_tensor_batch(r_i, aux.weights if aux is not None else None)
+                    self._reward_normalisation.add_tensor_batch(
+                        r_i, aux.weights if aux is not None else None
+                    )
                 r_i = r_i / self._reward_normalisation.std.unsqueeze(0)
             self.info["mean_intrinsic_reward"] = torch.mean(r_i).item()
             self.info["max_intrinsic_reward"] = torch.max(r_i).item()
@@ -91,7 +94,6 @@ class IntrinsicReward(Loggable, ABC):
         batch = self._clip_batch(batch)
         # Update assistance networks
         self._update(batch, aux, step)
-        
 
     @abstractmethod
     def _update(self, batch: Transitions, aux: AuxiliaryMemoryData, step: int):
